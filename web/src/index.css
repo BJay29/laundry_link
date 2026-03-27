@@ -1,0 +1,37 @@
+@import "tailwindcss";
+
+:root {
+  /* Pinipilit natin na Light Mode lang para sa Clean Dashboard look */
+  --background: #f1f5f9; /* Light Slate background */
+  --foreground: #0f172a; /* Dark text */
+  
+  font-family: 'Inter', system-ui, sans-serif;
+  background-color: var(--background);
+  color: var(--foreground);
+}
+
+/* Reset standard Vite/React margins */
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Tinanggal ang dark mode media query para hindi mag-black screen */
+
+/* Para sa smooth transitions ng buttons */
+button, a {
+  transition: all 0.2s ease-in-out;
+}
+
+/* Custom scrollbar para sa dashboard feed later */
+::-webkit-scrollbar {
+  width: 5px;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 10px;
+}

@@ -1,0 +1,108 @@
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Mail, Lock } from 'lucide-react';
+
+
+const Login = () => {
+  const navigate = useNavigate();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+
+  const handleLogin = (e) => {
+    e.preventDefault();
+    if (email && password) {
+      navigate('/dashboard');
+    }
+  };
+
+  
+
+  return (
+    <div className="min-h-screen bg-[#f8fafc] flex flex-col items-center justify-center p-6 font-sans relative overflow-hidden">
+      
+      {/* Background Subtle Pattern - Grid look from Image 1 */}
+      <div className="absolute inset-0 z-0 opacity-[0.03] pointer-events-none" 
+           style={{ backgroundImage: 'radial-gradient(#0ea5e9 1.5px, transparent 1.5px)', backgroundSize: '32px 32px' }}>
+      </div>
+
+      <div className="z-10 w-full max-w-[440px] flex flex-col items-center">
+        
+        {/* Branding Area (Purple and Green Logo from Image 2) */}
+        <div className="mb-10 text-center">
+          <div className="flex items-center justify-center mb-3">
+             <div className="flex gap-1.5 items-center justify-center">
+                <div className="w-3.5 h-3.5 rounded-full bg-[#5d2ca8]"></div>
+                <div className="w-8 h-1.5 bg-[#5d2ca8] rounded-full"></div>
+                <div className="w-5 h-5 rounded-full border-[5px] border-[#22c55e]"></div>
+             </div>
+          </div>
+          <h1 className="text-4xl font-black tracking-tighter flex justify-center italic">
+            <span className="text-[#5d2ca8]">LAUNDRY</span>
+            <span className="text-[#22c55e]">LINK</span>
+          </h1>
+        </div>
+
+        {/* Login Card (Clean White Box) */}
+        <div className="bg-white w-full rounded-[48px] p-10 shadow-2xl shadow-slate-200/60 border border-slate-100/50">
+          <h2 className="text-3xl font-black text-slate-800 text-center mb-10 tracking-tight">Sign In</h2>
+
+          <form onSubmit={handleLogin} className="space-y-6">
+            
+            {/* Gmail Input Field */}
+            <div className="relative group">
+              <div className="absolute inset-y-0 left-0 pl-6 flex items-center pointer-events-none text-sky-400 group-focus-within:text-sky-500 transition-colors">
+                <Mail size={20} />
+              </div>
+              <input
+                type="Email"
+                required
+                className="w-full bg-slate-50 border border-slate-100 rounded-2xl py-4.5 pl-14 pr-6 focus:outline-none focus:ring-4 focus:ring-sky-400/10 focus:border-sky-400 transition-all text-slate-700 placeholder:text-slate-400 font-medium"
+                placeholder="Enter your email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
+
+            {/* Password Input Field */}
+            <div className="relative group">
+              <div className="absolute inset-y-0 left-0 pl-6 flex items-center pointer-events-none text-sky-400 group-focus-within:text-sky-500 transition-colors">
+                <Lock size={20} />
+              </div>
+              <input
+                type="password"
+                required
+                className="w-full bg-slate-50 border border-slate-100 rounded-2xl py-4.5 pl-14 pr-6 focus:outline-none focus:ring-4 focus:ring-sky-400/10 focus:border-sky-400 transition-all text-slate-700 placeholder:text-slate-400 font-medium"
+                placeholder="Enter your password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </div>
+
+            {/* Forgot Password Link */}
+            <div className="flex justify-end px-1">
+              <button type="button" className="text-sm font-bold text-sky-400 hover:text-sky-500 transition-colors">
+                Forgot Password?
+              </button>
+            </div>
+
+            {/* Main Sign In Button */}
+            <button
+              type="submit"
+              className="w-full bg-[#0ea5e9] text-white py-4.5 rounded-2xl font-black text-lg shadow-xl shadow-sky-100 hover:bg-sky-500 hover:shadow-sky-200 transition-all active:scale-[0.98] mt-4 uppercase tracking-wider"
+            >
+              Sign In
+            </button>
+          </form>
+          
+          <div className="mt-8 text-center">
+            <p className="text-slate-400 text-xs font-medium">
+              Don't have an account? <span className="text-sky-400 font-bold cursor-pointer hover:underline">Contact Admin</span>
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default Login;
