@@ -15,7 +15,6 @@ const apiClient = axios.create({
 /**
  * Request Interceptor:
  * Automatically attaches the JWT Bearer token to the Authorization header 
- * if a valid token is found in the browser's localStorage.
  */
 apiClient.interceptors.request.use((config) => {
     const token = localStorage.getItem('token');
@@ -26,19 +25,15 @@ apiClient.interceptors.request.use((config) => {
 });
 
 export const apiService = {
-   
+    
     // --- AUTHENTICATION METHODS ---
     
-    /**
-     * Authenticates the user and persists shop-specific metadata.
-     * Stores the access token and shop details to maintain session context.
-     */
     login: async (email, password) => {
         try {
             const response = await apiClient.post('/auth/login', { email, password });
             const { user, access_token } = response.data;
 
-            // Session Persistence Layer
+            // Storing session data in LocalStorage
             localStorage.setItem('token', access_token);
             localStorage.setItem('user_email', user.email);
             localStorage.setItem('shop_id', user.shop_id);
@@ -53,23 +48,29 @@ export const apiService = {
         }
     },
 
-    /**
-     * Clears all session data and redirects the user to the login screen.
-     */
     logout: () => {
+        // Clear all stored session data and redirect to login
         localStorage.clear();
         window.location.href = '/login';
     },
 
     // --- BOOKING & TRANSACTION METHODS ---
     
-    /**
-     * Creates a new laundry transaction.
-     * Includes washer_id and dryer_id to trigger real-time 'Busy' status in the Monitoring Grid.
-     */
     createBooking: async (bookingData) => {
         try {
-            const response = await apiClient.post('/bookings/', bookingData);
+            // Ensure IDs and numeric values are correctly typed before sending to avoid 422 errors
+            const payload = {
+                ...bookingData,
+                // Use shop_id from storage if not explicitly provided in bookingData
+                shop_id: bookingData.shop_id ? parseInt(bookingData.shop_id) : parseInt(localStorage.getItem('shop_id')),
+                washer_id: bookingData.washer_id ? parseInt(bookingData.washer_id) : null,
+                dryer_id: bookingData.dryer_id ? parseInt(bookingData.dryer_id) : null,
+                weight: parseFloat(bookingData.weight),
+                loads: parseInt(bookingData.loads),
+                total_price: parseFloat(bookingData.total_price)
+            };
+
+            const response = await apiClient.post('/bookings/', payload);
             return response.data;
         } catch (error) {
             console.error("Create Booking Error:", error.response?.data?.detail || error.message);
@@ -77,10 +78,6 @@ export const apiService = {
         }
     },
 
-    /**
-     * Fetches active orders (Pending or In Progress).
-     * Used to populate the Service Terminal and real-time status trackers.
-     */
     getActiveBookings: async () => {
         try {
             const response = await apiClient.get('/bookings/active');
@@ -91,10 +88,6 @@ export const apiService = {
         }
     },
 
-    /**
-     * Transitions a booking status (e.g., from 'In Progress' to 'Ready').
-     * Transitioning to 'Ready' or 'Claimed' automatically sets assigned machines back to 'Available'.
-     */
     updateBookingStatus: async (bookingId, newStatus) => {
         try {
             const response = await apiClient.patch(`/bookings/${bookingId}/status`, null, {
@@ -109,13 +102,13 @@ export const apiService = {
 
     // --- MACHINE HUB & MONITORING METHODS ---
 
-    /**
-     * Retrieves the hardware status and operational metrics for all units.
-     * This is the primary data source for the Machine Hub table and Monitoring Grid.
-     */
     getMachines: async () => {
         try {
-            const response = await apiClient.get('/machines/');
+            // Fetch shop_id from storage to filter machines correctly
+            const shopId = localStorage.getItem('shop_id');
+            const response = await apiClient.get('/machines/', {
+                params: shopId ? { shop_id: parseInt(shopId) } : {}
+            });
             return response.data;
         } catch (error) {
             console.error("Fetch Machines Error:", error.response?.data?.detail || error.message);
@@ -123,13 +116,12 @@ export const apiService = {
         }
     },
 
-    /**
-     * Adds a single hardware unit (Washer or Dryer) to the shop.
-     * Triggered by the "Add Machine" interface.
-     */
     addMachine: async (machineData) => {
         try {
-            const response = await apiClient.post('/machines/', machineData);
+            const shopId = localStorage.getItem('shop_id');
+            // Ensure machine data is linked to the current logged-in shop
+            const payload = { ...machineData, shop_id: parseInt(shopId) };
+            const response = await apiClient.post('/machines/', payload);
             return response.data;
         } catch (error) {
             console.error("Add Machine Error:", error.response?.data?.detail || error.message);
@@ -137,10 +129,6 @@ export const apiService = {
         }
     },
 
-    /**
-     * Permanently removes a machine unit from the shop configuration.
-     * Deletion is immediate and reflects across all monitoring dashboards.
-     */
     deleteMachine: async (machineId) => {
         try {
             const response = await apiClient.delete(`/machines/${machineId}`);
@@ -151,10 +139,6 @@ export const apiService = {
         }
     },
 
-    /**
-     * Toggles the maintenance state of a unit.
-     * Blocked units cannot be assigned to new customers in the Booking Modal.
-     */
     toggleMaintenance: async (machineId) => {
         try {
             const response = await apiClient.patch(`/machines/${machineId}/maintenance`);
@@ -165,44 +149,12 @@ export const apiService = {
         }
     },
 
-    /**
-     * Triggers a recalculation of electricity, water, and detergent costs for a unit.
-     * Used to refresh the performance metrics in the Machine Hub table.
-     */
-    getMachineMetrics: async (machineId) => {
-        try {
-            const response = await apiClient.get(`/machines/${machineId}/metrics`);
-            return response.data;
-        } catch (error) {
-            console.error("Fetch Machine Metrics Error:", error.response?.data?.detail || error.message);
-            throw error;
-        }
-    },
-
-    /**
-     * Seeds the shop with the standard 12-unit configuration (6 Washers, 6 Dryers).
-     * Ideal for quick setup of new shop environments.
-     */
-    initializeMachines: async () => {
-        try {
-            const response = await apiClient.post('/machines/initialize');
-            return response.data;
-        } catch (error) {
-            console.error("Machine Initialization Error:", error.response?.data?.detail || error.message);
-            throw error;
-        }
-    },
-
     // --- ANALYTICS & INSIGHTS ---
 
-    /**
-     * Retrieves aggregated financial and operational data for the Main Dashboard.
-     */
     getDashboardStats: async () => {
         try {
             const shopId = localStorage.getItem('shop_id');
-            if (!shopId) throw new Error("Missing shop_id in local storage");
-            
+            if (!shopId) throw new Error("Missing shop_id");
             const response = await apiClient.get(`/analytics/dashboard-summary/${shopId}`);
             return response.data;
         } catch (error) {
@@ -211,14 +163,10 @@ export const apiService = {
         }
     },
 
-    /**
-     * Retrieves predictive occupancy and revenue forecasts based on historical data.
-     */
     getForecastData: async () => {
         try {
             const shopId = localStorage.getItem('shop_id');
-            if (!shopId) throw new Error("Missing shop_id in local storage");
-
+            if (!shopId) throw new Error("Missing shop_id");
             const response = await apiClient.get(`/analytics/forecast/${shopId}`);
             return response.data;
         } catch (error) {
@@ -227,10 +175,8 @@ export const apiService = {
         }
     },
 
-    // --- UTILITY HELPERS ---
-    
+    // --- UTILS ---
     getShopId: () => localStorage.getItem('shop_id'),
-    
     getAuthHeader: () => {
         const token = localStorage.getItem('token');
         return token ? { Authorization: `Bearer ${token}` } : {};

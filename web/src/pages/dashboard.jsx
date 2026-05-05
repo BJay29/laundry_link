@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, Calendar, RefreshCw, Layers, Monitor, Activity, TrendingUp, CheckCircle } from 'lucide-react';
-import apiService from '../services/APIservices'; // Updated path casing
+import apiService from '../services/APIservices';
 
 import StatCard from '../components/ui/statcard';
 import ForecastChart from '../components/charts/forecastcharts';
@@ -8,6 +8,11 @@ import OptimizationTip from '../components/ui/optimizationtip';
 import MachineGrid from '../components/machines/machinegrid';
 import BookingModal from '../components/modals/bookingmodal';
 
+/**
+ * Dashboard Component
+ * The central command center of the application. 
+ * Orchestrates real-time telemetry, revenue analytics, and hardware monitoring.
+ */
 const Dashboard = () => {
   const [stats, setStats] = useState(null);
   const [machines, setMachines] = useState([]);
@@ -16,12 +21,15 @@ const Dashboard = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(new Date());
 
+  /**
+   * Fetches data from the backend. 
+   * Uses Promise.allSettled to ensure one failing request doesn't break the whole UI.
+   */
   const loadDashboardData = useCallback(async (isRefresh = false) => {
     try {
       if (isRefresh) setRefreshing(true);
       else setLoading(true);
 
-      // Parallel fetch for optimal performance
       const [statsResult, machinesResult] = await Promise.allSettled([
         apiService.getDashboardStats(),
         apiService.getMachines(),
@@ -44,17 +52,16 @@ const Dashboard = () => {
     }
   }, []);
 
+  // Initial load and 60-second polling interval
   useEffect(() => {
     loadDashboardData();
-    // Refresh every 60 seconds to keep stats and hardware health updated
     const interval = setInterval(() => loadDashboardData(true), 60000);
     return () => clearInterval(interval);
   }, [loadDashboardData]);
 
   const handleBookingSuccess = () => {
     setIsModalOpen(false);
-    // Refresh dashboard to reflect new revenue and machine 'Busy' status
-    loadDashboardData(true);
+    loadDashboardData(true); // Immediate refresh to reflect new transaction
   };
 
   // ── LOADING STATE ──────────────────────────────────────────────────────────
@@ -77,7 +84,7 @@ const Dashboard = () => {
   return (
     <div className="p-8 bg-slate-50 min-h-screen space-y-10 font-sans">
 
-      {/* SECTION 1: HEADER & ACTIONS */}
+      {/* SECTION 1: HEADER & GLOBAL ACTIONS */}
       <div className="flex flex-col lg:flex-row justify-between items-start gap-6">
         <div>
           <div className="flex items-center gap-3 mb-1">
@@ -123,7 +130,7 @@ const Dashboard = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
           title="Daily Gross Revenue"
-          value={stats?.total_revenue ? `₱${stats.total_revenue.toLocaleString()}` : "₱0"}
+          value={stats?.total_revenue ? `₱${Number(stats.total_revenue).toLocaleString()}` : "₱0"}
           trend={stats?.revenue_trend || "+0%"}
           type="revenue"
         />
@@ -135,9 +142,9 @@ const Dashboard = () => {
         />
         <StatCard
           title="Avg Transaction"
-          value={stats?.avg_income ? `₱${stats.avg_income.toLocaleString()}` : "₱0"}
+          value={stats?.avg_income ? `₱${Number(stats.avg_income).toLocaleString()}` : "₱0"}
           trend={stats?.income_trend || "0%"}
-          isNegative={stats?.income_trend?.includes('-')}
+          isNegative={stats?.income_trend?.toString().includes('-')}
           type="income"
         />
         <StatCard
@@ -151,8 +158,7 @@ const Dashboard = () => {
       {/* SECTION 3: ANALYTICS ENGINE */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 bg-white p-10 rounded-[56px] border border-slate-100 shadow-sm relative overflow-hidden">
-          {/* Subtle Background Accent */}
-          <div className="absolute top-0 right-0 w-64 h-64 bg-sky-50/50 rounded-full blur-3xl -mr-32 -mt-32" />
+          <div className="absolute top-0 right-0 w-64 h-64 bg-sky-50/50 rounded-full blur-3xl -mr-32 -mt-32 pointer-events-none" />
           
           <div className="flex justify-between items-start mb-10 relative z-10">
             <div>
@@ -188,7 +194,7 @@ const Dashboard = () => {
             <BreakdownItem label="Wash Cycles" value={stats?.wash_only || 0} />
             <BreakdownItem label="Dry Cycles"  value={stats?.dry_only || 0} />
             <BreakdownItem label="Full Service" value={stats?.full_service || 0} />
-            <BreakdownItem label="Net Load"   value={`${stats?.total_weight || 0}kg`} />
+            <BreakdownItem label="Net Load"    value={`${stats?.total_weight || 0}kg`} />
           </div>
         </div>
 
