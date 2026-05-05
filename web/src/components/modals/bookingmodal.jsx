@@ -1,28 +1,33 @@
 import React, { useState, useEffect } from 'react';
-import { X, User, Weight, Settings2, CheckCircle2, Hash, Droplets, Truck, Zap, Info, Calculator, Edit3, Tag, Cpu } from 'lucide-react';
+import { X, User, Weight, Settings2, CheckCircle2, Hash, Calculator, Edit3, Tag, Cpu, Truck, Droplets } from 'lucide-react';
+import apiService from '../../services/APIservices';
+import { formatCurrency } from '../../utils/formatters';
 
+/**
+ * BookingModal Component
+ * Handles the creation of new laundry orders with Smart Calculation 
+ * and Manual Override modes.
+ */
 const BookingModal = ({ isOpen, onClose, onSubmit }) => {
-  // 'smart' for auto-calc logic, 'manual' for full user override
   const [bookingMode, setBookingMode] = useState('smart');
-  
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [machineData, setMachineData] = useState([]);
+
   const [formData, setFormData] = useState({
     customerName: '',
     serviceType: 'Full Service',
     itemType: 'Clothes',
     weight: 1,
-    calculatedLoads: 1, 
-    selectedWasher: null, // Track selected washing machine ID
-    selectedDryer: null,  // Track selected dryer ID
+    calculatedLoads: 1,
+    selectedWasher: null,
+    selectedDryer: null,
     addDetergent: false,
     addDelivery: false,
     isRush: false,
-    totalPrice: 0 
+    totalPrice: 0
   });
 
-  // Machine Data Arrays
-  const washers = [1, 2, 3, 4, 5, 6];
-  const dryers = [1, 2, 3, 4, 5, 6];
-
+  // Business Logic: Pricing Rates per unit
   const RATES = {
     FULL_SERVICE: 210,
     REGULAR_WASH: 65,
@@ -30,12 +35,35 @@ const BookingModal = ({ isOpen, onClose, onSubmit }) => {
     COMFORTER_PER_KG: 105
   };
 
+  // Business Logic: Weight limits per load based on item category
   const CAPACITY = {
     CLOTHES_MAX: 6,
     LINENS_MAX: 4
   };
 
-  // Automated price/load calculation logic
+  /**
+   * SYNC: Fetch machine availability from Backend when modal opens.
+   * Ensures the UI reflects real-time machine status (Busy, Available, Maintenance).
+   */
+  useEffect(() => {
+    if (isOpen) {
+      const fetchAvailability = async () => {
+        try {
+          const data = await apiService.getMachines();
+          setMachineData(data || []);
+        } catch (error) {
+          console.error("Error fetching machine availability:", error);
+        }
+      };
+      fetchAvailability();
+    }
+  }, [isOpen]);
+
+  /**
+   * LOGIC: Auto-calculate pricing and load count based on service rates.
+   * This effect only runs when 'smart' mode is active.
+   * In 'manual' mode, the user has full control over the inputs.
+   */
   useEffect(() => {
     if (bookingMode === 'manual') return;
 
@@ -61,8 +89,10 @@ const BookingModal = ({ isOpen, onClose, onSubmit }) => {
       loads = 1; 
     }
 
+    // Add-on calculations: Flat fees for Detergent and Delivery
     if (formData.addDetergent) base += 40; 
     if (formData.addDelivery) base += 70; 
+    // Rush fee: 40% markup on total
     if (formData.isRush) base *= 1.4;
 
     setFormData(prev => ({ 
@@ -74,91 +104,216 @@ const BookingModal = ({ isOpen, onClose, onSubmit }) => {
 
   if (!isOpen) return null;
 
+  /**
+   * Handles generic input changes for text, numbers, and checkboxes.
+   */
   const handleChange = (e) => {
-    const { name, value, type } = e.target;
+    const { name, value, type, checked } = e.target;
     setFormData(prev => ({ 
       ...prev, 
-      [name]: type === 'number' ? parseFloat(value) || 0 : value 
+      [name]: type === 'checkbox' ? checked : (type === 'number' ? parseFloat(value) || 0 : value)
     }));
   };
 
-  const selectMachine = (type, id) => {
-    const field = type === 'washer' ? 'selectedWasher' : 'selectedDryer';
+  /**
+   * Selection Logic: Assigns a specific Washer or Dryer to the booking.
+   * Prevents selection of machines that are currently Busy or Under Maintenance.
+   */
+  const selectMachine = (id, currentStatus) => {
+    const statusLower = currentStatus?.toLowerCase();
+    if (statusLower !== 'available' && statusLower !== 'idle' && currentStatus !== undefined) return;
+
+    const machine = machineData.find(m => m.id === id);
+    const type = machine?.machine_type || (id.startsWith('w') ? 'Washer' : 'Dryer');
+    const field = type === 'Washer' ? 'selectedWasher' : 'selectedDryer';
+
     setFormData(prev => ({
       ...prev,
-      [field]: prev[field] === id ? null : id // Toggle selection
+      [field]: prev[field] === id ? null : id 
     }));
   };
 
-  const toggleField = (field) => {
-    setFormData(prev => ({ ...prev, [field]: !prev[field] }));
+  /**
+   * Submission: Sends the structured booking payload to the FastAPI backend.
+   * Includes validation to ensure at least one machine is assigned.
+   */
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!formData.selectedWasher && !formData.selectedDryer) {
+        alert("Please assign at least one machine to proceed.");
+        return;
+    }
+    setIsSubmitting(true);
+
+    try {
+      const payload = {
+        customer_name: formData.customerName,
+        service_type: formData.serviceType,
+        category: formData.itemType,
+        weight: formData.weight,
+        loads: formData.calculatedLoads,
+        total_price: formData.totalPrice,
+        selected_washer_id: formData.selectedWasher,
+        selected_dryer_id: formData.selectedDryer,
+        is_rush: formData.isRush,
+        booking_mode: bookingMode,
+        add_detergent: formData.addDetergent,
+        add_delivery: formData.addDelivery
+      };
+
+      const response = await apiService.createBooking(payload);
+      if (onSubmit) onSubmit(response);
+      onClose();
+      
+      // Reset form to initial state on success
+      setFormData({
+        customerName: '',
+        serviceType: 'Full Service',
+        itemType: 'Clothes',
+        weight: 1,
+        calculatedLoads: 1,
+        selectedWasher: null,
+        selectedDryer: null,
+        addDetergent: false,
+        addDelivery: false,
+        isRush: false,
+        totalPrice: 0
+      });
+    } catch (error) {
+      alert(error.response?.data?.detail || "Action failed. Machine status might have changed.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    onSubmit({ ...formData, mode: bookingMode });
-    onClose();
+  const machineSlots = [1, 2, 3, 4, 5, 6];
+
+  const renderMachineGrid = (type) => {
+    return machineSlots.map((num) => {
+      const machine = machineData.find(m => m.machine_type === type && m.machine_number === num);
+      const machineId = machine?.id || `${type.toLowerCase()}-${num}`;
+      const isSelected = type === 'Washer' ? formData.selectedWasher === machineId : formData.selectedDryer === machineId;
+      
+      const status = machine?.status?.toLowerCase() || 'available';
+      const isBusy = status !== 'available' && status !== 'idle';
+
+      return (
+        <button
+          key={`${type}-${num}`}
+          type="button"
+          onClick={() => selectMachine(machineId, status)}
+          disabled={isBusy}
+          className={`h-12 rounded-2xl text-[12px] font-black border-2 transition-all duration-300 relative group
+            ${isSelected 
+              ? (type === 'Washer' 
+                  ? 'bg-sky-500 border-sky-600 text-white shadow-lg shadow-sky-200 scale-105' 
+                  : 'bg-orange-500 border-orange-600 text-white shadow-lg shadow-orange-200 scale-105') 
+              : isBusy 
+                ? 'bg-slate-50 border-slate-100 text-slate-300 cursor-not-allowed opacity-60' 
+                : 'bg-white border-slate-200 text-slate-600 hover:border-sky-400 hover:bg-sky-50/30'
+            }`}
+        >
+          <div className="flex flex-col items-center justify-center leading-tight">
+            <span>{type === 'Washer' ? 'W' : 'D'}{num}</span>
+            {isBusy && <span className="text-[7px] opacity-70 uppercase">{status}</span>}
+          </div>
+          {isSelected && (
+            <span className="absolute -top-1 -right-1 w-3 h-3 bg-white rounded-full border-2 border-inherit animate-pulse" />
+          )}
+        </button>
+      );
+    });
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 text-slate-700">
-      <div className="bg-white w-full max-w-xl rounded-[40px] shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200 flex flex-col max-h-[95vh]">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4">
+      <div className="bg-white w-full max-w-xl rounded-[48px] shadow-2xl overflow-hidden flex flex-col max-h-[92vh] border border-white/20">
         
-        {/* Header and Mode Switcher */}
-        <div className="px-8 pt-8 pb-4 border-b border-slate-50 shrink-0">
-          <div className="flex justify-between items-start mb-4">
+        {/* MODAL HEADER */}
+        <div className="px-10 pt-10 pb-6 border-b border-slate-50 shrink-0">
+          <div className="flex justify-between items-start mb-6">
             <div>
-              <h2 className="text-2xl font-black text-slate-800">New Booking</h2>
-              <p className="text-slate-400 font-medium text-xs tracking-tight">Configure service and select machines</p>
+              <h2 className="text-3xl font-black text-slate-900 tracking-tighter">Create Booking</h2>
+              <p className="text-slate-400 font-bold text-[11px] uppercase tracking-[0.2em] mt-1">LaundryLink Smart Terminal</p>
             </div>
-            <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full text-slate-300 transition-colors">
+            <button onClick={onClose} className="p-3 hover:bg-rose-50 hover:text-rose-500 rounded-2xl text-slate-300 transition-all active:scale-90">
               <X size={24} />
             </button>
           </div>
 
-          <div className="bg-slate-100 p-1 rounded-2xl flex items-center shadow-inner">
+          <div className="bg-slate-100/80 p-1.5 rounded-[24px] flex items-center">
             <button 
               type="button"
               onClick={() => setBookingMode('smart')}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[10px] font-black transition-all ${bookingMode === 'smart' ? 'text-sky-600 bg-white shadow-md' : 'text-slate-400 hover:text-slate-500'}`}
+              className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-[18px] text-[11px] font-black transition-all ${bookingMode === 'smart' ? 'text-sky-600 bg-white shadow-sm' : 'text-slate-400 hover:text-slate-500'}`}
             >
-              <Calculator size={14} /> SMART MODE
+              <Calculator size={14} /> SMART CALC
             </button>
             <button 
               type="button"
               onClick={() => setBookingMode('manual')}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[10px] font-black transition-all ${bookingMode === 'manual' ? 'text-orange-600 bg-white shadow-md' : 'text-slate-400 hover:text-slate-500'}`}
+              className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-[18px] text-[11px] font-black transition-all ${bookingMode === 'manual' ? 'text-orange-600 bg-white shadow-sm' : 'text-slate-400 hover:text-slate-500'}`}
             >
-              <Edit3 size={14} /> MANUAL INPUT
+              <Edit3 size={14} /> MANUAL OVERRIDE
             </button>
           </div>
         </div>
 
-        {/* Scrollable Form Content */}
-        <form onSubmit={handleSubmit} className="p-8 space-y-6 overflow-y-auto">
+        <form onSubmit={handleSubmit} className="px-10 py-8 space-y-8 overflow-y-auto custom-scrollbar flex-1">
           
-          {/* Customer Name */}
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase ml-1 flex items-center gap-2 tracking-[0.15em]">
-              <User size={12} className={bookingMode === 'manual' ? 'text-orange-500' : 'text-sky-500'} /> Customer Name
-            </label>
-            <input 
-              name="customerName" required value={formData.customerName} onChange={handleChange}
-              className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 font-bold text-slate-700 focus:ring-4 ring-sky-50 outline-none transition-all" 
-              placeholder="Full Name" 
-            />
-          </div>
+          <div className="grid grid-cols-2 gap-5">
+            <div className="space-y-3 col-span-2">
+              <label className="text-[11px] font-black text-slate-400 uppercase ml-2 flex items-center gap-2 tracking-widest">
+                <User size={14} className="text-sky-500" /> Customer Name
+              </label>
+              <input 
+                name="customerName" required value={formData.customerName} onChange={handleChange}
+                className="w-full bg-slate-50/50 border-2 border-slate-100 rounded-[24px] px-6 py-4 font-bold text-slate-800 focus:ring-4 ring-sky-50 focus:border-sky-200 outline-none transition-all placeholder:text-slate-300" 
+                placeholder="Juan Dela Cruz" 
+              />
+            </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            {/* Service & Category Logic */}
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase ml-1 flex items-center gap-2 tracking-[0.15em]">
-                <Settings2 size={12} className={bookingMode === 'manual' ? 'text-orange-500' : 'text-sky-500'} /> Service
+            <div className="space-y-3">
+              <label className="text-[11px] font-black text-slate-400 uppercase ml-2 flex items-center gap-2 tracking-widest">
+                <Weight size={14} className="text-sky-500" /> Weight (kg)
+              </label>
+              <input 
+                name="weight" type="number" step="0.1" required value={formData.weight} onChange={handleChange}
+                className={`w-full border-2 rounded-[24px] px-6 py-4 font-bold outline-none transition-all ${bookingMode === 'manual' ? 'bg-orange-50/30 border-orange-100 text-orange-600 focus:border-orange-200' : 'bg-slate-50/50 border-slate-100 text-slate-800 focus:border-sky-200'}`} 
+              />
+            </div>
+
+            <div className="space-y-3">
+              <label className="text-[11px] font-black text-slate-400 uppercase ml-2 flex items-center gap-2 tracking-widest">
+                <Hash size={14} className="text-sky-500" /> {bookingMode === 'manual' ? 'Manual Loads' : 'Est. Loads'}
               </label>
               {bookingMode === 'manual' ? (
-                <input name="serviceType" value={formData.serviceType} onChange={handleChange} className="w-full bg-orange-50/50 border border-orange-200 rounded-2xl px-5 py-4 font-bold text-orange-700 outline-none" placeholder="Service" />
+                <input 
+                  name="calculatedLoads" type="number" value={formData.calculatedLoads} onChange={handleChange}
+                  className="w-full bg-orange-50/30 border-2 border-orange-100 rounded-[24px] px-6 py-4 font-black text-orange-600 focus:border-orange-200 outline-none"
+                />
               ) : (
-                <select name="serviceType" value={formData.serviceType} onChange={handleChange} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 font-bold text-slate-700 outline-none">
+                <div className="w-full bg-slate-100 border-2 border-slate-100 rounded-[24px] px-6 py-4 font-black text-slate-400">
+                  {formData.calculatedLoads} {formData.calculatedLoads > 1 ? 'Loads' : 'Load'}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-5">
+            <div className="space-y-3">
+              <label className="text-[11px] font-black text-slate-400 uppercase ml-2 flex items-center gap-2 tracking-widest">
+                <Settings2 size={14} className="text-sky-500" /> Service Type
+              </label>
+              {bookingMode === 'manual' ? (
+                <input 
+                   name="serviceType" value={formData.serviceType} onChange={handleChange}
+                   placeholder="Enter Service"
+                   className="w-full bg-orange-50/30 border-2 border-orange-100 rounded-[24px] px-6 py-4 font-bold text-orange-600 focus:border-orange-200 outline-none"
+                />
+              ) : (
+                <select name="serviceType" value={formData.serviceType} onChange={handleChange} className="w-full bg-slate-50 border-2 border-slate-100 rounded-[24px] px-6 py-4 font-bold text-slate-800 outline-none cursor-pointer focus:border-sky-200">
                   <option value="Full Service">Full Service</option>
                   <option value="Self-Service (8kg)">Regular Wash</option>
                   <option value="Titan Wash (12kg)">Titan Wash</option>
@@ -167,104 +322,114 @@ const BookingModal = ({ isOpen, onClose, onSubmit }) => {
               )}
             </div>
 
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase ml-1 flex items-center gap-2 tracking-[0.15em]">
-                <Tag size={12} className={bookingMode === 'manual' ? 'text-orange-500' : 'text-sky-500'} /> Category
+            <div className="space-y-3">
+              <label className="text-[11px] font-black text-slate-400 uppercase ml-2 flex items-center gap-2 tracking-widest">
+                <Tag size={14} className="text-sky-500" /> Category
               </label>
               {bookingMode === 'manual' ? (
-                <input name="itemType" value={formData.itemType} onChange={handleChange} className="w-full bg-orange-50/50 border border-orange-200 rounded-2xl px-5 py-4 font-bold text-orange-700 outline-none" placeholder="Category" />
+                <input 
+                  name="itemType" value={formData.itemType} onChange={handleChange}
+                  placeholder="Enter Category"
+                  className="w-full bg-orange-50/30 border-2 border-orange-100 rounded-[24px] px-6 py-4 font-bold text-orange-600 focus:border-orange-200 outline-none"
+                />
               ) : (
-                <select name="itemType" value={formData.itemType} onChange={handleChange} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 font-bold text-slate-700 outline-none">
+                <select name="itemType" value={formData.itemType} onChange={handleChange} className="w-full bg-slate-50 border-2 border-slate-100 rounded-[24px] px-6 py-4 font-bold text-slate-800 outline-none cursor-pointer focus:border-sky-200">
                   <option value="Clothes">Regular Clothes</option>
-                  <option value="Linens">Linens/Bedding</option>
+                  <option value="Linens">Linens / Bedding</option>
                 </select>
               )}
             </div>
           </div>
 
-          {/* Machine Selection Grid */}
-          <div className="space-y-4">
-            <label className="text-[10px] font-black text-slate-400 uppercase ml-1 flex items-center gap-2 tracking-[0.15em]">
-              <Cpu size={12} className="text-sky-500" /> Machine Assignment
-            </label>
-            
-            <div className="grid grid-cols-2 gap-6">
-              {/* Washers 1-6 */}
-              <div className="space-y-2">
-                <span className="text-[9px] font-bold text-slate-400 block ml-1 italic">Washing Machines</span>
-                <div className="grid grid-cols-3 gap-2">
-                  {washers.map(id => (
-                    <button
-                      key={`w-${id}`} type="button" onClick={() => selectMachine('washer', id)}
-                      className={`py-2 rounded-xl text-xs font-black border-2 transition-all ${formData.selectedWasher === id ? 'bg-sky-500 border-sky-500 text-white shadow-lg' : 'bg-slate-50 border-slate-100 text-slate-400 hover:border-sky-200'}`}
-                    >
-                      W{id}
-                    </button>
-                  ))}
+          {/* ADD-ONS SECTION: Configured for simple selection in both modes */}
+          <div className="grid grid-cols-3 gap-4">
+            <button
+              type="button"
+              onClick={() => handleChange({ target: { name: 'addDetergent', type: 'checkbox', checked: !formData.addDetergent } })}
+              className={`p-4 rounded-[24px] border-2 flex flex-col items-center gap-2 transition-all ${formData.addDetergent ? 'bg-sky-500 border-sky-600 text-white shadow-md' : 'bg-white border-slate-100 text-slate-400'}`}
+            >
+              <Droplets size={20} />
+              <span className="text-[10px] font-black uppercase">Detergent</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleChange({ target: { name: 'addDelivery', type: 'checkbox', checked: !formData.addDelivery } })}
+              className={`p-4 rounded-[24px] border-2 flex flex-col items-center gap-2 transition-all ${formData.addDelivery ? 'bg-sky-500 border-sky-600 text-white shadow-md' : 'bg-white border-slate-100 text-slate-400'}`}
+            >
+              <Truck size={20} />
+              <span className="text-[10px] font-black uppercase">Delivery</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleChange({ target: { name: 'isRush', type: 'checkbox', checked: !formData.isRush } })}
+              className={`p-4 rounded-[24px] border-2 flex flex-col items-center gap-2 transition-all ${formData.isRush ? 'bg-rose-500 border-rose-600 text-white shadow-md' : 'bg-white border-slate-100 text-slate-400'}`}
+            >
+              <CheckCircle2 size={20} />
+              <span className="text-[10px] font-black uppercase">Rush</span>
+            </button>
+          </div>
+
+          <div className="space-y-6 p-8 bg-slate-50/50 rounded-[40px] border-2 border-slate-100">
+            <div className="flex justify-between items-center px-2">
+                <label className="text-[11px] font-black text-slate-500 uppercase flex items-center gap-2 tracking-[0.2em]">
+                <Cpu size={14} className="text-sky-500" /> Machine Assignment
+                </label>
+                <span className="text-[10px] font-bold text-sky-600 bg-sky-50 px-3 py-1 rounded-full uppercase tracking-tighter">Live Status</span>
+            </div>
+            <div className="grid grid-cols-2 gap-10">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Washers</span>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  {renderMachineGrid('Washer')}
                 </div>
               </div>
-
-              {/* Dryers 1-6 */}
-              <div className="space-y-2">
-                <span className="text-[9px] font-bold text-slate-400 block ml-1 italic">Dryer Machines</span>
-                <div className="grid grid-cols-3 gap-2">
-                  {dryers.map(id => (
-                    <button
-                      key={`d-${id}`} type="button" onClick={() => selectMachine('dryer', id)}
-                      className={`py-2 rounded-xl text-xs font-black border-2 transition-all ${formData.selectedDryer === id ? 'bg-orange-500 border-orange-500 text-white shadow-lg' : 'bg-slate-50 border-slate-100 text-slate-400 hover:border-orange-200'}`}
-                    >
-                      D{id}
-                    </button>
-                  ))}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Dryers</span>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  {renderMachineGrid('Dryer')}
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            {/* Weight & Loads */}
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase ml-1 flex items-center gap-2 tracking-[0.15em]">
-                <Weight size={12} /> Weight
-              </label>
-              <div className="relative">
-                <input name="weight" type="number" step="0.1" value={formData.weight} onChange={handleChange} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 font-black text-slate-700 outline-none" />
-                <span className="absolute right-5 top-1/2 -translate-y-1/2 font-bold text-slate-300">kg</span>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase ml-1 flex items-center gap-2 tracking-[0.15em]">
-                <Hash size={12} /> Loads
-              </label>
-              <input 
-                name="calculatedLoads" type="number" value={formData.calculatedLoads} onChange={handleChange}
-                readOnly={bookingMode === 'smart'}
-                className={`w-full border rounded-2xl px-5 py-4 font-black transition-all outline-none ${bookingMode === 'manual' ? 'bg-orange-50 border-orange-200 text-orange-600' : 'bg-sky-50 border-sky-100 text-sky-600 cursor-not-allowed'}`}
-              />
-            </div>
-          </div>
-
-          {/* Pricing Block */}
-          <div className={`rounded-[32px] p-6 flex justify-between items-center shadow-xl transition-all duration-500 shrink-0 ${bookingMode === 'manual' ? 'bg-orange-600' : 'bg-slate-900'}`}>
+          {/* TOTAL PAYABLE: Using formatCurrency for standard Peso formatting */}
+          <div className={`rounded-[32px] p-8 flex justify-between items-center shadow-2xl transition-all duration-500 ${bookingMode === 'manual' ? 'bg-orange-600 shadow-orange-100' : 'bg-slate-900 shadow-slate-200'}`}>
             <div className="flex flex-col">
-              <span className="font-bold text-white/40 text-[9px] uppercase tracking-[0.25em]">Total Amount</span>
-              <span className="text-[10px] text-white/80 font-black italic mt-1 uppercase">{bookingMode === 'manual' ? 'Manual Override' : 'Calculated Price'}</span>
+              <span className="font-bold text-white/40 text-[10px] uppercase tracking-[0.4em]">Total Payable</span>
+              <span className="text-[11px] text-white font-black italic mt-1 tracking-wider">
+                {bookingMode === 'manual' ? '✦ MANUAL OVERRIDE ACTIVE' : '✓ SYSTEM AUTO-CALC'}
+              </span>
             </div>
-            <div className="flex items-center gap-2 bg-white/10 p-2 px-4 rounded-2xl border border-white/10">
-              <span className="text-xl font-black text-white/50">₱</span>
+            <div className="flex items-center gap-3 bg-white/10 p-3 px-6 rounded-[24px] border border-white/20">
               {bookingMode === 'manual' ? (
-                <input name="totalPrice" type="number" value={formData.totalPrice} onChange={handleChange} className="bg-transparent text-3xl font-black text-white w-24 outline-none border-b-2 border-white/20" />
+                <div className="flex items-center gap-2">
+                   <span className="text-3xl font-black text-white/30">₱</span>
+                   <input 
+                    name="totalPrice" 
+                    type="number" 
+                    value={formData.totalPrice} 
+                    onChange={handleChange} 
+                    className="bg-transparent text-4xl font-black text-white w-28 outline-none border-b-4 border-white/20 focus:border-white transition-all" 
+                   />
+                </div>
               ) : (
-                <span className="text-4xl font-black text-white">{formData.totalPrice}</span>
+                <span className="text-4xl font-black text-white tracking-tighter">
+                    {formatCurrency(formData.totalPrice)}
+                </span>
               )}
             </div>
           </div>
 
           <button 
             type="submit" 
-            className={`w-full text-white py-5 rounded-[24px] font-black text-lg shadow-xl transition-all flex items-center justify-center gap-3 ${bookingMode === 'manual' ? 'bg-orange-500 shadow-orange-500/30' : 'bg-sky-500 shadow-sky-500/30'}`}
+            disabled={isSubmitting}
+            className={`w-full text-white py-6 rounded-[32px] font-black text-2xl shadow-xl transition-all flex items-center justify-center gap-4 active:scale-95 ${isSubmitting ? 'opacity-70 cursor-wait' : ''} ${bookingMode === 'manual' ? 'bg-orange-500 hover:bg-orange-400 shadow-orange-200' : 'bg-sky-600 hover:bg-sky-500 shadow-sky-200'}`}
           >
-            <CheckCircle2 size={24} /> Confirm Transaction
+            {isSubmitting ? 'Processing...' : <><CheckCircle2 size={28} /> Finalize Booking</>}
           </button>
         </form>
       </div>
