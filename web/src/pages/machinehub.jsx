@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Zap, Droplets, FlaskConical, Trash2, RefreshCw, AlertTriangle, Waves, Wind, CheckCircle } from 'lucide-react';
+import { Plus, Zap, Droplets, FlaskConical, Trash2, RefreshCw, AlertTriangle, Waves, Wind, CheckCircle, Repeat } from 'lucide-react';
 import apiService from '../services/APIservices';
+import optimizationLogic from '../utils/optimizationlogic';
 import MachineModal from '../components/modals/machinemodal';
 
 /**
- * DEFAULT_MACHINES
- * Static hardware grid (W1-W6, D1-D6). 
- * This ensures the table layout remains consistent even if database records are missing.
+ * DEFAULT_HARDWARE_GRID
+ * Provides a UI skeleton (W1-W6, D1-D6) to ensure the layout remains 
+ * consistent while data is being fetched from the database.
  */
 const DEFAULT_MACHINES = [
   ...Array.from({ length: 6 }, (_, i) => ({
@@ -15,9 +16,7 @@ const DEFAULT_MACHINES = [
     machine_type: 'Washer',
     status: null,
     total_cycles: 0,
-    avg_detergent: 0,
-    avg_electricity: 0,
-    avg_water: 0,
+    metrics: { detergent_cost: 0, electricity_cost: 0, water_cost: 0, total_overhead: 0 }
   })),
   ...Array.from({ length: 6 }, (_, i) => ({
     _key: `D${i + 1}`,
@@ -25,9 +24,7 @@ const DEFAULT_MACHINES = [
     machine_type: 'Dryer',
     status: null,
     total_cycles: 0,
-    avg_detergent: 0,
-    avg_electricity: 0,
-    avg_water: 0,
+    metrics: { detergent_cost: 0, electricity_cost: 0, water_cost: 0, total_overhead: 0 }
   })),
 ];
 
@@ -40,8 +37,8 @@ const MachineHub = () => {
   const [costs, setCosts] = useState({ detergent: 0, electricity: 0, water: 0 });
 
   /**
-   * SYNC LOGIC: Fetches live telemetry from the FastAPI backend.
-   * Calculates aggregated shop expenses based on cycle counts and utility rates.
+   * TELEMETRY SYNC: Synchronizes machine status and lifetime metrics from the API.
+   * Maps backend data to the local UI state and aggregates shop-wide expenses.
    */
   const syncMachineData = useCallback(async () => {
     try {
@@ -50,15 +47,13 @@ const MachineHub = () => {
       
       const list = (data || []).map(m => ({
         ...m,
-        avg_detergent:   Number(m.avg_detergent)   || 0,
-        avg_electricity: Number(m.avg_electricity)  || 0,
-        avg_water:       Number(m.avg_water)        || 0,
-        total_cycles:    parseInt(m.total_cycles)   || 0,
+        total_cycles: parseInt(m.total_cycles) || 0,
+        metrics: m.metrics || { detergent_cost: 0, electricity_cost: 0, water_cost: 0, total_overhead: 0 }
       }));
 
       setDbMachines(list);
 
-      // Identify hardware that exists in DB but falls outside the standard 1-6 range
+      // Separate additional hardware units that fall outside the standard 1-6 grid
       const extras = list.filter(m => {
         const isDefaultWasher = m.machine_type === 'Washer' && m.machine_number <= 6;
         const isDefaultDryer  = m.machine_type === 'Dryer'  && m.machine_number <= 6;
@@ -66,22 +61,22 @@ const MachineHub = () => {
       });
       setExtraMachines(extras);
 
-      // Calculate Total Operating Expenses (TOE)
+      // Calculate total business expenditure across all registered nodes
       const totals = list.reduce((acc, m) => ({
-        detergent:   acc.detergent   + (m.avg_detergent * m.total_cycles),
-        electricity: acc.electricity + (m.avg_electricity * m.total_cycles),
-        water:       acc.water       + (m.avg_water * m.total_cycles),
+        detergent:   acc.detergent   + (m.metrics.detergent_cost || 0),
+        electricity: acc.electricity + (m.metrics.electricity_cost || 0),
+        water:       acc.water       + (m.metrics.water_cost || 0),
       }), { detergent: 0, electricity: 0, water: 0 });
       
       setCosts(totals);
     } catch (err) {
-      console.error('Hardware Telemetry Sync Failed:', err);
+      console.error('Data Sync Error:', err);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // Polling: Refresh data every 30 seconds for live updates
+  // Lifecycle: Initialize data fetch and set polling interval for real-time updates
   useEffect(() => {
     syncMachineData();
     const interval = setInterval(syncMachineData, 30000);
@@ -89,20 +84,19 @@ const MachineHub = () => {
   }, [syncMachineData]);
 
   /**
-   * ACTIONS
+   * HARDWARE MANAGEMENT ACTIONS
    */
   const handleDeleteMachine = async (id) => {
     if (!id) return;
-    if (!window.confirm("CRITICAL: Remove this hardware unit? This cannot be undone.")) return;
+    if (!window.confirm("PERMANENT ACTION: Unregister this unit? All historical metrics and cycle logs will be deleted.")) return;
     
     try {
       setLoading(true);
       await apiService.deleteMachine(id);
-      showToast("Hardware de-registered successfully");
+      showToast("Unit successfully removed");
       await syncMachineData();
     } catch (error) {
-      // Logic: Backend prevents deletion if machine is linked to active transactions
-      alert("Conflict: Unit is currently assigned to a booking or active cycle.");
+      alert("Error: Active bookings are currently assigned to this unit.");
     } finally {
       setLoading(false);
     }
@@ -112,10 +106,10 @@ const MachineHub = () => {
     if (!id) return;
     try {
       await apiService.toggleMaintenance(id);
-      showToast("Status updated");
+      showToast("Machine status updated");
       await syncMachineData();
     } catch (err) {
-      console.error("Maintenance toggle failed:", err);
+      console.error("Status update failed:", err);
     }
   };
 
@@ -127,8 +121,7 @@ const MachineHub = () => {
   const getMachineLabel = (m) => `${m.machine_type === 'Washer' ? 'W' : 'D'}${m.machine_number}`;
 
   /**
-   * DATA MERGING
-   * Prioritizes DB values over Default placeholders for the primary 12 slots.
+   * MERGE LOGIC: Integrates live DB records into the static UI grid.
    */
   const mergedMachines = DEFAULT_MACHINES.map(slot => {
     const live = dbMachines.find(
@@ -142,7 +135,7 @@ const MachineHub = () => {
   return (
     <div className="p-8 bg-slate-50 min-h-screen font-sans">
       
-      {/* Dynamic Notification Toast */}
+      {/* Action Notification */}
       {successMsg && (
         <div className="fixed top-6 right-6 z-50 bg-slate-900 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4">
           <CheckCircle size={18} className="text-emerald-400" />
@@ -150,48 +143,47 @@ const MachineHub = () => {
         </div>
       )}
 
-      {/* Interface Header */}
+      {/* Header Section */}
       <div className="flex justify-between items-start mb-8">
         <div>
           <h2 className="text-slate-900 font-bold text-lg mb-1">
             {localStorage.getItem('shop_name') || 'Laundromat Command Center'}
           </h2>
-          <p className="text-slate-500 text-sm font-medium mb-4 tracking-tight uppercase">Node Management</p>
+          <p className="text-slate-500 text-sm font-medium mb-4 tracking-tight uppercase">Infrastructure Management</p>
           <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight">Machine Hub</h1>
-          <p className="text-slate-400 text-sm mt-1">Monitor utility overhead and individual hardware health.</p>
+          <p className="text-slate-400 text-sm mt-1">Monitoring lifecycle cycles and resource consumption.</p>
         </div>
 
         <div className="flex items-center gap-3 mt-4">
           <button
             onClick={syncMachineData}
-            title="Refresh Telemetry"
             className={`p-3 bg-white border border-slate-200 rounded-xl text-slate-400 hover:text-sky-500 transition-all shadow-sm ${loading ? 'animate-spin' : ''}`}
           >
             <RefreshCw size={18} />
           </button>
           <button
             onClick={() => setIsModalOpen(true)}
-            className="bg-sky-500 hover:bg-sky-600 text-white px-8 py-3 rounded-2xl font-black flex items-center gap-2 shadow-lg shadow-sky-100 active:scale-95 transition-all"
+            className="bg-sky-500 hover:bg-sky-600 text-white px-8 py-3 rounded-2xl font-black flex items-center gap-2 shadow-lg shadow-sky-100 transition-all"
           >
-            <Plus size={18} strokeWidth={3} /> ADD UNIT
+            <Plus size={18} strokeWidth={3} /> REGISTER UNIT
           </button>
         </div>
       </div>
 
-      {/* Aggregate Cost Analytics */}
+      {/* Global Metrics Dashboard */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <CostCard icon={<FlaskConical size={24} />} label="Detergent Overhead" value={`₱${costs.detergent.toLocaleString(undefined, {minimumFractionDigits: 2})}`} color="purple" />
-        <CostCard icon={<Zap size={24} />} label="Energy Consumption" value={`₱${costs.electricity.toLocaleString(undefined, {minimumFractionDigits: 2})}`} color="amber" />
-        <CostCard icon={<Droplets size={24} />} label="Water Utility" value={`₱${costs.water.toLocaleString(undefined, {minimumFractionDigits: 2})}`} color="blue" />
+        <CostCard icon={<FlaskConical size={24} />} label="Total Detergent Spend" value={optimizationLogic.formatCurrency(costs.detergent)} color="purple" />
+        <CostCard icon={<Zap size={24} />} label="Total Energy Expense" value={optimizationLogic.formatCurrency(costs.electricity)} color="amber" />
+        <CostCard icon={<Droplets size={24} />} label="Total Water Utility" value={optimizationLogic.formatCurrency(costs.water)} color="blue" />
       </div>
 
-      {/* Hardware Inventory Table */}
+      {/* Machine Data Grid */}
       <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50/50">
-                {['Hardware ID', 'Machine Type', 'System Status', 'Cycle Count', 'Detergent/c', 'Electricity/c', 'Water/c', 'Management'].map(h => (
+                {['Machine ID', 'Category', 'Operational Status', 'Usage Logs', 'Electricity', 'Water', 'Detergent', 'Actions'].map(h => (
                   <th key={h} className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">
                     {h}
                   </th>
@@ -202,7 +194,6 @@ const MachineHub = () => {
             <tbody className="divide-y divide-slate-50">
               {allRows.map((m) => {
                 const isRegistered = !!m.id;
-                const currentStatus = m.status || 'Offline';
 
                 return (
                   <tr key={m._key || m.id} className="hover:bg-slate-50/50 transition-colors group">
@@ -217,50 +208,53 @@ const MachineHub = () => {
                       </div>
                     </td>
 
-                    <td className="px-6 py-5 font-bold text-slate-500 text-xs">{m.machine_type.toUpperCase()}</td>
+                    <td className="px-6 py-5 font-bold text-slate-500 text-xs">{m.machine_type?.toUpperCase()}</td>
 
-                    {/* Operational Status */}
+                    {/* Status Indicator */}
                     <td className="px-6 py-5">
                       <span className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-tight border ${
-                        currentStatus === 'Busy' ? 'bg-blue-50 text-blue-600 border-blue-100' :
-                        currentStatus === 'Maintenance' ? 'bg-rose-50 text-rose-600 border-rose-100' :
-                        currentStatus === 'Available' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
+                        m.status === 'Busy' ? 'bg-blue-50 text-blue-600 border-blue-100' :
+                        m.status === 'Maintenance' ? 'bg-rose-50 text-rose-600 border-rose-100' :
+                        m.status === 'Available' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
                         'bg-slate-100 text-slate-400 border-slate-200'
                       }`}>
-                        {currentStatus}
+                        {m.status || 'Offline'}
                       </span>
                     </td>
 
-                    {/* Cycle Tracking */}
+                    {/* Cycle Usage Counter */}
                     <td className="px-6 py-5">
-                      <div className="flex flex-col">
-                        <span className="font-black text-slate-700">{m.total_cycles}</span>
-                        <span className="text-[10px] text-slate-400 font-bold uppercase">Cycles Run</span>
+                      <div className="flex items-center gap-2">
+                        <Repeat size={14} className="text-slate-400" />
+                        <span className="text-[11px] font-black uppercase text-slate-700 tracking-tight">
+                          {m.total_cycles} Total Cycles
+                        </span>
                       </div>
+                      <p className="text-[9px] text-slate-400 font-bold mt-0.5">Lifetime hardware usage</p>
                     </td>
 
-                    {/* Telemetry Metrics */}
-                    {[m.avg_detergent, m.avg_electricity, m.avg_water].map((val, i) => (
-                      <td key={i} className="px-6 py-5">
-                        <div className="flex flex-col">
-                          <span className={`font-bold text-sm ${val > 0 ? 'text-slate-700' : 'text-slate-300'}`}>
-                            {val > 0 ? `₱${val.toFixed(2)}` : '0.00'}
-                          </span>
-                          <span className="text-[9px] text-slate-400 font-black uppercase tracking-tighter">Avg/Cycle</span>
-                        </div>
-                      </td>
-                    ))}
+                    {/* Financial Metrics */}
+                    <td className="px-6 py-5">
+                       <MetricValue value={m.metrics?.electricity_cost} color="amber" />
+                    </td>
 
-                    {/* Logic Buttons */}
+                    <td className="px-6 py-5">
+                       <MetricValue value={m.metrics?.water_cost} color="sky" />
+                    </td>
+
+                    <td className="px-6 py-5">
+                       <MetricValue value={m.metrics?.detergent_cost} color="purple" />
+                    </td>
+
+                    {/* Unit Controls */}
                     <td className="px-6 py-5 text-right">
                       <div className="flex items-center gap-2 justify-end">
                         <button
                           onClick={() => handleToggleMaintenance(m.id)}
                           disabled={!isRegistered}
-                          title="Toggle Maintenance"
                           className={`p-2 rounded-xl transition-all ${
                             !isRegistered ? 'text-slate-100' : 
-                            currentStatus === 'Maintenance' ? 'bg-amber-100 text-amber-600' : 
+                            m.status === 'Maintenance' ? 'bg-amber-100 text-amber-600' : 
                             'bg-slate-50 text-slate-300 hover:text-amber-500'
                           }`}
                         >
@@ -269,7 +263,6 @@ const MachineHub = () => {
                         <button
                           onClick={() => handleDeleteMachine(m.id)}
                           disabled={!isRegistered}
-                          title="Remove Hardware"
                           className={`p-2 rounded-xl transition-all ${
                             !isRegistered ? 'text-slate-100' : 'bg-slate-50 text-slate-300 hover:text-rose-500 hover:bg-rose-50'
                           }`}
@@ -286,7 +279,6 @@ const MachineHub = () => {
         </div>
       </div>
 
-      {/* Modal for adding new hardware units */}
       <MachineModal 
         isOpen={isModalOpen} 
         onClose={() => setIsModalOpen(false)} 
@@ -297,8 +289,19 @@ const MachineHub = () => {
 };
 
 /**
- * CostCard Component
- * Displays aggregated expense metrics with thematic color coding.
+ * MetricValue Helper Component
+ */
+const MetricValue = ({ value, color }) => (
+  <div className="flex flex-col">
+    <span className={`font-black text-sm ${value > 0 ? 'text-slate-700' : 'text-slate-200'}`}>
+      {value > 0 ? optimizationLogic.formatCurrency(value) : '₱0.00'}
+    </span>
+    <span className={`text-[9px] text-${color}-500/70 font-black uppercase tracking-tighter`}>Accumulated</span>
+  </div>
+);
+
+/**
+ * CostCard Helper Component
  */
 const CostCard = ({ icon, label, value, color }) => {
   const themes = {

@@ -165,7 +165,7 @@ const ServiceTerminal = () => {
             onClick={() => setIsModalOpen(true)}
             className="bg-sky-500 hover:bg-sky-600 text-white px-8 py-3 rounded-2xl font-bold transition-all shadow-lg active:scale-95 flex items-center gap-2"
           >
-            + New Booking
+            + Add Booking
           </button>
         </div>
       </div>

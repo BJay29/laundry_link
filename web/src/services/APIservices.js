@@ -1,7 +1,8 @@
 import axios from 'axios';
 
 /**
- * Base URL for the FastAPI backend deployed on Render.
+ * Base URL for the FastAPI backend.
+ * Update this if your production environment changes.
  */
 const BASE_URL = 'https://laundrylink-backend-8p1l.onrender.com';
 
@@ -14,7 +15,8 @@ const apiClient = axios.create({
 
 /**
  * Request Interceptor:
- * Automatically attaches the JWT Bearer token to the Authorization header 
+ * Automatically attaches the JWT Bearer token to every outgoing request
+ * to ensure authorized access to protected routes.
  */
 apiClient.interceptors.request.use((config) => {
     const token = localStorage.getItem('token');
@@ -33,7 +35,7 @@ export const apiService = {
             const response = await apiClient.post('/auth/login', { email, password });
             const { user, access_token } = response.data;
 
-            // Storing session data in LocalStorage
+            // Persist session data in LocalStorage for state management across refreshes
             localStorage.setItem('token', access_token);
             localStorage.setItem('user_email', user.email);
             localStorage.setItem('shop_id', user.shop_id);
@@ -49,7 +51,7 @@ export const apiService = {
     },
 
     logout: () => {
-        // Clear all stored session data and redirect to login
+        // Clear all stored session data and redirect to the login portal
         localStorage.clear();
         window.location.href = '/login';
     },
@@ -58,10 +60,13 @@ export const apiService = {
     
     createBooking: async (bookingData) => {
         try {
-            // Ensure IDs and numeric values are correctly typed before sending to avoid 422 errors
+            /**
+             * Data Sanitization:
+             * Ensures machine IDs and numeric values are correctly typed as Int/Float.
+             * This prevents validation errors in the FastAPI backend.
+             */
             const payload = {
                 ...bookingData,
-                // Use shop_id from storage if not explicitly provided in bookingData
                 shop_id: bookingData.shop_id ? parseInt(bookingData.shop_id) : parseInt(localStorage.getItem('shop_id')),
                 washer_id: bookingData.washer_id ? parseInt(bookingData.washer_id) : null,
                 dryer_id: bookingData.dryer_id ? parseInt(bookingData.dryer_id) : null,
@@ -80,6 +85,7 @@ export const apiService = {
 
     getActiveBookings: async () => {
         try {
+            // Fetches bookings that are 'In Progress' or 'Ready' to populate the Dashboard monitoring grid
             const response = await apiClient.get('/bookings/active');
             return response.data;
         } catch (error) {
@@ -90,6 +96,10 @@ export const apiService = {
 
     updateBookingStatus: async (bookingId, newStatus) => {
         try {
+            /**
+             * Status Lifecycle Update:
+             * Triggers machine release logic in the backend when status hits 'Ready' or 'Claimed'.
+             */
             const response = await apiClient.patch(`/bookings/${bookingId}/status`, null, {
                 params: { new_status: newStatus }
             });
@@ -100,12 +110,15 @@ export const apiService = {
         }
     },
 
-    // --- MACHINE HUB & MONITORING METHODS ---
+    // --- MACHINE HUB & INDEPENDENT MONITORING METHODS ---
 
     getMachines: async () => {
         try {
-            // Fetch shop_id from storage to filter machines correctly
             const shopId = localStorage.getItem('shop_id');
+            /**
+             * Returns all machines with real-time performance metrics.
+             * Metrics now follow the hierarchy: Electricity > Water > Detergent.
+             */
             const response = await apiClient.get('/machines/', {
                 params: shopId ? { shop_id: parseInt(shopId) } : {}
             });
@@ -116,11 +129,26 @@ export const apiService = {
         }
     },
 
+    getMachineMetrics: async (machineId) => {
+        try {
+            // Fetches unique predictive metrics and cycle history for a specific machine unit
+            const response = await apiClient.get(`/machines/${machineId}/metrics`);
+            return response.data;
+        } catch (error) {
+            console.error("Fetch Machine Metrics Error:", error.response?.data?.detail || error.message);
+            throw error;
+        }
+    },
+
     addMachine: async (machineData) => {
         try {
             const shopId = localStorage.getItem('shop_id');
-            // Ensure machine data is linked to the current logged-in shop
-            const payload = { ...machineData, shop_id: parseInt(shopId) };
+            // Link the new hardware unit to the specific shop currently logged in
+            const payload = { 
+                ...machineData, 
+                shop_id: parseInt(shopId),
+                machine_number: parseInt(machineData.machine_number)
+            };
             const response = await apiClient.post('/machines/', payload);
             return response.data;
         } catch (error) {
@@ -131,6 +159,7 @@ export const apiService = {
 
     deleteMachine: async (machineId) => {
         try {
+            // Permanently removes machine record and its historical cycle data
             const response = await apiClient.delete(`/machines/${machineId}`);
             return response.data;
         } catch (error) {
@@ -141,10 +170,25 @@ export const apiService = {
 
     toggleMaintenance: async (machineId) => {
         try {
+            // Switches machine between 'Available' and 'Maintenance' while preserving cycle counts
             const response = await apiClient.patch(`/machines/${machineId}/maintenance`);
             return response.data;
         } catch (error) {
             console.error("Toggle Maintenance Error:", error.response?.data?.detail || error.message);
+            throw error;
+        }
+    },
+
+    initializeDefaultMachines: async () => {
+        try {
+            /**
+             * Bootstrap function to deploy the standard 6 Washer + 6 Dryer configuration.
+             * Each machine is initialized with its own independent tracking ID.
+             */
+            const response = await apiClient.post('/machines/initialize');
+            return response.data;
+        } catch (error) {
+            console.error("Initialization Error:", error.response?.data?.detail || error.message);
             throw error;
         }
     },
@@ -154,7 +198,7 @@ export const apiService = {
     getDashboardStats: async () => {
         try {
             const shopId = localStorage.getItem('shop_id');
-            if (!shopId) throw new Error("Missing shop_id");
+            if (!shopId) throw new Error("Missing shop_id in session storage");
             const response = await apiClient.get(`/analytics/dashboard-summary/${shopId}`);
             return response.data;
         } catch (error) {
@@ -166,7 +210,7 @@ export const apiService = {
     getForecastData: async () => {
         try {
             const shopId = localStorage.getItem('shop_id');
-            if (!shopId) throw new Error("Missing shop_id");
+            if (!shopId) throw new Error("Missing shop_id in session storage");
             const response = await apiClient.get(`/analytics/forecast/${shopId}`);
             return response.data;
         } catch (error) {

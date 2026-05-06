@@ -74,7 +74,7 @@ const Dashboard = () => {
             <Activity className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-sky-500" size={24} />
           </div>
           <p className="text-slate-400 font-black text-[10px] uppercase tracking-[0.4em] mt-8 animate-pulse">
-            Booting Command Center...
+          Loading....
           </p>
         </div>
       </div>
@@ -101,7 +101,7 @@ const Dashboard = () => {
                </span>
             </div>
           </div>
-          <h1 className="text-6xl font-black text-slate-900 mt-2 tracking-tighter italic">Command</h1>
+          <h1 className="text-6xl font-black text-slate-900 mt-2 tracking-tighter italic">Overview Dashboard</h1>
           <p className="text-slate-500 text-sm font-bold mt-1 max-w-md">
             Visualizing real-time operational efficiency and predictive growth models.
           </p>
@@ -121,7 +121,7 @@ const Dashboard = () => {
             onClick={() => setIsModalOpen(true)}
             className="flex-1 lg:flex-none bg-sky-500 hover:bg-sky-600 text-white px-10 py-5 rounded-[28px] font-black transition-all shadow-xl shadow-sky-100 flex items-center justify-center gap-3 hover:scale-[1.03] active:scale-95"
           >
-            <Plus size={22} strokeWidth={4} /> Create Booking
+            <Plus size={22} strokeWidth={4} /> Add Booking
           </button>
         </div>
       </div>
@@ -135,20 +135,20 @@ const Dashboard = () => {
           type="revenue"
         />
         <StatCard
-          title="Hardware Utilization"
+          title="Active Machines Utilization"
           value={stats?.utilization_rate ? `${stats.utilization_rate}%` : "0%"}
           trend={stats?.utilization_trend || "Stable"}
           type="utilization"
         />
         <StatCard
-          title="Avg Transaction"
+          title="Avg Income per Service"
           value={stats?.avg_income ? `₱${Number(stats.avg_income).toLocaleString()}` : "₱0"}
           trend={stats?.income_trend || "0%"}
           isNegative={stats?.income_trend?.toString().includes('-')}
           type="income"
         />
         <StatCard
-          title="Active Queue"
+          title="Total Bookings"
           value={stats?.pending_bookings || "0"}
           trend={stats?.bookings_trend || "Live"}
           type="bookings"
@@ -166,7 +166,7 @@ const Dashboard = () => {
                 <TrendingUp size={16} />
                 <span className="text-[10px] font-black uppercase tracking-widest">Analytics Engine</span>
               </div>
-              <h2 className="text-3xl font-black text-slate-900 tracking-tight">Revenue Forecast</h2>
+              <h2 className="text-3xl font-black text-slate-900 tracking-tight">Income & Bookings Forecast </h2>
               <p className="text-slate-400 text-xs font-bold mt-1">
                 7-Day Predictive Modeling based on historical traffic.
               </p>
@@ -215,7 +215,7 @@ const Dashboard = () => {
               <CheckCircle size={16} />
               <span className="text-[10px] font-black uppercase tracking-widest">Hardware Telemetry</span>
             </div>
-            <h2 className="text-3xl font-black text-slate-900 tracking-tight">Machine Status</h2>
+            <h2 className="text-3xl font-black text-slate-900 tracking-tight">Real-Time Machine Monitoring</h2>
             <p className="text-slate-400 text-xs font-bold">
               Real-time load balancing and health monitoring for all units.
             </p>

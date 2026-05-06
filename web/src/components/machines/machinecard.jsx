@@ -1,27 +1,32 @@
 import React from 'react';
-import { Waves, Wind, AlertCircle, Clock } from 'lucide-react';
+import { Waves, Wind, AlertCircle, Clock, TrendingUp } from 'lucide-react';
 
+/**
+ * MachineCard Component
+ * Displays real-time telemetry and predictive metrics for individual hardware units.
+ * Now aligned with the backend's persistent metrics and cost hierarchy.
+ */
 const MachineCard = ({ 
   machine_number, 
   machine_type, 
   status, 
-  profitability_score = 0, // Matches backend naming
+  profitability_score = 0, 
   total_cycles = 0, 
-  maintenance_cost = 0, 
+  maintenance_cost = 0, // Used here as Total Revenue/Overhead context
   time_remaining = 0, 
   current_price = 0,
   onClick
 }) => {
-  // Logic to determine states based on backend strings
+  // Identify hardware category for icon mapping
   const isDryer = machine_type?.toLowerCase() === 'dryer';
   
-  // Status categorization
+  // Normalize status strings from the FastAPI backend
   const isBusy = status?.toLowerCase() === 'busy' || status?.toLowerCase() === 'active' || status?.toLowerCase() === 'processing';
   const isMaintenance = status?.toLowerCase() === 'maintenance';
   const isAvailable = status?.toLowerCase() === 'available' || status?.toLowerCase() === 'idle';
 
-  // Format Machine ID (e.g., W1, D6)
-  const machineId = `${machine_type === 'Washer' ? 'W' : 'D'}${machine_number}`;
+  // Format hardware identifier (e.g., W1 for Washer 1, D6 for Dryer 6)
+  const machineId = `${machine_type === 'Washer' ? 'W' : 'D'}${machine_number}`;    
 
   return (
     <div 
@@ -34,7 +39,7 @@ const MachineCard = ({
           : 'border-slate-50 bg-white shadow-sm hover:shadow-md hover:border-slate-200'
     }`}>
       
-      {/* 1. Header Section: Machine Icon, ID, and Type */}
+      {/* 1. HEADER: Machine Identity and Live Status */}
       <div className="flex justify-between items-start mb-6">
         <div className="flex gap-3">
           <div className={`p-3 rounded-2xl transition-all duration-500 ${
@@ -49,7 +54,7 @@ const MachineCard = ({
           </div>
         </div>
         
-        {/* Dynamic Status Badge */}
+        {/* Status Badge with semantic coloring */}
         <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-colors ${
           isBusy ? 'bg-sky-100 text-sky-600' : 
           isMaintenance ? 'bg-rose-100 text-rose-600' : 'bg-slate-100 text-slate-400'
@@ -58,7 +63,7 @@ const MachineCard = ({
         </span>
       </div>
 
-      {/* 2. Middle Section: Dynamic Status Indicators */}
+      {/* 2. OPERATIONAL CONTEXT: Timer, Price, or Maintenance Alerts */}
       <div className="min-h-[80px] mb-6">
         {isMaintenance ? (
           <div className="bg-rose-50 p-4 rounded-2xl flex items-center gap-3 text-rose-600 border border-rose-100 animate-pulse">
@@ -87,14 +92,17 @@ const MachineCard = ({
         )}
       </div>
 
-      {/* 3. Footer Section: Performance and Lifetime Stats */}
+      {/* 3. PERFORMANCE ANALYTICS: Profitability and Lifetime Metrics */}
       <div className="space-y-4 pt-2">
         <div className="flex justify-between items-end">
-          <span className="text-slate-400 text-[11px] font-black uppercase tracking-tight">Performance Index</span>
+          <div className="flex items-center gap-1">
+            <TrendingUp size={12} className="text-slate-400" />
+            <span className="text-slate-400 text-[11px] font-black uppercase tracking-tight">Performance Index</span>
+          </div>
           <span className="text-slate-900 text-sm font-black">{profitability_score}%</span>
         </div>
         
-        {/* Progress Bar with Active Pulse Animation */}
+        {/* Predictive Progress Bar: Reflects the profitability score calculated by the backend */}
         <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden relative">
           <div 
             className={`h-full transition-all duration-1000 ease-out rounded-full relative z-10 ${
@@ -109,20 +117,20 @@ const MachineCard = ({
           </div>
         </div>
 
-        {/* Lifetime Stats Footer */}
+        {/* Node Telemetry Footer: Displays cycle counts and total tracked revenue/costs */}
         <div className="flex justify-between text-[11px] font-black text-slate-400 border-t border-slate-50 pt-3">
           <div className="flex flex-col">
              <span className="text-slate-300 text-[8px] uppercase tracking-tighter">Utilization</span>
-             <span className="text-slate-700">{total_cycles} Cycles</span>
+             <span className="text-slate-700">{total_cycles} Total Cycles</span>
           </div>
           <div className="flex flex-col text-right">
-             <span className="text-slate-300 text-[8px] uppercase tracking-tighter">Total Revenue</span>
-             <span className="text-slate-900 font-black">₱{maintenance_cost.toLocaleString()}</span>
+             <span className="text-slate-300 text-[8px] uppercase tracking-tighter">Accrued Revenue</span>
+             <span className="text-slate-900 font-black">₱{maintenance_cost.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
           </div>
         </div>
       </div>
 
-      {/* Internal Shimmer Animation for the Progress Bar */}
+      {/* Dynamic CSS for Shimmer effect on active progress bars */}
       <style jsx>{`
         @keyframes shimmer {
           0% { transform: translateX(-150%) skewX(-20deg); }
