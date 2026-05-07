@@ -2,7 +2,7 @@ import axios from 'axios';
 
 /**
  * Base URL for the FastAPI backend.
- * Update this if your production environment changes.
+ * Hosted on Render for production access.
  */
 const BASE_URL = 'https://laundrylink-backend-8p1l.onrender.com';
 
@@ -85,7 +85,7 @@ export const apiService = {
 
     getActiveBookings: async () => {
         try {
-            // Fetches bookings that are 'In Progress' or 'Ready' to populate the Dashboard monitoring grid
+            // Fetches bookings that are 'In Progress' or 'Ready' for the Dashboard monitoring grid
             const response = await apiClient.get('/bookings/active');
             return response.data;
         } catch (error) {
@@ -94,14 +94,15 @@ export const apiService = {
         }
     },
 
+    /**
+     * UPDATED: Status Lifecycle Update
+     * Now sends a JSON body to match the BookingStatusUpdate Pydantic schema.
+     * This triggers machine release and profit accumulation logic in the backend.
+     */
     updateBookingStatus: async (bookingId, newStatus) => {
         try {
-            /**
-             * Status Lifecycle Update:
-             * Triggers machine release logic in the backend when status hits 'Ready' or 'Claimed'.
-             */
-            const response = await apiClient.patch(`/bookings/${bookingId}/status`, null, {
-                params: { new_status: newStatus }
+            const response = await apiClient.patch(`/bookings/${bookingId}/status`, { 
+                status: newStatus 
             });
             return response.data;
         } catch (error) {
@@ -110,14 +111,14 @@ export const apiService = {
         }
     },
 
-    // --- MACHINE HUB & INDEPENDENT MONITORING METHODS ---
+    // --- MACHINE HUB & TELEMETRY METHODS ---
 
     getMachines: async () => {
         try {
             const shopId = localStorage.getItem('shop_id');
             /**
              * Returns all machines with real-time performance metrics.
-             * Metrics now follow the hierarchy: Electricity > Water > Detergent.
+             * Data includes the new profitability_rate and remaining_time fields.
              */
             const response = await apiClient.get('/machines/', {
                 params: shopId ? { shop_id: parseInt(shopId) } : {}
@@ -131,7 +132,7 @@ export const apiService = {
 
     getMachineMetrics: async (machineId) => {
         try {
-            // Fetches unique predictive metrics and cycle history for a specific machine unit
+            // Fetches unique predictive metrics (Electricity/Water/Detergent) for a unit
             const response = await apiClient.get(`/machines/${machineId}/metrics`);
             return response.data;
         } catch (error) {
@@ -143,7 +144,6 @@ export const apiService = {
     addMachine: async (machineData) => {
         try {
             const shopId = localStorage.getItem('shop_id');
-            // Link the new hardware unit to the specific shop currently logged in
             const payload = { 
                 ...machineData, 
                 shop_id: parseInt(shopId),
@@ -159,7 +159,6 @@ export const apiService = {
 
     deleteMachine: async (machineId) => {
         try {
-            // Permanently removes machine record and its historical cycle data
             const response = await apiClient.delete(`/machines/${machineId}`);
             return response.data;
         } catch (error) {
@@ -170,7 +169,7 @@ export const apiService = {
 
     toggleMaintenance: async (machineId) => {
         try {
-            // Switches machine between 'Available' and 'Maintenance' while preserving cycle counts
+            // Switches machine to 'Maintenance' status to prevent new bookings
             const response = await apiClient.patch(`/machines/${machineId}/maintenance`);
             return response.data;
         } catch (error) {
@@ -181,10 +180,7 @@ export const apiService = {
 
     initializeDefaultMachines: async () => {
         try {
-            /**
-             * Bootstrap function to deploy the standard 6 Washer + 6 Dryer configuration.
-             * Each machine is initialized with its own independent tracking ID.
-             */
+            // Deploys the standard configuration (6 Washers, 6 Dryers) for a new shop
             const response = await apiClient.post('/machines/initialize');
             return response.data;
         } catch (error) {
@@ -195,6 +191,10 @@ export const apiService = {
 
     // --- ANALYTICS & INSIGHTS ---
 
+    /**
+     * Fetches consolidated data for the Dashboard overview.
+     * Includes revenue, utilization, and the AI optimization tips.
+     */
     getDashboardStats: async () => {
         try {
             const shopId = localStorage.getItem('shop_id');

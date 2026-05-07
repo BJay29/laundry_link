@@ -1,16 +1,17 @@
 /**
  * Utility helpers for interpreting predictive metrics and optimization data.
- * The heavy math for budget limits (₱10k utility and ₱40k supply) is processed 
- * by the Backend PredictionService to maintain a single source of truth.
+ * These helpers support the UI by converting raw backend telemetry into 
+ * actionable business insights and formatted currency.
  */
 
 export const optimizationLogic = {
     /**
      * Formats numeric overhead values into a readable Philippine Peso (PHP) string.
-     * Consistently used across Machine Hub cards and Dashboard StatCards.
-     * @param {number} value - The cost value retrieved from machine.metrics.
+     * Used across Machine Hub tables, Dashboard StatCards, and Modals.
+     * @param {number} value - The raw cost value (e.g., 38.5).
      */
     formatCurrency: (value) => {
+        // Ensures that even if value is null/undefined, it renders as ₱0.00
         return new Intl.NumberFormat('en-PH', {
             style: 'currency',
             currency: 'PHP',
@@ -19,19 +20,25 @@ export const optimizationLogic = {
     },
 
     /**
-     * Assigns a semantic color based on the individual machine's total overhead.
-     * High overhead triggers a warning (Rose), while efficient units stay Green.
+     * Assigns a semantic color based on the individual machine's profitability rate.
+     * Directly linked to the 'profitability_rate' field in the Machine model.
+     * @param {number} rate - Percentage profit margin (0-100).
      */
-    getEfficiencyColor: (cost) => {
-        if (cost === 0) return 'text-slate-400';
-        if (cost > 150) return 'text-rose-500';  // Critical overhead threshold
-        if (cost > 75) return 'text-amber-500';  // Warning: Approaching high usage
-        return 'text-emerald-500';               // Optimal operational cost
+    getEfficiencyColor: (rate) => {
+        // If there is no activity (rate 0), we use a neutral slate color
+        if (rate === undefined || rate === null || rate === 0) return 'text-slate-400';
+        
+        // Thresholds calibrated for high-margin laundry services
+        if (rate >= 70) return 'text-emerald-500';  // High Profit: Machine is highly optimized
+        if (rate >= 40) return 'text-amber-500';    // Moderate: High overhead or low service price
+        return 'text-rose-500';                     // Low Profit: Immediate optimization required
     },
 
     /**
-     * Calculates the percentage of the ₱10,000 Utility or ₱40,000 Supply budget consumed.
-     * Data should be sourced from the Dashboard Summary analytics endpoint.
+     * Calculates the percentage of a specific budget consumed.
+     * Standard shop limits: ₱10,000 for Utilities | ₱40,000 for Supplies.
+     * @param {number} currentTotal - Accumulated spend from backend metrics.
+     * @param {number} budgetLimit - The target cap (10000 or 40000).
      */
     calculateBudgetUsage: (currentTotal, budgetLimit) => {
         if (!budgetLimit || budgetLimit === 0) return 0;
@@ -40,47 +47,62 @@ export const optimizationLogic = {
     },
 
     /**
-     * Generates an actionable optimization status based on the cost hierarchy.
-     * This logic detects if Electricity, Water, or Detergent is the primary cost driver.
+     * Generates actionable optimization status based on resource consumption.
+     * Logic is weighted to detect if Power (Dryers) or Detergent (Washers) 
+     * is deviating from the standard hardware baseline.
      */
     getOptimizationStatus: (machine) => {
-        if (!machine.metrics) return { status: 'No Data', color: 'slate', tip: 'Start a cycle to see metrics.' };
+        // Priority 1: No Data / New Machine Gate
+        // If there are no metrics OR cycles are 0 and machine is not running, show 'Ready'
+        const hasNoActivity = !machine.metrics || (machine.total_cycles === 0 && machine.status !== 'Busy');
         
-        const { total_overhead, electricity_cost, water_cost, detergent_cost } = machine.metrics;
-        
-        // Priority 1: Hardware Maintenance
-        if (machine.status === 'Maintenance') {
-            return { status: 'Offline', color: 'rose', tip: 'Scheduled for repair.' };
-        }
-        
-        // Priority 2: Electricity Check (Primary Cost Driver)
-        if (electricity_cost > (total_overhead * 0.6)) {
+        if (hasNoActivity && machine.status !== 'Maintenance') {
             return { 
-                status: 'Power Heavy', 
-                color: 'amber', 
-                tip: 'Check heater settings to reduce kWh.' 
+                status: 'Ready', 
+                color: 'slate', 
+                tip: 'Waiting for the first cycle to begin telemetry tracking.' 
             };
         }
 
-        // Priority 3: Supply Waste Check
-        if (detergent_cost > 50) {
+        // Priority 2: Hardware Availability (Maintenance overrides metrics)
+        if (machine.status === 'Maintenance') {
+            return { status: 'Offline', color: 'rose', tip: 'Unit under repair. Capacity reduced.' };
+        }
+
+        const { total_overhead, electricity_cost, detergent_cost } = machine.metrics || {};
+        const isDryer = machine.machine_type?.toLowerCase() === 'dryer';
+        const profitability = machine.profitability_rate || 0;
+        
+        // Priority 3: Critical Profit Warning (Only relevant if machine is earning/Busy)
+        if (profitability < 30 && machine.status === 'Busy') {
+            return { 
+                status: 'Low Margin', 
+                color: 'rose', 
+                tip: 'Operating costs nearly exceed revenue. Review service pricing.' 
+            };
+        }
+        
+        // Priority 4: Energy Drain Analysis (Check for Deviations)
+        const electricityThreshold = isDryer ? 0.95 : 0.60; 
+        if (electricity_cost > (total_overhead * electricityThreshold)) {
+            return { 
+                status: 'Power Heavy', 
+                color: 'amber', 
+                tip: isDryer ? 'Clean lint filter to improve airflow and drying speed.' : 'Check heater settings to reduce kWh.' 
+            };
+        }
+
+        // Priority 5: Supply Consumption Check (Washer specific)
+        if (!isDryer && detergent_cost > (total_overhead * 0.4)) {
             return { 
                 status: 'High Supplies', 
                 color: 'blue', 
-                tip: 'Calibrate detergent pump for better dosage.' 
+                tip: 'Calibrate detergent pump for correct dosage per kg.' 
             };
         }
         
-        // Priority 4: High Overall Usage
-        if (total_overhead > 100) {
-            return { 
-                status: 'High Usage', 
-                color: 'amber', 
-                tip: 'Monitor cycle frequency for this unit.' 
-            };
-        }
-        
-        return { status: 'Optimized', color: 'emerald', tip: 'Operating at peak efficiency.' };
+        // Default: If data exists and cycles > 0, and no flags are raised
+        return { status: 'Optimized', color: 'emerald', tip: 'Machine operating at peak profit efficiency.' };
     }
 };
 

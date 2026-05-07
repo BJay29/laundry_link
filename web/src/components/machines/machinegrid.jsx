@@ -3,55 +3,46 @@ import MachineCard from "./machinecard";
 import apiService from "../../services/APIservices";
 
 /**
- * DEFAULT_SLOTS
- * Provides a consistent UI layout of 12 machines (6 Washers, 6 Dryers).
- * These act as placeholders until the backend data is merged on top.
+ * Static UI layout (6 Washers, 6 Dryers). 
+ * These placeholders prevent layout shifts while data loads and define the shop structure.
+ * They are initialized with zeroed metrics that get populated by merged live data.
  */
 const DEFAULT_SLOTS = [
   ...Array.from({ length: 6 }, (_, i) => ({
     _key: `W${i + 1}`,
     machine_number: i + 1,
     machine_type: 'Washer',
-    status: 'Available',
-    profitability_score: 0,
+    status: 'Offline',
     total_cycles: 0,
-    maintenance_cost: 0,
-    current_price: 0,
     remaining_time: 0,
+    profitability_rate: 0,
+    net_profit_accumulated: 0,
     id: null,
   })),
   ...Array.from({ length: 6 }, (_, i) => ({
     _key: `D${i + 1}`,
     machine_number: i + 1,
     machine_type: 'Dryer',
-    status: 'Available',
-    profitability_score: 0,
+    status: 'Offline',
     total_cycles: 0,
-    maintenance_cost: 0,
-    current_price: 0,
     remaining_time: 0,
+    profitability_rate: 0,
+    net_profit_accumulated: 0,
     id: null,
   })),
 ];
 
-/**
- * MachineGrid Component
- * - Renders a responsive grid of laundry machines.
- * - Merges live backend data with 12 default UI slots for layout stability.
- * - Handles both Management (toggle maintenance) and Selection (booking) modes.
- */
 const MachineGrid = ({
-  machines = [],       // Live data array from FastAPI
+  machines = [], 
   loading = false,
-  onUpdate,            // Callback to refresh data after an action
-  onSelect,            // Callback for BookingModal selection
+  onUpdate, 
+  onSelect, 
   isSelectionMode = false,
 }) => {
 
   /**
-   * DATA MERGING LOGIC
-   * Maps through the 12 default slots and replaces placeholder values with
-   * live data if a machine with the same type and number exists in the DB.
+   * Merges live Database telemetry into the 12 default UI slots.
+   * Ensures profitability and hardware cycle times are passed to the cards.
    */
   const mergedSlots = DEFAULT_SLOTS.map(slot => {
     const live = machines.find(
@@ -59,25 +50,23 @@ const MachineGrid = ({
     );
     
     if (live) {
+      // Logic: Prioritize backend metrics (PredictionService results)
       return {
         ...slot,
-        ...live, // Overwrite defaults with real DB values (id, status, etc.)
-        _key: slot._key,
+        ...live, 
+        // Syncing specific fields derived from backend PredictionService
         status: live.status || 'Available',
-        profitability_score: live.profitability_score || 0,
-        total_cycles: live.total_cycles || 0,
-        maintenance_cost: live.maintenance_cost || 0,
-        current_price: live.current_price || 0,
         remaining_time: live.remaining_time || 0,
+        profitability_rate: live.profitability_rate || 0,
+        net_profit_accumulated: live.net_profit_accumulated || 0,
       };
     }
     return slot;
   });
 
   /**
-   * EXTRA MACHINES
-   * Captures any machines from the backend that exceed the default 1-6 numbering
-   * (e.g., Washer #7 or Dryer #10) and appends them to the end of the grid.
+   * Append extra machines that exist in the DB but are outside the W1-6 / D1-6 default set.
+   * This allows the shop to scale beyond the initial 12-machine footprint.
    */
   const extras = machines.filter(m => {
     const isDefaultWasher = m.machine_type === 'Washer' && m.machine_number <= 6;
@@ -88,54 +77,39 @@ const MachineGrid = ({
   const allMachines = [...mergedSlots, ...extras];
 
   /**
-   * CLICK HANDLER
-   * Determines action based on the 'isSelectionMode' prop.
+   * Action Handler:
+   * 1. If in Selection Mode (Service Terminal): Selects machine for booking.
+   * 2. If in Default Mode (Machine Hub): Toggles hardware maintenance state.
    */
   const handleClick = async (machine) => {
-    // Safety Check: If machine.id is null, it exists in UI but not in the Database
-    if (!machine.id) {
-      console.warn("Action Ignored: Machine placeholder is not registered in the database.");
-      return;
-    }
+    if (!machine.id) return; // Ignore clicks on unregistered or offline placeholders
 
     if (isSelectionMode) {
-      /**
-       * SELECTION MODE (Booking)
-       * Triggered when selecting a machine for a new laundry order.
-       * Only 'Available' or 'Idle' machines should typically be selectable.
-       */
       const status = machine.status?.toLowerCase();
+      // Guard clause: Prevent booking machines that are already busy or undergoing repair
       if (status !== 'available' && status !== 'idle') {
-        alert(`This ${machine.machine_type} is currently ${status}.`);
+        alert(`Warning: This unit is currently ${status}. Please select an idle machine.`);
         return;
       }
-      
       if (onSelect) onSelect(machine);
       return;
     }
 
-    /**
-     * MANAGEMENT MODE (Dashboard)
-     * Toggles the machine between 'Available' and 'Maintenance' states.
-     */
+    // Toggle maintenance status via API to reflect hardware downtime in telemetry
     try {
       await apiService.toggleMaintenance(machine.id);
-      if (onUpdate) onUpdate(); // Refresh the parent state to show new status
+      if (onUpdate) onUpdate(); 
     } catch (err) {
-      console.error("Maintenance toggle failed:", err);
-      alert("Failed to update machine status. Please check connection.");
+      console.error("Hardware status update error:", err);
     }
   };
 
-  /**
-   * LOADING STATE
-   * Renders skeleton cards to prevent layout shift during initial data fetch.
-   */
+  // Loading skeleton state: Renders 12 pulsing cards to match the shop's physical layout
   if (loading && machines.length === 0) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 animate-pulse">
         {[...Array(12)].map((_, i) => (
-          <div key={i} className="h-64 bg-slate-100 rounded-[40px] border-2 border-slate-50" />
+          <div key={i} className="h-64 bg-slate-100 rounded-[40px]" />
         ))}
       </div>
     );
@@ -150,13 +124,16 @@ const MachineGrid = ({
           machine_type={machine.machine_type}
           status={machine.status}
           total_cycles={machine.total_cycles}
-          maintenance_cost={machine.maintenance_cost}
+          // PROPS SYNC: Passing backend PredictionService results directly to the card
+          remaining_time={machine.remaining_time}
+          profitability_rate={machine.profitability_rate}
+          net_profit_accumulated={machine.net_profit_accumulated}
+          // Dynamic pricing and service details for active transactions
+          current_service_type={machine.current_service_type}
           current_price={machine.current_price}
-          time_remaining={machine.remaining_time}
-          profitability_score={machine.profitability_score}
-          // Only show pointer cursor if the machine exists in the database
           onClick={machine.id ? () => handleClick(machine) : undefined}
-          className={!machine.id ? "opacity-50 grayscale cursor-not-allowed" : "cursor-pointer"}
+          // Visual feedback for unregistered machine slots
+          className={!machine.id ? "opacity-40 grayscale cursor-not-allowed" : "cursor-pointer"}
         />
       ))}
     </div>
