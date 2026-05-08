@@ -7,7 +7,7 @@ import MachineModal from '../components/modals/machinemodal';
 /**
  * DEFAULT_MACHINES
  * Static skeleton for the UI grid (W1-W6, D1-D6).
- * Ensures a consistent layout even when the database is empty or loading.
+ * Maintains visual consistency during data fetching.
  */
 const DEFAULT_MACHINES = [
   ...Array.from({ length: 6 }, (_, i) => ({
@@ -38,8 +38,8 @@ const MachineHub = () => {
 
   /**
    * TELEMETRY SYNC
-   * Fetches latest machine states and hardware-specific resource metrics from Backend.
-   * Aggregates shop-wide expenses for the summary cards.
+   * Synchronizes hardware states and resource consumption from the backend.
+   * Aggregates shop-wide expenses for the top stat cards.
    */
   const syncMachineData = useCallback(async () => {
     try {
@@ -49,27 +49,29 @@ const MachineHub = () => {
       const list = (data || []).map(m => {
         const cycles = parseInt(m.total_cycles) || 0;
         
+        // Map backend metrics or provide zeroed defaults
+        const liveMetrics = m.metrics || { 
+          detergent_cost: 0, 
+          electricity_cost: 0, 
+          water_cost: 0, 
+          total_overhead: 0 
+        };
+
         return {
           ...m,
           total_cycles: cycles,
-          // If cycles are 0 and machine isn't busy, we force metrics to 0 to prevent ghost costs
           metrics: (cycles === 0 && m.status !== 'Busy') ? {
             detergent_cost: 0, 
             electricity_cost: 0, 
             water_cost: 0, 
             total_overhead: 0 
-          } : (m.metrics || { 
-            detergent_cost: 0, 
-            electricity_cost: 0, 
-            water_cost: 0, 
-            total_overhead: 0 
-          })
+          } : liveMetrics
         };
       });
 
       setDbMachines(list);
 
-      // Filter machines that are not part of the standard 1-6 UI skeleton
+      // Handle units beyond the standard 6x6 layout
       const extras = list.filter(m => {
         const isDefaultWasher = m.machine_type === 'Washer' && m.machine_number <= 6;
         const isDefaultDryer  = m.machine_type === 'Dryer'  && m.machine_number <= 6;
@@ -77,11 +79,11 @@ const MachineHub = () => {
       });
       setExtraMachines(extras);
 
-      // AGGREGATION LOGIC: Sums historical utility usage across all hardware units
+      // Global expense summation for top cards
       const totals = list.reduce((acc, m) => ({
-        detergent:   acc.detergent   + (parseFloat(m.metrics.detergent_cost) || 0),
-        electricity: acc.electricity + (parseFloat(m.metrics.electricity_cost) || 0),
-        water:       acc.water       + (parseFloat(m.metrics.water_cost) || 0),
+        detergent:   acc.detergent   + (parseFloat(m.metrics?.detergent_cost) || 0),
+        electricity: acc.electricity + (parseFloat(m.metrics?.electricity_cost) || 0),
+        water:       acc.water       + (parseFloat(m.metrics?.water_cost) || 0),
       }), { detergent: 0, electricity: 0, water: 0 });
       
       setCosts(totals);
@@ -92,27 +94,43 @@ const MachineHub = () => {
     }
   }, []);
 
-  // Sync lifecycle: Initial load and 30-second automated heartbeats
   useEffect(() => {
     syncMachineData();
-    const interval = setInterval(syncMachineData, 30000);
+    const interval = setInterval(syncMachineData, 30000); // Auto-refresh every 30s
     return () => clearInterval(interval);
   }, [syncMachineData]);
 
   /**
-   * HARDWARE MANAGEMENT CONTROLS
+   * HARDWARE DECOMMISSIONING
+   * Permanently removes a machine. 
+   * Updates state immediately after a successful backend 'DELETE' call.
    */
-  const handleDeleteMachine = async (id) => {
+  const handleDeleteMachine = async (id, status) => {
     if (!id) return;
-    if (!window.confirm("CRITICAL: Unregister this unit? Historical overhead data and cycle logs will be permanently removed.")) return;
+
+    // Preventive check: Never allow deletion of active machines
+    if (status === 'Busy') {
+      alert("CRITICAL: Cannot decommission a unit while it is 'Busy'. Please wait for the cycle to complete.");
+      return;
+    }
+
+    const confirmMsg = "WARNING: Unregistering this unit will stop its real-time telemetry. Historical bookings will remain intact but will show 'Unassigned' hardware. Continue?";
+    if (!window.confirm(confirmMsg)) return;
     
     try {
       setLoading(true);
       await apiService.deleteMachine(id);
-      showToast("Unit successfully decommissioned");
+      showToast("Hardware removed from inventory");
+      
+      // Immediate state update: Remove from local state before next sync
+      setDbMachines(prev => prev.filter(m => m.id !== id));
+      setExtraMachines(prev => prev.filter(m => m.id !== id));
+      
+      // Trigger full sync to recalculate global costs
       await syncMachineData();
     } catch (error) {
-      alert("Action Denied: Active bookings are currently assigned to this hardware unit.");
+      console.error("Deletion failed:", error.message);
+      alert(error.message || "Failed to decommission unit. Check system logs.");
     } finally {
       setLoading(false);
     }
@@ -122,7 +140,7 @@ const MachineHub = () => {
     if (!id) return;
     try {
       await apiService.toggleMaintenance(id);
-      showToast("Machine status synchronized");
+      showToast("Operational status updated");
       await syncMachineData();
     } catch (err) {
       console.error("Maintenance toggle failed:", err);
@@ -136,7 +154,7 @@ const MachineHub = () => {
 
   const getMachineLabel = (m) => `${m.machine_type === 'Washer' ? 'W' : 'D'}${m.machine_number}`;
 
-  // UI MERGE: Overlays live DB telemetry onto the static grid skeleton
+  // UI MERGE: Map database machines onto the static grid slots
   const mergedMachines = DEFAULT_MACHINES.map(slot => {
     const live = dbMachines.find(
       m => m.machine_type === slot.machine_type && m.machine_number === slot.machine_number
@@ -149,7 +167,7 @@ const MachineHub = () => {
   return (
     <div className="p-8 bg-slate-50 min-h-screen font-sans">
       
-      {/* Dynamic Notification Toast */}
+      {/* Dynamic Toast Notification */}
       {successMsg && (
         <div className="fixed top-6 right-6 z-50 bg-slate-900 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4">
           <CheckCircle size={18} className="text-emerald-400" />
@@ -157,63 +175,64 @@ const MachineHub = () => {
         </div>
       )}
 
-      {/* Header & Infrastructure Actions */}
+      {/* Header Section */}
       <div className="flex justify-between items-start mb-8">
         <div>
-          <h2 className="text-slate-900 font-bold text-lg mb-1">
-            {localStorage.getItem('shop_name') || 'Laundromat Command Center'}
+          <h2 className="text-slate-900 font-bold text-lg mb-1 italic">
+            {localStorage.getItem('shop_name') || 'Naga College Foundation Node'}
           </h2>
-          <p className="text-slate-500 text-sm font-medium mb-4 tracking-tight uppercase">Infrastructure Management</p>
-          <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight italic uppercase">Machine Hub</h1>
-          <p className="text-slate-400 text-sm mt-1">Monitoring machine lifecycles and historical resource consumption.</p>
+          <p className="text-slate-500 text-xs font-black mb-4 tracking-widest uppercase opacity-60">System Infrastructure</p>
+          <h1 className="text-4xl font-black text-slate-900 tracking-tight uppercase italic">Machine Hub</h1>
+          <p className="text-slate-400 text-sm mt-1">Real-time telemetry and resource overhead management.</p>
         </div>
 
         <div className="flex items-center gap-3 mt-4">
           <button
             onClick={syncMachineData}
-            className={`p-3 bg-white border border-slate-200 rounded-xl text-slate-400 hover:text-sky-500 transition-all shadow-sm ${loading ? 'animate-spin' : ''}`}
+            disabled={loading}
+            className={`p-3 bg-white border border-slate-200 rounded-xl text-slate-400 hover:text-sky-500 transition-all shadow-sm ${loading ? 'opacity-50' : ''}`}
           >
-            <RefreshCw size={18} />
+            <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
           </button>
           <button
             onClick={() => setIsModalOpen(true)}
-            className="bg-sky-500 hover:bg-sky-600 text-white px-8 py-3 rounded-2xl font-black flex items-center gap-2 shadow-lg shadow-sky-100 transition-all hover:scale-[1.02] active:scale-95"
+            className="bg-sky-500 hover:bg-sky-600 text-white px-8 py-3 rounded-2xl font-black flex items-center gap-2 shadow-lg shadow-sky-100 transition-all hover:scale-[1.02] active:scale-95 uppercase text-xs tracking-wider"
           >
-            <Plus size={18} strokeWidth={3} /> REGISTER UNIT
+            <Plus size={18} strokeWidth={3} /> Register Unit
           </button>
         </div>
       </div>
 
-      {/* GLOBAL RESOURCE METRICS: High-level overview of operational overhead */}
+      {/* Global Cost Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <CostCard 
           icon={<FlaskConical size={24} />} 
-          label="Total Detergent Spend" 
+          label="Aggregated Detergent" 
           value={optimizationLogic.formatCurrency(costs.detergent)} 
           color="purple" 
         />
         <CostCard 
           icon={<Zap size={24} />} 
-          label="Total Energy Expense" 
+          label="Energy Consumption" 
           value={optimizationLogic.formatCurrency(costs.electricity)} 
           color="amber" 
         />
         <CostCard 
           icon={<Droplets size={24} />} 
-          label="Total Water Utility" 
+          label="Water Utility Cost" 
           value={optimizationLogic.formatCurrency(costs.water)} 
           color="blue" 
         />
       </div>
 
-      {/* MACHINE TELEMETRY TABLE: Detailed view per hardware unit */}
+      {/* Main Hardware Grid */}
       <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50/50">
-                {['Machine ID', 'Category', 'Status', 'Usage Logs', 'Electricity', 'Water', 'Detergent', 'Actions'].map(h => (
-                  <th key={h} className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">
+                {['Unit ID', 'Type', 'Status', 'Usage Logs', 'Elec (PHP)', 'Water (PHP)', 'Det (PHP)', 'Actions'].map(h => (
+                  <th key={h} className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">
                     {h}
                   </th>
                 ))}
@@ -225,9 +244,8 @@ const MachineHub = () => {
                 const isRegistered = !!m.id;
 
                 return (
-                  <tr key={m._key || m.id} className="hover:bg-slate-50/50 transition-colors group">
+                  <tr key={m._key || m.id} className={`hover:bg-slate-50/50 transition-colors group ${!isRegistered ? 'opacity-30' : ''}`}>
                     
-                    {/* Identity Column */}
                     <td className="px-6 py-5">
                       <div className="flex items-center gap-3">
                         <div className={`p-2.5 rounded-xl ${m.machine_type === 'Washer' ? 'bg-sky-50 text-sky-500' : 'bg-orange-50 text-orange-500'}`}>
@@ -237,65 +255,55 @@ const MachineHub = () => {
                       </div>
                     </td>
 
-                    <td className="px-6 py-5 font-bold text-slate-500 text-xs">{m.machine_type?.toUpperCase()}</td>
+                    <td className="px-6 py-5 font-bold text-slate-400 text-[11px] uppercase tracking-wider">{m.machine_type}</td>
 
-                    {/* Live Status Column */}
                     <td className="px-6 py-5">
                       <span className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-tight border ${
-                        m.status === 'Busy' ? 'bg-blue-50 text-blue-600 border-blue-100 shadow-sm shadow-blue-500/10' :
+                        m.status === 'Busy' ? 'bg-blue-50 text-blue-600 border-blue-100' :
                         m.status === 'Maintenance' ? 'bg-rose-50 text-rose-600 border-rose-100' :
                         m.status === 'Available' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
                         'bg-slate-100 text-slate-400 border-slate-200'
                       }`}>
-                        {m.status || 'Offline'}
+                        {m.status || 'Unregistered'}
                       </span>
                     </td>
 
-                    {/* Operational Load Column */}
                     <td className="px-6 py-5">
                       <div className="flex items-center gap-2">
-                        <Repeat size={14} className="text-slate-400" />
-                        <span className="text-[11px] font-black uppercase text-slate-700 tracking-tight">
-                          {m.total_cycles} Total Cycles
+                        <Repeat size={14} className="text-slate-300" />
+                        <span className="text-[11px] font-black uppercase text-slate-600 tracking-tight">
+                          {m.total_cycles} Cycles
                         </span>
                       </div>
-                      <p className="text-[9px] text-slate-400 font-bold mt-0.5 tracking-tighter italic">Lifetime hardware logs</p>
-                    </td>
-
-                    {/* RESOURCE METRICS: Visual logic updated to handle 0-values correctly */}
-                    <td className="px-6 py-5">
-                        <MetricValue value={m.metrics?.electricity_cost} cycles={m.total_cycles} color="amber" />
                     </td>
 
                     <td className="px-6 py-5">
-                        <MetricValue value={m.metrics?.water_cost} cycles={m.total_cycles} color="sky" />
+                        <MetricValue value={m.metrics?.electricity_cost} cycles={m.total_cycles} />
                     </td>
-
                     <td className="px-6 py-5">
-                        <MetricValue value={m.metrics?.detergent_cost} cycles={m.total_cycles} color="purple" />
+                        <MetricValue value={m.metrics?.water_cost} cycles={m.total_cycles} />
+                    </td>
+                    <td className="px-6 py-5">
+                        <MetricValue value={m.metrics?.detergent_cost} cycles={m.total_cycles} />
                     </td>
 
-                    {/* Administrative Controls */}
                     <td className="px-6 py-5 text-right">
                       <div className="flex items-center gap-2 justify-end">
                         <button
                           onClick={() => handleToggleMaintenance(m.id)}
-                          disabled={!isRegistered}
-                          title="Toggle Maintenance State"
+                          disabled={!isRegistered || m.status === 'Busy'}
                           className={`p-2 rounded-xl transition-all ${
-                            !isRegistered ? 'opacity-20 cursor-not-allowed' : 
-                            m.status === 'Maintenance' ? 'bg-amber-100 text-amber-600' : 
-                            'bg-slate-50 text-slate-300 hover:text-amber-500 hover:bg-amber-50'
+                            !isRegistered || m.status === 'Busy' ? 'opacity-10 cursor-not-allowed' : 
+                            m.status === 'Maintenance' ? 'bg-amber-100 text-amber-600' : 'bg-slate-50 text-slate-300 hover:text-amber-500 hover:bg-amber-50'
                           }`}
                         >
                           <AlertTriangle size={16} />
                         </button>
                         <button
-                          onClick={() => handleDeleteMachine(m.id)}
-                          disabled={!isRegistered}
-                          title="Unregister Hardware Unit"
+                          onClick={() => handleDeleteMachine(m.id, m.status)}
+                          disabled={!isRegistered || m.status === 'Busy'}
                           className={`p-2 rounded-xl transition-all ${
-                            !isRegistered ? 'opacity-20 cursor-not-allowed' : 'bg-slate-50 text-slate-300 hover:text-rose-500 hover:bg-rose-50'
+                            !isRegistered || m.status === 'Busy' ? 'opacity-10 cursor-not-allowed' : 'bg-slate-50 text-slate-300 hover:text-rose-500 hover:bg-rose-50'
                           }`}
                         >
                           <Trash2 size={16} />
@@ -310,7 +318,6 @@ const MachineHub = () => {
         </div>
       </div>
 
-      {/* Registration Modal Overlay */}
       <MachineModal 
         isOpen={isModalOpen} 
         onClose={() => setIsModalOpen(false)} 
@@ -320,27 +327,18 @@ const MachineHub = () => {
   );
 };
 
-/**
- * MetricValue Component
- * Displays formatted currency and 'Accumulated' sub-label.
- * Mutes color if cycles are zero to distinguish from active units.
- */
-const MetricValue = ({ value, cycles, color }) => {
+const MetricValue = ({ value, cycles }) => {
   const isZero = !value || value <= 0 || cycles === 0;
-  
   return (
     <div className="flex flex-col">
-      <span className={`font-black text-sm transition-colors ${isZero ? 'text-slate-200' : 'text-slate-700'}`}>
+      <span className={`font-black text-xs ${isZero ? 'text-slate-200' : 'text-slate-700'}`}>
         {optimizationLogic.formatCurrency(isZero ? 0 : value)}
       </span>
-      <span className="text-[9px] text-slate-400 font-black uppercase tracking-tighter">Accumulated</span>
+      <span className="text-[8px] text-slate-400 font-bold uppercase tracking-tighter">Accumulated</span>
     </div>
   );
 };
 
-/**
- * CostCard Component
- */
 const CostCard = ({ icon, label, value, color }) => {
   const themes = {
     purple: { bg: 'bg-purple-50', text: 'text-purple-600', iconBg: 'bg-white text-purple-500 shadow-sm' },
@@ -349,10 +347,10 @@ const CostCard = ({ icon, label, value, color }) => {
   };
   const theme = themes[color];
   return (
-    <div className={`p-6 rounded-[32px] border border-slate-100 shadow-sm flex items-center gap-5 transition-all hover:shadow-md hover:scale-[1.01] ${theme.bg}`}>
+    <div className={`p-6 rounded-[32px] border border-slate-100 shadow-sm flex items-center gap-5 transition-all hover:shadow-md ${theme.bg}`}>
       <div className={`p-4 rounded-2xl ${theme.iconBg}`}>{icon}</div>
       <div>
-        <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1">{label}</p>
+        <p className="text-slate-500 text-[9px] font-black uppercase tracking-widest mb-1">{label}</p>
         <p className={`text-2xl font-black tracking-tighter ${theme.text}`}>{value}</p>
       </div>
     </div>

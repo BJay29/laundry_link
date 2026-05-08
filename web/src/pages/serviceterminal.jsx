@@ -6,8 +6,8 @@ import { formatTime, formatCurrency } from '../utils/formatters';
 
 /**
  * SERVICE TERMINAL COMPONENT
- * Main operational interface for managing live laundry transactions.
- * Acts as the control center for order lifecycles and machine occupancy.
+ * Main operational dashboard for managing the laundry queue.
+ * Features a live clock and real-time status updates for the forecasting engine.
  */
 const ServiceTerminal = () => {
   const [bookings, setBookings] = useState([]);
@@ -16,10 +16,22 @@ const ServiceTerminal = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
 
+  // LIVE CLOCK STATE: Provides a real-time reference for manual time-stamping
+  const [currentTime, setCurrentTime] = useState(new Date());
+
   /**
-   * DATA SYNCHRONIZATION
-   * Fetches only active transactions (Pending, In Progress, Ready).
-   * 'Claimed' orders are archived and removed from this view to keep the queue clean.
+   * LIVE CLOCK EFFECT
+   * Updates the UI clock every second to maintain terminal accuracy.
+   */
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  /**
+   * DATA FETCHING
+   * Fetches active bookings from the FastAPI backend.
+   * Handles both initial load and background refreshes.
    */
   const loadBookings = useCallback(async (isRefresh = false) => {
     try {
@@ -37,11 +49,7 @@ const ServiceTerminal = () => {
     }
   }, []);
 
-  /**
-   * POLLING LIFECYCLE
-   * Establishes a 30-second heartbeat to ensure staff members see 
-   * real-time updates across different workstations.
-   */
+  // Polling Effect: Refresh data every 30 seconds to keep terminal updated
   useEffect(() => {
     loadBookings();
     const interval = setInterval(() => loadBookings(true), 30000);
@@ -49,25 +57,18 @@ const ServiceTerminal = () => {
   }, [loadBookings]);
 
   /**
-   * TRANSACTION LIFECYCLE HANDLER
-   * Transitions: Pending -> In Progress -> Ready -> Claimed.
-   * 
-   * NOTE: Transitioning to 'Claimed' is critical as it triggers 
-   * the backend logic to unlock the linked Machine IDs.
+   * STATUS LIFECYCLE HANDLER
+   * Transitions a booking through: Pending -> In Progress -> Ready -> Claimed.
    */
   const handleStatusUpdate = async (bookingId, newStatus) => {
     try {
       setRefreshing(true);
       await apiService.updateBookingStatus(bookingId, newStatus);
-      
-      // Visual feedback for the operator
-      showNotification(`Order successfully moved to ${newStatus}`);
-      
-      // Immediate refresh to update machine availability UI
+      showNotification(`Order moved to ${newStatus}`);
       await loadBookings(true);
     } catch (err) {
       console.error('Lifecycle Transition Error:', err.message);
-      alert("System could not update status. Check backend connection.");
+      alert("Status update failed. Please check backend connectivity.");
     } finally {
       setRefreshing(false);
     }
@@ -85,28 +86,41 @@ const ServiceTerminal = () => {
   };
 
   /**
-   * UI HELPER METHODS
+   * UI HELPER: Status Styling
+   * Maps backend status strings to Tailwind CSS color variants.
    */
   const getStatusStyle = (status) => {
     switch (status?.toLowerCase()) {
       case 'in progress': return 'bg-blue-50 text-blue-500 border-blue-100';
       case 'pending':     return 'bg-amber-50 text-amber-600 border-amber-100';
       case 'ready':       return 'bg-emerald-50 text-emerald-600 border-emerald-100 shadow-sm shadow-emerald-500/10';
+      case 'claimed':     return 'bg-slate-100 text-slate-500 border-slate-200';
       default:            return 'bg-slate-50 text-slate-400 border-slate-100';
     }
   };
 
+  /**
+   * UI HELPER: Machine Mapping
+   * Displays Washer and Dryer numbers. Shows 'SYNCING' if IDs exist but data is fetching.
+   */
   const getMachineDisplay = (booking) => {
     const parts = [];
-    if (booking.washer?.machine_number) parts.push(`W${booking.washer.machine_number}`);
-    if (booking.dryer?.machine_number)  parts.push(`D${booking.dryer.machine_number}`);
-    return parts.length > 0 ? parts.join(' • ') : 'WAITING';
+    
+    // Check for both nested objects or flattened numeric properties from backend
+    const wNum = booking.washer?.machine_number || booking.washer_number;
+    const dNum = booking.dryer?.machine_number || booking.dryer_number;
+
+    if (wNum) parts.push(`W${wNum}`);
+    if (dNum) parts.push(`D${dNum}`);
+    
+    if (parts.length > 0) return parts.join(' • ');
+    if (booking.washer_id || booking.dryer_id) return 'SYNCING...';
+    return 'WAITING';
   };
 
   return (
     <div className="p-8 bg-slate-50 min-h-screen font-sans">
-
-      {/* Dynamic Action Notifications */}
+      {/* Dynamic Success Toast */}
       {successMessage && (
         <div className="fixed top-8 right-8 z-[100] bg-slate-900 text-white px-6 py-4 rounded-2xl shadow-2xl font-bold text-sm flex items-center gap-3 animate-in fade-in slide-in-from-right-4">
           <CheckCircle size={20} className="text-emerald-400" />
@@ -114,24 +128,25 @@ const ServiceTerminal = () => {
         </div>
       )}
 
-      {/* Terminal Command Header */}
+      {/* Header Section */}
       <div className="flex flex-col lg:flex-row justify-between items-start mb-10 gap-6">
         <div>
           <h2 className="text-slate-900 font-bold text-lg mb-1 tracking-tight">
             {localStorage.getItem('shop_name') || 'Laundromat Terminal'}
           </h2>
           <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mb-4 opacity-60">
-            Internal Operations Node
+            Operations Management Node
           </p>
           <h1 className="text-5xl font-black text-slate-900 tracking-tighter italic uppercase">Service Terminal</h1>
           <p className="text-slate-400 text-sm mt-1 font-medium">Manage order fulfillment and monitor hardware occupancy.</p>
         </div>
 
         <div className="flex items-center gap-3 w-full lg:w-auto">
+          {/* Real-time Clock Component */}
           <div className="flex items-center gap-3 bg-white px-5 py-4 rounded-2xl border border-slate-200 shadow-sm">
-            <Calendar size={18} className="text-sky-500" />
-            <span className="text-sm font-black text-slate-700">
-              {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+            <Clock size={18} className="text-sky-500" />
+            <span className="text-sm font-black text-slate-700 tabular-nums">
+              {currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
             </span>
             <div className="h-4 w-[1px] bg-slate-200 mx-1" />
             <button
@@ -150,19 +165,19 @@ const ServiceTerminal = () => {
         </div>
       </div>
 
-      {/* LIVE QUEUE TABLE */}
+      {/* Main Queue Table */}
       <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden">
         {loading ? (
           <div className="flex flex-col items-center justify-center py-44">
             <div className="animate-spin rounded-full h-12 w-12 border-[3px] border-sky-500 border-r-transparent mb-4" />
-            <p className="text-slate-400 font-black text-[10px] uppercase tracking-widest">Syncing Active Queue...</p>
+            <p className="text-slate-400 font-black text-[10px] uppercase tracking-widest">Synchronizing Queue...</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-slate-50 bg-slate-50/50">
-                  {['Intake Time', 'Customer Name', 'Service Plan', 'Weight', 'Hardware', 'Balance', 'Lifecycle', 'Operations'].map(h => (
+                  {['Intake Time', 'Customer Name', 'Service Type', 'Weight', 'Machines', 'Balance', 'Lifecycle', 'Operations'].map(h => (
                     <th key={h} className="text-left px-8 py-6 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
                       {h}
                     </th>
@@ -184,18 +199,20 @@ const ServiceTerminal = () => {
                   bookings.map((booking) => (
                     <tr key={booking.id} className="hover:bg-slate-50/50 transition-colors group">
                       <td className="px-8 py-7">
-                        <div className="flex items-center gap-2 text-slate-500 font-bold text-xs">
+                        <div className="flex items-center gap-2 text-slate-500 font-bold text-xs whitespace-nowrap">
                           <Clock size={14} className="text-slate-300" />
-                          {formatTime(booking.created_at)}
+                          {formatTime(booking.booking_timestamp || booking.created_at)}
                         </div>
                       </td>
 
                       <td className="px-8 py-7">
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center text-white font-black text-[10px]">
-                            {booking.customer_name.charAt(0).toUpperCase()}
+                            {booking.customer_name?.charAt(0).toUpperCase() || 'C'}
                           </div>
-                          <span className="text-slate-900 font-black text-sm">{booking.customer_name}</span>
+                          <span className="text-slate-900 font-black text-sm truncate max-w-[150px]">
+                            {booking.customer_name}
+                          </span>
                         </div>
                       </td>
 
@@ -230,34 +247,34 @@ const ServiceTerminal = () => {
 
                       <td className="px-8 py-7">
                         <div className="flex items-center gap-2">
-                          {/* TRANSITION: Pending -> In Progress */}
+                          {/* Pending -> In Progress */}
                           {booking.status === 'Pending' && (
                             <button
                               onClick={() => handleStatusUpdate(booking.id, 'In Progress')}
                               className="p-3 bg-white border border-slate-200 text-slate-400 hover:text-sky-500 hover:border-sky-200 rounded-xl transition-all shadow-sm active:scale-90"
-                              title="Engage Machine"
+                              title="Start Cycle"
                             >
                               <PlayCircle size={20} />
                             </button>
                           )}
                           
-                          {/* TRANSITION: In Progress -> Ready */}
+                          {/* In Progress -> Ready */}
                           {booking.status === 'In Progress' && (
                             <button
                               onClick={() => handleStatusUpdate(booking.id, 'Ready')}
                               className="p-3 bg-white border border-slate-200 text-slate-400 hover:text-emerald-500 hover:border-emerald-200 rounded-xl transition-all shadow-sm active:scale-90"
-                              title="Cycle Complete"
+                              title="Mark as Ready"
                             >
                               <CheckCircle size={20} />
                             </button>
                           )}
                           
-                          {/* TRANSITION: Ready -> Claimed (Archive transaction and Release Hardware) */}
+                          {/* Ready -> Claimed (Archive) */}
                           {booking.status === 'Ready' && (
                             <button
                               onClick={() => handleStatusUpdate(booking.id, 'Claimed')}
                               className="p-3 bg-sky-500 text-white rounded-xl transition-all shadow-lg shadow-sky-100 hover:bg-sky-600 active:scale-90"
-                              title="Release Machine & Archive"
+                              title="Customer Claimed"
                             >
                               <Archive size={20} />
                             </button>
@@ -277,6 +294,7 @@ const ServiceTerminal = () => {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSubmit={handleBookingSuccess}
+        actualBookingTime={currentTime} 
       />
     </div>
   );

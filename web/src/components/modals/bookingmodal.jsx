@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { X, User, Weight, Settings2, CheckCircle2, Hash, Calculator, Edit3, Tag, Cpu, Truck, Droplets } from 'lucide-react';
-import apiService from '../../services/APIservices';
-import { formatCurrency } from '../../utils/formatters';
+import apiService from '../../services/APIservices'; 
+import { optimizationLogic } from '../../utils/optimizationlogic';
 
 /**
- * BookingModal Component
- * Handles the creation of new laundry orders with Smart Calculation 
- * and Manual Override modes.
+ * BOOKING MODAL COMPONENT
+ * Handles new laundry order creation with Smart Calculation and Manual Override modes.
+ * Optimized for machine ID synchronization and precise timestamp injection for AI forecasting.
  */
-const BookingModal = ({ isOpen, onClose, onSubmit }) => {
+const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
   const [bookingMode, setBookingMode] = useState('smart');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [machineData, setMachineData] = useState([]);
@@ -27,7 +27,7 @@ const BookingModal = ({ isOpen, onClose, onSubmit }) => {
     totalPrice: 0
   });
 
-  // Business Logic: Pricing Rates per unit
+  // Business Logic: Pricing rates per unit calibrated for local shop standards
   const RATES = {
     FULL_SERVICE: 210,
     REGULAR_WASH: 65,
@@ -61,7 +61,7 @@ const BookingModal = ({ isOpen, onClose, onSubmit }) => {
 
   /**
    * LOGIC: Auto-calculate pricing and load count based on service rates.
-   * This effect only runs when 'smart' mode is active.
+   * Runs only when 'smart' mode is active.
    */
   useEffect(() => {
     if (bookingMode === 'manual') return;
@@ -111,18 +111,16 @@ const BookingModal = ({ isOpen, onClose, onSubmit }) => {
 
   /**
    * Selection Logic: Assigns a specific Washer or Dryer to the booking.
-   * Prevents selection of machines that are not "Available" or "Idle".
+   * Validates if the machine is initialized in the database before selection.
    */
   const selectMachine = (id, currentStatus) => {
-    // If id is not a number, the machine is likely not synced with the database yet
-    if (typeof id !== 'number') {
+    if (id === undefined || id === null) {
         alert("System Sync: This machine slot is not initialized in the database.");
         return;
     }
 
     const statusLower = currentStatus?.toLowerCase();
-    // Allow selection only if status is available or idle
-    const isSelectable = statusLower === 'available' || statusLower === 'idle' || currentStatus === undefined;
+    const isSelectable = statusLower === 'available' || statusLower === 'idle' || !currentStatus;
     
     if (!isSelectable) return;
 
@@ -138,7 +136,7 @@ const BookingModal = ({ isOpen, onClose, onSubmit }) => {
 
   /**
    * Submission: Sends the structured booking payload to the FastAPI backend.
-   * Ensures strict mapping to Pydantic schema and Number casting for IDs.
+   * Ensures all numeric values are correctly parsed to match the PostgreSQL schema.
    */
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -151,7 +149,6 @@ const BookingModal = ({ isOpen, onClose, onSubmit }) => {
     setIsSubmitting(true);
 
     try {
-      // Constructing the payload precisely for the Backend schema
       const payload = {
         customer_name: formData.customerName,
         service_type: formData.serviceType,
@@ -161,11 +158,14 @@ const BookingModal = ({ isOpen, onClose, onSubmit }) => {
         total_price: parseFloat(formData.totalPrice),
         washer_id: formData.selectedWasher ? parseInt(formData.selectedWasher) : null,
         dryer_id: formData.selectedDryer ? parseInt(formData.selectedDryer) : null,
-        is_rush: formData.isRush,
+        is_rush: Boolean(formData.isRush),
         booking_mode: bookingMode,
-        add_detergent: formData.addDetergent,
-        add_delivery: formData.addDelivery,
-        shop_id: parseInt(localStorage.getItem('shop_id')) // Ensure shop_id is included
+        add_detergent: Boolean(formData.addDetergent),
+        add_delivery: Boolean(formData.addDelivery),
+        shop_id: parseInt(localStorage.getItem('shop_id')),
+        booking_timestamp: actualBookingTime 
+            ? (actualBookingTime instanceof Date ? actualBookingTime.toISOString() : actualBookingTime)
+            : new Date().toISOString()
       };
 
       const response = await apiService.createBooking(payload);
@@ -173,7 +173,6 @@ const BookingModal = ({ isOpen, onClose, onSubmit }) => {
       if (onSubmit) onSubmit(response);
       onClose();
       
-      // Reset form state to defaults after successful creation
       setFormData({
         customerName: '',
         serviceType: 'Full Service',
@@ -191,28 +190,42 @@ const BookingModal = ({ isOpen, onClose, onSubmit }) => {
     } catch (error) {
       console.error("Booking Submission Error:", error);
       const backendError = error.response?.data?.detail;
-      alert(typeof backendError === 'string' ? backendError : "Transaction failed. Please refresh and try again.");
+      alert(typeof backendError === 'string' ? backendError : "Transaction failed. Please check connectivity.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const machineSlots = [1, 2, 3, 4, 5, 6];
-
+  /**
+   * UPDATED: Dynamic Machine Grid Rendering
+   * Automatically generates the grid based on machines existing in the database.
+   * Removes reliance on a static array.
+   */
   const renderMachineGrid = (type) => {
-    return machineSlots.map((num) => {
-      const machine = machineData.find(m => m.machine_type === type && m.machine_number === num);
-      
-      // Critical: ID must be from DB. If not found, use a temporary string key for UI mapping
-      const machineId = machine?.id || `${type.toLowerCase()}-${num}`;
+    // Filter and sort machines by their actual machine_number assigned in Machine Hub
+    const filteredMachines = machineData
+      .filter(m => m.machine_type === type)
+      .sort((a, b) => a.machine_number - b.machine_number);
+
+    // If no machines are added yet in the database for this type
+    if (filteredMachines.length === 0) {
+      return (
+        <div className="col-span-3 py-4 text-center">
+          <span className="text-[10px] font-bold text-slate-300 uppercase italic">No {type}s Active</span>
+        </div>
+      );
+    }
+
+    return filteredMachines.map((machine) => {
+      const machineId = machine.id;
+      const num = machine.machine_number;
       const isSelected = type === 'Washer' ? formData.selectedWasher === machineId : formData.selectedDryer === machineId;
-      
-      const status = machine?.status?.toLowerCase() || 'available';
-      const isBusy = status !== 'available' && status !== 'idle';
+      const status = machine.status?.toLowerCase() || 'available';
+      const isBusy = status !== 'available' && status !== 'idle' && status !== 'ready';
 
       return (
         <button
-          key={`${type}-${num}`}
+          key={`${type}-${machineId}`}
           type="button"
           onClick={() => selectMachine(machineId, status)}
           disabled={isBusy}
@@ -242,7 +255,7 @@ const BookingModal = ({ isOpen, onClose, onSubmit }) => {
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4">
       <div className="bg-white w-full max-w-xl rounded-[48px] shadow-2xl overflow-hidden flex flex-col max-h-[92vh] border border-white/20">
         
-        {/* MODAL HEADER */}
+        {/* HEADER SECTION */}
         <div className="px-10 pt-10 pb-6 border-b border-slate-50 shrink-0">
           <div className="flex justify-between items-start mb-6">
             <div>
@@ -272,6 +285,7 @@ const BookingModal = ({ isOpen, onClose, onSubmit }) => {
           </div>
         </div>
 
+        {/* FORM CONTENT */}
         <form onSubmit={handleSubmit} className="px-10 py-8 space-y-8 overflow-y-auto custom-scrollbar flex-1">
           
           <div className="grid grid-cols-2 gap-5">
@@ -381,6 +395,7 @@ const BookingModal = ({ isOpen, onClose, onSubmit }) => {
             </button>
           </div>
 
+          {/* MACHINE GRID */}
           <div className="space-y-6 p-8 bg-slate-50/50 rounded-[40px] border-2 border-slate-100">
             <div className="flex justify-between items-center px-2">
                 <label className="text-[11px] font-black text-slate-500 uppercase flex items-center gap-2 tracking-[0.2em]">
@@ -408,7 +423,7 @@ const BookingModal = ({ isOpen, onClose, onSubmit }) => {
             </div>
           </div>
 
-          {/* TOTAL PAYABLE */}
+          {/* PRICING FOOTER */}
           <div className={`rounded-[32px] p-8 flex justify-between items-center shadow-2xl transition-all duration-500 ${bookingMode === 'manual' ? 'bg-orange-600 shadow-orange-100' : 'bg-slate-900 shadow-slate-200'}`}>
             <div className="flex flex-col">
               <span className="font-bold text-white/40 text-[10px] uppercase tracking-[0.4em]">Total Payable</span>
@@ -430,7 +445,7 @@ const BookingModal = ({ isOpen, onClose, onSubmit }) => {
                 </div>
               ) : (
                 <span className="text-4xl font-black text-white tracking-tighter">
-                    {formatCurrency(formData.totalPrice)}
+                    {optimizationLogic.formatCurrency(formData.totalPrice)}
                 </span>
               )}
             </div>

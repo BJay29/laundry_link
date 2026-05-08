@@ -1,39 +1,56 @@
 import React from 'react';
-import { CheckCircle2, Clock, User, HardDrive, PhilippinePeso, Activity } from 'lucide-react';
+import { CheckCircle2, Clock, User, HardDrive, PhilippinePeso, Activity, Loader2 } from 'lucide-react';
 import { formatTime } from '../../utils/formatters';
 
 /**
  * BookingTable Component
- * Displays the list of active laundry orders with real-time data
- * from the backend, including specific machine assignments and timestamps.
+ * Displays the list of active laundry orders with real-time data.
+ * Optimized to handle joined machine data from the FastAPI backend.
  */
 const BookingTable = ({ bookings = [], onComplete }) => {
   
   /**
-   * Helper function to format the machine display.
-   * Prioritizes the nested machine objects (washer/dryer) from the backend schema.
-   * This ensures the UI displays human-readable numbers like "W1" instead of UUIDs.
+   * Enhanced helper function to format machine display.
+   * Checks for both nested objects (from joinedload) and flattened numbers 
+   * (from the Pydantic validator) to eliminate the "Waiting" label.
    */
   const renderMachineInfo = (booking) => {
     const parts = [];
 
-    // Check for nested washer object from DB
-    if (booking.washer?.machine_number) {
-      parts.push(`W${booking.washer.machine_number}`);
-    } else if (booking.washer_id && typeof booking.washer_id === 'string') {
-      // Fallback: extract last few characters if it's a UUID string
-      parts.push(`W${booking.washer_id.split('-').pop().substring(0, 3)}`);
+    // 1. Check for Washer assignment (Nested object OR direct number)
+    const washerNum = booking.washer?.machine_number || booking.washer_number;
+    if (washerNum) {
+      parts.push(`W${washerNum}`);
     }
 
-    // Check for nested dryer object from DB
-    if (booking.dryer?.machine_number) {
-      parts.push(`D${booking.dryer.machine_number}`);
-    } else if (booking.dryer_id && typeof booking.dryer_id === 'string') {
-      // Fallback: extract last few characters if it's a UUID string
-      parts.push(`D${booking.dryer_id.split('-').pop().substring(0, 3)}`);
+    // 2. Check for Dryer assignment (Nested object OR direct number)
+    const dryerNum = booking.dryer?.machine_number || booking.dryer_number;
+    if (dryerNum) {
+      parts.push(`D${dryerNum}`);
     }
-    
-    return parts.length > 0 ? parts.join(' & ') : 'UNASSIGNED';
+
+    // Return the formatted string (e.g., "W1 & D2")
+    if (parts.length > 0) {
+      return (
+        <span className="text-orange-600 font-black text-xs uppercase tracking-tighter">
+          {parts.join(' & ')}
+        </span>
+      );
+    }
+
+    // 3. Handling Transition States
+    // If IDs exist but numbers aren't resolved yet, show a syncing state
+    if (booking.washer_id || booking.dryer_id) {
+      return (
+        <div className="flex items-center gap-1 text-blue-500 animate-pulse">
+          <Loader2 size={12} className="animate-spin" />
+          <span className="text-[10px] font-black uppercase">Assigning...</span>
+        </div>
+      );
+    }
+
+    // 4. Default Fallback
+    return <span className="text-slate-300 font-bold text-[10px]">UNASSIGNED</span>;
   };
 
   return (
@@ -56,11 +73,12 @@ const BookingTable = ({ bookings = [], onComplete }) => {
             {bookings.length > 0 ? (
               bookings.map((booking) => (
                 <tr key={booking.id} className="hover:bg-sky-50/20 transition-colors group">
-                  {/* Timestamp from created_at */}
+                  
+                  {/* Intake Time: Fallback to created_at if booking_timestamp is null */}
                   <td className="px-8 py-6">
                     <div className="flex items-center gap-2 text-slate-600 font-bold text-sm whitespace-nowrap">
                       <Clock size={14} className="text-slate-300" />
-                      {booking.created_at ? formatTime(booking.created_at) : '--:-- --'}
+                      {booking.booking_timestamp ? formatTime(booking.booking_timestamp) : formatTime(booking.created_at)}
                     </div>
                   </td>
 
@@ -70,7 +88,9 @@ const BookingTable = ({ bookings = [], onComplete }) => {
                       <div className="w-8 h-8 rounded-full bg-sky-100 flex items-center justify-center text-sky-600 shadow-sm">
                         <User size={14} />
                       </div>
-                      {booking.customer_name || 'Walk-in Client'}
+                      <span className="truncate max-w-[150px]">
+                        {booking.customer_name || 'Walk-in Client'}
+                      </span>
                     </div>
                   </td>
 
@@ -88,30 +108,28 @@ const BookingTable = ({ bookings = [], onComplete }) => {
                     </span>
                   </td>
 
-                  {/* Dynamic Hardware Assignment */}
+                  {/* Machine Assignment: The critical fix for the WAITING label */}
                   <td className="px-8 py-6">
                     <div className="flex items-center gap-2">
                       <HardDrive size={14} className="text-orange-400" />
-                      <span className="text-orange-600 font-black text-xs uppercase tracking-tighter">
-                        {renderMachineInfo(booking)}
-                      </span>
+                      {renderMachineInfo(booking)}
                     </div>
                   </td>
 
-                  {/* Financial Detail */}
+                  {/* Financial Detail: Displaying in PHP (Philippine Peso) */}
                   <td className="px-8 py-6">
                     <div className="flex items-center gap-1 text-emerald-600 font-black text-sm">
                       <PhilippinePeso size={14} />
-                      {parseFloat(booking.total_price).toFixed(2)}
+                      {parseFloat(booking.total_price || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </div>
                   </td>
 
                   {/* Live Status Badge */}
                   <td className="px-8 py-6">
                     <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full w-fit ${
-                      booking.status === 'Completed' ? 'bg-emerald-50 text-emerald-600' : 'bg-sky-50 text-sky-600'
+                      ['Claimed', 'Ready'].includes(booking.status) ? 'bg-emerald-50 text-emerald-600' : 'bg-sky-50 text-sky-600'
                     }`}>
-                      <Activity size={12} className={booking.status !== 'Completed' ? "animate-pulse" : ""} />
+                      <Activity size={12} className={!['Claimed', 'Cancelled', 'Ready'].includes(booking.status) ? "animate-pulse" : ""} />
                       <span className="text-[10px] font-black uppercase tracking-tight">
                         {booking.status || 'In Progress'}
                       </span>
@@ -123,13 +141,13 @@ const BookingTable = ({ bookings = [], onComplete }) => {
                     <div className="flex justify-center">
                       <button 
                         onClick={() => onComplete(booking.id)}
-                        disabled={booking.status === 'Completed'}
+                        disabled={['Claimed', 'Ready'].includes(booking.status)}
                         className={`p-2.5 rounded-xl transition-all active:scale-90 ${
-                          booking.status === 'Completed' 
+                          ['Claimed', 'Ready'].includes(booking.status) 
                           ? 'bg-slate-50 text-slate-200 cursor-not-allowed' 
                           : 'bg-slate-50 text-slate-300 hover:bg-emerald-50 hover:text-emerald-500 shadow-sm'
                         }`}
-                        title="Mark as Completed"
+                        title="Mark as Ready"
                       >
                         <CheckCircle2 size={18} />
                       </button>
@@ -138,15 +156,16 @@ const BookingTable = ({ bookings = [], onComplete }) => {
                 </tr>
               ))
             ) : (
+              /* Empty State UI */
               <tr>
                 <td colSpan="8" className="px-8 py-20 text-center">
-                  <div className="flex flex-col items-center gap-3">
+                  <div className="flex flex-col items-center gap-3 opacity-60">
                     <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center text-slate-200">
                       <Clock size={32} />
                     </div>
                     <div className="space-y-1">
                       <p className="text-slate-500 font-black text-sm">No Active Cycles</p>
-                      <p className="text-slate-400 text-xs">All laundry orders have been processed.</p>
+                      <p className="text-slate-400 text-xs">The terminal queue is currently empty.</p>
                     </div>
                   </div>
                 </td>

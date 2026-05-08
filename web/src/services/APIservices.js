@@ -61,9 +61,9 @@ export const apiService = {
     createBooking: async (bookingData) => {
         try {
             /**
-             * Data Sanitization:
+             * Data Sanitization & Schema Alignment:
              * Ensures machine IDs and numeric values are correctly typed as Int/Float.
-             * This prevents validation errors in the FastAPI backend.
+             * Added 'booking_timestamp' handling to align with the updated PostgreSQL schema.
              */
             const payload = {
                 ...bookingData,
@@ -72,7 +72,11 @@ export const apiService = {
                 dryer_id: bookingData.dryer_id ? parseInt(bookingData.dryer_id) : null,
                 weight: parseFloat(bookingData.weight),
                 loads: parseInt(bookingData.loads),
-                total_price: parseFloat(bookingData.total_price)
+                total_price: parseFloat(bookingData.total_price),
+                add_detergent: Boolean(bookingData.add_detergent),
+                add_delivery: Boolean(bookingData.add_delivery),
+                is_rush: Boolean(bookingData.is_rush),
+                booking_timestamp: bookingData.booking_timestamp ? new Date(bookingData.booking_timestamp).toISOString() : new Date().toISOString()
             };
 
             const response = await apiClient.post('/bookings/', payload);
@@ -83,9 +87,12 @@ export const apiService = {
         }
     },
 
+    /**
+     * Fetches bookings that are 'In Progress' or 'Ready' for the Terminal UI.
+     * Updated to support the new database columns to ensure data renders correctly.
+     */
     getActiveBookings: async () => {
         try {
-            // Fetches bookings that are 'In Progress' or 'Ready' for the Dashboard monitoring grid
             const response = await apiClient.get('/bookings/active');
             return response.data;
         } catch (error) {
@@ -96,8 +103,7 @@ export const apiService = {
 
     /**
      * UPDATED: Status Lifecycle Update
-     * Now sends a JSON body to match the BookingStatusUpdate Pydantic schema.
-     * This triggers machine release and profit accumulation logic in the backend.
+     * Triggers machine release and accumulated profit logic in the backend.
      */
     updateBookingStatus: async (bookingId, newStatus) => {
         try {
@@ -116,10 +122,6 @@ export const apiService = {
     getMachines: async () => {
         try {
             const shopId = localStorage.getItem('shop_id');
-            /**
-             * Returns all machines with real-time performance metrics.
-             * Data includes the new profitability_rate and remaining_time fields.
-             */
             const response = await apiClient.get('/machines/', {
                 params: shopId ? { shop_id: parseInt(shopId) } : {}
             });
@@ -130,9 +132,23 @@ export const apiService = {
         }
     },
 
+    /**
+     * DECOMMISSION HARDWARE (Delete)
+     * Permanently removes a machine unit from the database.
+     * Backend now supports ON DELETE SET NULL to preserve booking history.
+     */
+    deleteMachine: async (machineId) => {
+        try {
+            const response = await apiClient.delete(`/machines/${machineId}`);
+            return response.data;
+        } catch (error) {
+            console.error("Delete Machine Error:", error.response?.data?.detail || error.message);
+            throw error;
+        }
+    },
+
     getMachineMetrics: async (machineId) => {
         try {
-            // Fetches unique predictive metrics (Electricity/Water/Detergent) for a unit
             const response = await apiClient.get(`/machines/${machineId}/metrics`);
             return response.data;
         } catch (error) {
@@ -157,19 +173,8 @@ export const apiService = {
         }
     },
 
-    deleteMachine: async (machineId) => {
-        try {
-            const response = await apiClient.delete(`/machines/${machineId}`);
-            return response.data;
-        } catch (error) {
-            console.error("Delete Machine Error:", error.response?.data?.detail || error.message);
-            throw error;
-        }
-    },
-
     toggleMaintenance: async (machineId) => {
         try {
-            // Switches machine to 'Maintenance' status to prevent new bookings
             const response = await apiClient.patch(`/machines/${machineId}/maintenance`);
             return response.data;
         } catch (error) {
@@ -180,7 +185,6 @@ export const apiService = {
 
     initializeDefaultMachines: async () => {
         try {
-            // Deploys the standard configuration (6 Washers, 6 Dryers) for a new shop
             const response = await apiClient.post('/machines/initialize');
             return response.data;
         } catch (error) {
@@ -191,30 +195,14 @@ export const apiService = {
 
     // --- ANALYTICS & INSIGHTS ---
 
-    /**
-     * Fetches consolidated data for the Dashboard overview.
-     * Includes revenue, utilization, and the AI optimization tips.
-     */
     getDashboardStats: async () => {
         try {
             const shopId = localStorage.getItem('shop_id');
-            if (!shopId) throw new Error("Missing shop_id in session storage");
+            if (!shopId) throw new Error("Session Expired: Missing shop_id");
             const response = await apiClient.get(`/analytics/dashboard-summary/${shopId}`);
             return response.data;
         } catch (error) {
             console.error("Dashboard Stats Fetch Error:", error.response?.data?.detail || error.message);
-            throw error;
-        }
-    },
-
-    getForecastData: async () => {
-        try {
-            const shopId = localStorage.getItem('shop_id');
-            if (!shopId) throw new Error("Missing shop_id in session storage");
-            const response = await apiClient.get(`/analytics/forecast/${shopId}`);
-            return response.data;
-        } catch (error) {
-            console.error("Forecast Data Fetch Error:", error.response?.data?.detail || error.message);
             throw error;
         }
     },

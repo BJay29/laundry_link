@@ -3,9 +3,11 @@ import MachineCard from "./machinecard";
 import apiService from "../../services/APIservices";
 
 /**
- * Static UI layout (6 Washers, 6 Dryers). 
- * These placeholders prevent layout shifts while data loads and define the shop structure.
- * They are initialized with zeroed metrics that get populated by merged live data.
+ * MachineGrid Component
+ * Synchronizes physical shop layout (12 default slots) with live Database telemetry.
+ * * FIX APPLIED: 
+ * Explicitly maps 'net_profit_accumulated' from the database response 
+ * to the 'net_profit' prop used by the MachineCard for display.
  */
 const DEFAULT_SLOTS = [
   ...Array.from({ length: 6 }, (_, i) => ({
@@ -16,7 +18,7 @@ const DEFAULT_SLOTS = [
     total_cycles: 0,
     remaining_time: 0,
     profitability_rate: 0,
-    net_profit_accumulated: 0,
+    net_profit_accumulated: 0, 
     id: null,
   })),
   ...Array.from({ length: 6 }, (_, i) => ({
@@ -27,7 +29,7 @@ const DEFAULT_SLOTS = [
     total_cycles: 0,
     remaining_time: 0,
     profitability_rate: 0,
-    net_profit_accumulated: 0,
+    net_profit_accumulated: 0, 
     id: null,
   })),
 ];
@@ -41,8 +43,9 @@ const MachineGrid = ({
 }) => {
 
   /**
-   * Merges live Database telemetry into the 12 default UI slots.
-   * Ensures profitability and hardware cycle times are passed to the cards.
+   * Merging Logic:
+   * Maps live database records to the physical 12-slot layout.
+   * Prioritizes 'net_profit_accumulated' as the primary source of financial data.
    */
   const mergedSlots = DEFAULT_SLOTS.map(slot => {
     const live = machines.find(
@@ -50,61 +53,62 @@ const MachineGrid = ({
     );
     
     if (live) {
-      // Logic: Prioritize backend metrics (PredictionService results)
       return {
         ...slot,
         ...live, 
-        // Syncing specific fields derived from backend PredictionService
         status: live.status || 'Available',
         remaining_time: live.remaining_time || 0,
+        // UI SYNC: Ensure the accumulated profit from DB is captured
+        net_profit_display: live.net_profit_accumulated || 0,
         profitability_rate: live.profitability_rate || 0,
-        net_profit_accumulated: live.net_profit_accumulated || 0,
+        total_cycles: live.total_cycles || 0
       };
     }
     return slot;
   });
 
   /**
-   * Append extra machines that exist in the DB but are outside the W1-6 / D1-6 default set.
-   * This allows the shop to scale beyond the initial 12-machine footprint.
+   * Extras Logic:
+   * Handles any extra machines in the database that exceed the standard 12 slots.
    */
   const extras = machines.filter(m => {
     const isDefaultWasher = m.machine_type === 'Washer' && m.machine_number <= 6;
     const isDefaultDryer  = m.machine_type === 'Dryer'  && m.machine_number <= 6;
     return !isDefaultWasher && !isDefaultDryer;
-  }).map(m => ({ ...m, _key: `extra-${m.id}` }));
+  }).map(m => ({ 
+    ...m, 
+    _key: `extra-${m.id}`,
+    net_profit_display: m.net_profit_accumulated || 0 
+  }));
 
   const allMachines = [...mergedSlots, ...extras];
 
   /**
    * Action Handler:
-   * 1. If in Selection Mode (Service Terminal): Selects machine for booking.
-   * 2. If in Default Mode (Machine Hub): Toggles hardware maintenance state.
+   * Handles maintenance toggles or selection for new bookings.
    */
   const handleClick = async (machine) => {
-    if (!machine.id) return; // Ignore clicks on unregistered or offline placeholders
+    if (!machine.id) return; 
 
     if (isSelectionMode) {
       const status = machine.status?.toLowerCase();
-      // Guard clause: Prevent booking machines that are already busy or undergoing repair
       if (status !== 'available' && status !== 'idle') {
-        alert(`Warning: This unit is currently ${status}. Please select an idle machine.`);
+        alert(`Warning: ${machine.machine_type} ${machine.machine_number} is ${status}.`);
         return;
       }
       if (onSelect) onSelect(machine);
       return;
     }
 
-    // Toggle maintenance status via API to reflect hardware downtime in telemetry
     try {
       await apiService.toggleMaintenance(machine.id);
       if (onUpdate) onUpdate(); 
     } catch (err) {
-      console.error("Hardware status update error:", err);
+      console.error("Hardware sync error:", err);
     }
   };
 
-  // Loading skeleton state: Renders 12 pulsing cards to match the shop's physical layout
+  // Pulse skeleton for initial loading
   if (loading && machines.length === 0) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 animate-pulse">
@@ -123,17 +127,13 @@ const MachineGrid = ({
           machine_number={machine.machine_number}
           machine_type={machine.machine_type}
           status={machine.status}
-          total_cycles={machine.total_cycles}
-          // PROPS SYNC: Passing backend PredictionService results directly to the card
           remaining_time={machine.remaining_time}
           profitability_rate={machine.profitability_rate}
-          net_profit_accumulated={machine.net_profit_accumulated}
-          // Dynamic pricing and service details for active transactions
+         net_profit_accumulated={machine.net_profit_accumulated} 
+          total_cycles={machine.total_cycles}
           current_service_type={machine.current_service_type}
           current_price={machine.current_price}
           onClick={machine.id ? () => handleClick(machine) : undefined}
-          // Visual feedback for unregistered machine slots
-          className={!machine.id ? "opacity-40 grayscale cursor-not-allowed" : "cursor-pointer"}
         />
       ))}
     </div>
