@@ -170,7 +170,7 @@ const ServiceTerminal = () => {
         {loading ? (
           <div className="flex flex-col items-center justify-center py-44">
             <div className="animate-spin rounded-full h-12 w-12 border-[3px] border-sky-500 border-r-transparent mb-4" />
-            <p className="text-slate-400 font-black text-[10px] uppercase tracking-widest">Synchronizing Queue...</p>
+            <p className="text-slate-400 font-black text-[10px] uppercase tracking-widest">Loading...</p>
           </div>
         ) : (
           <div className="overflow-x-auto">

@@ -10,25 +10,30 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
+  Cell
 } from 'recharts';
 
 /**
  * CustomTooltip Component
- * Styled to match the premium dark look from the reference wireframes.
+ * Optimized for high-contrast visibility and currency formatting.
  */
 const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
     return (
       <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-2xl border border-slate-700 backdrop-blur-md bg-opacity-95">
-        <p className="font-black text-xs uppercase tracking-widest text-slate-400 mb-2">{label}</p>
-        <div className="space-y-1">
+        <p className="font-black text-[10px] uppercase tracking-widest text-slate-400 mb-2">{label}</p>
+        <div className="space-y-1.5">
           <div className="flex justify-between gap-8 items-center">
-            <span className="text-slate-300 text-sm font-bold">Bookings:</span>
-            <span className="text-sky-400 font-black">{payload[0].value}</span>
+            <span className="text-slate-300 text-xs font-bold">Bookings:</span>
+            <span className="text-sky-400 font-black">
+              {payload[0]?.value?.toLocaleString() || 0}
+            </span>
           </div>
           <div className="flex justify-between gap-8 items-center">
-            <span className="text-slate-300 text-sm font-bold">Income:</span>
-            <span className="text-emerald-400 font-black">₱{payload[1].value.toLocaleString()}</span>
+            <span className="text-slate-300 text-xs font-bold">Projected Income:</span>
+            <span className="text-emerald-400 font-black">
+              ₱{payload[1]?.value?.toLocaleString() || 0}
+            </span>
           </div>
         </div>
       </div>
@@ -37,8 +42,13 @@ const CustomTooltip = ({ active, payload, label }) => {
   return null;
 };
 
+/**
+ * ForecastChart
+ * Visualizes the 7-day AI demand projection.
+ * Uses a ComposedChart to overlay Projected Income (Line) over Bookings (Bar).
+ */
 const ForecastChart = ({ data }) => {
-  // Default data if none is provided to prevent chart breaking during dev
+  // Placeholder data to maintain layout structure if API is fetching or empty
   const chartData = data && data.length > 0 ? data : [
     { day: 'Mon', bookings: 0, income: 0 },
     { day: 'Tue', bookings: 0, income: 0 },
@@ -50,13 +60,20 @@ const ForecastChart = ({ data }) => {
   ];
 
   return (
-    <div className="w-full h-[400px] relative">
+    <div className="w-full h-full min-h-[350px] relative">
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart
           data={chartData}
-          margin={{ top: 10, right: 10, bottom: 0, left: 10 }}
+          margin={{ top: 20, right: 0, bottom: 20, left: 0 }}
         >
-          {/* Grid setup matching image_5bca61.png */}
+          {/* Definition for Bar Gradient */}
+          <defs>
+            <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#0EA5E9" stopOpacity={1} />
+              <stop offset="100%" stopColor="#38BDF8" stopOpacity={0.8} />
+            </linearGradient>
+          </defs>
+
           <CartesianGrid 
             strokeDasharray="3 3" 
             vertical={false} 
@@ -67,81 +84,95 @@ const ForecastChart = ({ data }) => {
             dataKey="day" 
             axisLine={false} 
             tickLine={false} 
-            tick={{ fill: '#94A3B8', fontSize: 12, fontWeight: 700 }}
+            tick={{ fill: '#94A3B8', fontSize: 10, fontWeight: 800 }}
             dy={15}
+            // Ensure labels don't collide on small screens
+            interval={0} 
           />
           
-          {/* Primary Axis for Bookings */}
+          {/* Left Axis: Volumetric Data (Bookings) */}
           <YAxis 
             yAxisId="left"
             axisLine={false} 
             tickLine={false} 
-            tick={{ fill: '#94A3B8', fontSize: 12, fontWeight: 500 }}
-            width={40}
+            tick={{ fill: '#94A3B8', fontSize: 10, fontWeight: 600 }}
+            width={35}
           />
 
-          {/* Secondary Axis for Revenue */}
+          {/* Right Axis: Financial Data (Income) */}
           <YAxis 
             yAxisId="right" 
             orientation="right" 
             axisLine={false} 
             tickLine={false} 
-            tick={{ fill: '#94A3B8', fontSize: 12, fontWeight: 500 }}
-            width={60}
+            tick={{ fill: '#94A3B8', fontSize: 10, fontWeight: 600 }}
+            width={55}
+            tickFormatter={(value) => `₱${value >= 1000 ? (value/1000).toFixed(1) + 'k' : value}`}
           />
 
           <Tooltip 
             content={<CustomTooltip />} 
-            cursor={{ fill: '#F8FAFC' }}
+            cursor={{ fill: '#F8FAFC', radius: 10 }}
           />
           
           <Legend 
-            verticalAlign="bottom" 
-            align="center"
+            verticalAlign="top" 
+            align="right"
             iconType="circle"
-            iconSize={8}
-            wrapperStyle={{ paddingTop: '40px', fontSize: '12px', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}
+            iconSize={6}
+            wrapperStyle={{ 
+              paddingBottom: '30px', 
+              fontSize: '10px', 
+              fontWeight: '900', 
+              color: '#64748B', 
+              textTransform: 'uppercase', 
+              letterSpacing: '0.1em' 
+            }}
           />
 
-          {/* Bar Component for Predicted Bookings */}
+          {/* BAR: PREDICTED VOLUME */}
           <Bar 
             yAxisId="left"
             dataKey="bookings" 
-            name="Predicted Bookings" 
-            fill="#0EA5E9" 
-            radius={[6, 6, 0, 0]} 
-            barSize={45}
-            animationDuration={1500}
+            name="Bookings" 
+            fill="url(#barGradient)" 
+            radius={[8, 8, 0, 0]} 
+            barSize={32}
+            animationDuration={1200}
+            animationEasing="ease-out"
           />
 
-          {/* Line Component for Projected Income */}
+          {/* LINE: PROJECTED REVENUE */}
           <Line 
             yAxisId="right"
             type="monotone" 
             dataKey="income" 
-            name="Projected Income" 
+            name="Income" 
             stroke="#10B981" 
             strokeWidth={4}
-            dot={{ r: 5, fill: '#10B981', strokeWidth: 3, stroke: '#fff' }}
-            activeDot={{ r: 8, strokeWidth: 0 }}
-            animationDuration={2000}
+            dot={{ r: 4, fill: '#10B981', strokeWidth: 2, stroke: '#fff' }}
+            activeDot={{ r: 6, strokeWidth: 0, fill: '#059669' }}
+            animationDuration={1800}
+            animationEasing="ease-in-out"
           />
         </ComposedChart>
       </ResponsiveContainer>
 
-      {/* Conditional Empty State Overlay */}
+      {/* BLUR OVERLAY: Triggers if backend returns an empty array during cooldowns */}
       {(!data || data.length === 0) && (
-        <div className="absolute inset-0 flex items-center justify-center bg-white/60 backdrop-blur-[2px] rounded-2xl">
-          <p className="text-slate-400 font-bold text-sm tracking-widest uppercase bg-white px-6 py-3 shadow-xl rounded-full border border-slate-100">
-            No forecast data available
-          </p>
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/40 backdrop-blur-[1.5px] rounded-3xl">
+          <div className="bg-white/90 px-6 py-4 shadow-2xl shadow-slate-200/50 rounded-[24px] border border-slate-100 flex flex-col items-center">
+             <Activity className="text-sky-400 mb-2 animate-pulse" size={20} />
+             <p className="text-slate-900 font-black text-[10px] tracking-[0.2em] uppercase">
+               Syncing Forecast...
+             </p>
+          </div>
         </div>
       )}
     </div>
   );
 };
 
-// PropTypes for better development documentation
 ForecastChart.propTypes = {
   data: PropTypes.arrayOf(
     PropTypes.shape({

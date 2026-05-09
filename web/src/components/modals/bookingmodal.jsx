@@ -1,17 +1,28 @@
 import React, { useState, useEffect } from 'react';
-import { X, User, Weight, Settings2, CheckCircle2, Hash, Calculator, Edit3, Tag, Cpu, Truck, Droplets } from 'lucide-react';
+import { X, User, Weight, Settings2, CheckCircle2, Hash, Calculator, Edit3, Tag, Cpu, Truck, Droplets, Loader2 } from 'lucide-react';
 import apiService from '../../services/APIservices'; 
 import { optimizationLogic } from '../../utils/optimizationlogic';
 
 /**
  * BOOKING MODAL COMPONENT
  * Handles new laundry order creation with Smart Calculation and Manual Override modes.
- * Optimized for machine ID synchronization and precise timestamp injection for AI forecasting.
+ * Optimized for machine ID synchronization and precise pricing updates from backend.
  */
 const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
   const [bookingMode, setBookingMode] = useState('smart');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoadingSettings, setIsLoadingSettings] = useState(false);
   const [machineData, setMachineData] = useState([]);
+  
+  // Dynamic Pricing State (Fetched from Backend)
+  // Default values are now aligned with the latest DB schema keys from the controller
+  const [dbRates, setDbRates] = useState({
+    regular_wash_price: 65,
+    titan_wash_price: 100, // Updated to match latest controller default
+    comforter_price: 150,
+    full_service_price: 210,
+    detergent_cost_per_load: 10 // Updated to match latest controller default
+  });
 
   const [formData, setFormData] = useState({
     customerName: '',
@@ -27,14 +38,6 @@ const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
     totalPrice: 0
   });
 
-  // Business Logic: Pricing rates per unit calibrated for local shop standards
-  const RATES = {
-    FULL_SERVICE: 210,
-    REGULAR_WASH: 65,
-    TITAN_WASH: 100,
-    COMFORTER_PER_KG: 105
-  };
-
   // Business Logic: Weight limits per load based on item category
   const CAPACITY = {
     CLOTHES_MAX: 6,
@@ -42,62 +45,88 @@ const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
   };
 
   /**
-   * SYNC: Fetch machine availability from Backend when modal opens.
-   * Ensures the UI reflects real-time machine status (Busy, Available, Maintenance).
+   * SYNC: Fetch machine availability and pricing settings from Backend when modal opens.
+   * Ensures the UI is using the most recent rates saved in Optimization Settings.
    */
   useEffect(() => {
     if (isOpen) {
-      const fetchAvailability = async () => {
+      const fetchData = async () => {
         try {
-          const data = await apiService.getMachines();
-          setMachineData(data || []);
+          setIsLoadingSettings(true);
+          const shopId = apiService.getShopId();
+          
+          // Parallel fetch for machines and pricing settings to reduce loading time
+          const [machines, settings] = await Promise.all([
+            apiService.getMachines(),
+            apiService.getBookingPricing(shopId)
+          ]);
+
+          setMachineData(machines || []);
+          
+          // Sync with Network Response: Mapping backend keys to state
+          if (settings) {
+           setDbRates({
+  regular_wash_price: Number(settings["Regular Wash"] || 65),
+  titan_wash_price: Number(settings["Titan Wash"] || 100),
+  comforter_price: Number(settings["Comforter"] || 150),
+  full_service_price: Number(settings["Full Service"] || 210),
+  detergent_cost_per_load: Number(settings["detergent_fee"] || 10)
+});
+          }
         } catch (error) {
-          console.error("Error fetching machine availability:", error);
+          console.error("Error fetching modal data:", error);
+        } finally {
+          setIsLoadingSettings(false);
         }
       };
-      fetchAvailability();
+      fetchData();
     }
   }, [isOpen]);
 
   /**
-   * LOGIC: Auto-calculate pricing and load count based on service rates.
-   * Runs only when 'smart' mode is active.
+   * LOGIC: Auto-calculate pricing and load count based on service rates from database.
+   * Updated to use strict mapping between serviceType and dbRates keys.
    */
   useEffect(() => {
-    if (bookingMode === 'manual') return;
+    // Skip auto-calc if in manual mode or while data is still being fetched
+    if (bookingMode === 'manual' || isLoadingSettings) return;
 
     let base = 0;
     let loads = 1;
 
+    // Calculation logic synced with the provided network response keys
     if (formData.serviceType === 'Full Service') {
       const limit = formData.itemType === 'Clothes' ? CAPACITY.CLOTHES_MAX : CAPACITY.LINENS_MAX;
-      loads = Math.ceil(formData.weight / limit) || 1;
-      base = RATES.FULL_SERVICE * loads;
+      loads = Math.ceil(Number(formData.weight) / limit) || 1;
+      base = dbRates.full_service_price * loads;
     } 
-    else if (formData.serviceType === 'Self-Service (8kg)') {
-      loads = Math.ceil(formData.weight / 8) || 1;
-      base = RATES.REGULAR_WASH * loads;
+    else if (formData.serviceType === 'Regular Wash') {
+      // Regular wash typically handles standard 8kg capacity
+      loads = Math.ceil(Number(formData.weight) / 8) || 1;
+      base = dbRates.regular_wash_price * loads;
     } 
-    else if (formData.serviceType === 'Titan Wash (12kg)') {
-      loads = Math.ceil(formData.weight / 12) || 1;
-      base = RATES.TITAN_WASH * loads;
+    else if (formData.serviceType === 'Titan Wash') {
+      // Titan wash handles heavy 12kg capacity loads
+      loads = Math.ceil(Number(formData.weight) / 12) || 1;
+      base = dbRates.titan_wash_price * loads; 
     } 
     else if (formData.serviceType === 'Comforter') {
-      const chargingWeight = Math.max(formData.weight, 3); 
-      base = RATES.COMFORTER_PER_KG * chargingWeight;
+      // Comforter service is usually per-piece/per-kg flat rate
+      base = dbRates.comforter_price * Number(formData.weight);
       loads = 1; 
     }
 
-    if (formData.addDetergent) base += 40; 
-    if (formData.addDelivery) base += 70; 
-    if (formData.isRush) base *= 1.4;
+    // Apply Add-on costs (Detergent is multiplied by total loads)
+    if (formData.addDetergent) base += (dbRates.detergent_cost_per_load * loads); 
+    if (formData.addDelivery) base += 70; // Fixed delivery fee for Naga College Foundation area
+    if (formData.isRush) base *= 1.4; // 40% Rush premium for priority processing
 
     setFormData(prev => ({ 
       ...prev, 
       totalPrice: Math.round(base), 
       calculatedLoads: loads 
     }));
-  }, [bookingMode, formData.serviceType, formData.itemType, formData.weight, formData.addDetergent, formData.addDelivery, formData.isRush]);
+  }, [bookingMode, formData.serviceType, formData.itemType, formData.weight, formData.addDetergent, formData.addDelivery, formData.isRush, dbRates, isLoadingSettings]);
 
   if (!isOpen) return null;
 
@@ -111,7 +140,6 @@ const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
 
   /**
    * Selection Logic: Assigns a specific Washer or Dryer to the booking.
-   * Validates if the machine is initialized in the database before selection.
    */
   const selectMachine = (id, currentStatus) => {
     if (id === undefined || id === null) {
@@ -120,7 +148,8 @@ const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
     }
 
     const statusLower = currentStatus?.toLowerCase();
-    const isSelectable = statusLower === 'available' || statusLower === 'idle' || !currentStatus;
+    // Logic: Machines are selectable if Available, Idle, or just starting (Ready)
+    const isSelectable = statusLower === 'available' || statusLower === 'idle' || statusLower === 'ready' || !currentStatus;
     
     if (!isSelectable) return;
 
@@ -136,7 +165,7 @@ const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
 
   /**
    * Submission: Sends the structured booking payload to the FastAPI backend.
-   * Ensures all numeric values are correctly parsed to match the PostgreSQL schema.
+   * Sanitizes all numeric fields to match PostgreSQL decimal/integer types.
    */
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -149,20 +178,24 @@ const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
     setIsSubmitting(true);
 
     try {
+      /**
+       * FINAL SANITIZATION:
+       * Ensures all numeric types are strictly cast before transmission to avoid 422 errors.
+       */
       const payload = {
-        customer_name: formData.customerName,
-        service_type: formData.serviceType,
-        category: formData.itemType,
-        weight: parseFloat(formData.weight),
-        loads: parseInt(formData.calculatedLoads),
-        total_price: parseFloat(formData.totalPrice),
+        customer_name: String(formData.customerName).trim(),
+        service_type: String(formData.serviceType),
+        category: String(formData.itemType),
+        weight: parseFloat(formData.weight || 0),
+        loads: parseInt(formData.calculatedLoads || 1),
+        total_price: parseFloat(formData.totalPrice || 0),
         washer_id: formData.selectedWasher ? parseInt(formData.selectedWasher) : null,
         dryer_id: formData.selectedDryer ? parseInt(formData.selectedDryer) : null,
         is_rush: Boolean(formData.isRush),
-        booking_mode: bookingMode,
+        booking_mode: String(bookingMode),
         add_detergent: Boolean(formData.addDetergent),
         add_delivery: Boolean(formData.addDelivery),
-        shop_id: parseInt(localStorage.getItem('shop_id')),
+        shop_id: parseInt(apiService.getShopId()),
         booking_timestamp: actualBookingTime 
             ? (actualBookingTime instanceof Date ? actualBookingTime.toISOString() : actualBookingTime)
             : new Date().toISOString()
@@ -173,6 +206,7 @@ const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
       if (onSubmit) onSubmit(response);
       onClose();
       
+      // Reset form state after successful creation
       setFormData({
         customerName: '',
         serviceType: 'Full Service',
@@ -190,24 +224,17 @@ const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
     } catch (error) {
       console.error("Booking Submission Error:", error);
       const backendError = error.response?.data?.detail;
-      alert(typeof backendError === 'string' ? backendError : "Transaction failed. Please check connectivity.");
+      alert(typeof backendError === 'string' ? backendError : "Transaction failed.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  /**
-   * UPDATED: Dynamic Machine Grid Rendering
-   * Automatically generates the grid based on machines existing in the database.
-   * Removes reliance on a static array.
-   */
   const renderMachineGrid = (type) => {
-    // Filter and sort machines by their actual machine_number assigned in Machine Hub
     const filteredMachines = machineData
       .filter(m => m.machine_type === type)
       .sort((a, b) => a.machine_number - b.machine_number);
 
-    // If no machines are added yet in the database for this type
     if (filteredMachines.length === 0) {
       return (
         <div className="col-span-3 py-4 text-center">
@@ -287,6 +314,12 @@ const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
 
         {/* FORM CONTENT */}
         <form onSubmit={handleSubmit} className="px-10 py-8 space-y-8 overflow-y-auto custom-scrollbar flex-1">
+          {isLoadingSettings && (
+            <div className="flex items-center justify-center py-4 gap-2 text-sky-500 font-bold animate-pulse">
+               <Loader2 className="animate-spin" size={16} />
+               <span>Syncing Live Pricing...</span>
+            </div>
+          )}
           
           <div className="grid grid-cols-2 gap-5">
             <div className="space-y-3 col-span-2">
@@ -341,8 +374,8 @@ const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
               ) : (
                 <select name="serviceType" value={formData.serviceType} onChange={handleChange} className="w-full bg-slate-50 border-2 border-slate-100 rounded-[24px] px-6 py-4 font-bold text-slate-800 outline-none cursor-pointer focus:border-sky-200">
                   <option value="Full Service">Full Service</option>
-                  <option value="Self-Service (8kg)">Regular Wash</option>
-                  <option value="Titan Wash (12kg)">Titan Wash</option>
+                  <option value="Regular Wash">Regular Wash</option>
+                  <option value="Titan Wash">Titan Wash</option>
                   <option value="Comforter">Comforter</option>
                 </select>
               )}
@@ -395,7 +428,7 @@ const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
             </button>
           </div>
 
-          {/* MACHINE GRID */}
+          {/* MACHINE GRID ASSIGNMENT */}
           <div className="space-y-6 p-8 bg-slate-50/50 rounded-[40px] border-2 border-slate-100">
             <div className="flex justify-between items-center px-2">
                 <label className="text-[11px] font-black text-slate-500 uppercase flex items-center gap-2 tracking-[0.2em]">
@@ -423,7 +456,7 @@ const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
             </div>
           </div>
 
-          {/* PRICING FOOTER */}
+          {/* PRICING FOOTER SECTION */}
           <div className={`rounded-[32px] p-8 flex justify-between items-center shadow-2xl transition-all duration-500 ${bookingMode === 'manual' ? 'bg-orange-600 shadow-orange-100' : 'bg-slate-900 shadow-slate-200'}`}>
             <div className="flex flex-col">
               <span className="font-bold text-white/40 text-[10px] uppercase tracking-[0.4em]">Total Payable</span>

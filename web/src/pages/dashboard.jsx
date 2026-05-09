@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, Calendar, RefreshCw, Monitor, Activity, TrendingUp, CheckCircle } from 'lucide-react';
 import apiService from '../services/APIservices';
 
+// Component Imports
 import StatCard from '../components/ui/statcard';
 import ForecastChart from '../components/charts/forecastcharts';
 import OptimizationTip from '../components/ui/optimizationtip';
@@ -9,13 +10,14 @@ import MachineGrid from '../components/machines/machinegrid';
 import BookingModal from '../components/modals/bookingmodal';
 
 /**
- * Dashboard Component
- * Central command center of LaundryLink.
- * Synchronized with the Backend PredictionService to calculate 
- * real-time overhead (CASURECO II/MNWD) and net profitability.
+ * DASHBOARD COMPONENT
+ * The central intelligence hub for LaundryLink.
+ * Manages real-time data orchestration between the FastAPI backend and React frontend.
  */
 const Dashboard = () => {
+  // State Management
   const [stats, setStats] = useState(null);
+  const [forecast, setForecast] = useState([]);
   const [machines, setMachines] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -23,36 +25,53 @@ const Dashboard = () => {
   const [lastUpdated, setLastUpdated] = useState(new Date());
 
   /**
-   * TELEMETRY SYNC ENGINE
-   * Fetches data from /stats and /machines endpoints.
-   * Ensures that nested 'metrics' (net_profit, profitability_rate) are mapped correctly.
+   * DATA SYNCHRONIZATION ENGINE
+   * Executes concurrent API calls to minimize network waterfall delays.
+   * Logic specifically maps backend analytics to frontend KPI cards.
    */
   const loadDashboardData = useCallback(async (isRefresh = false) => {
     try {
       if (isRefresh) setRefreshing(true);
       else setLoading(true);
 
-      // Concurrent fetching to reduce network latency
-      const [statsResult, machinesResult] = await Promise.allSettled([
+      // Concurrent fetching for performance optimization
+      const [statsResult, machinesResult, forecastResult] = await Promise.allSettled([
         apiService.getDashboardStats(),
         apiService.getMachines(),
+        apiService.getForecastData(),
       ]);
 
-      // 1. Handle Global Stats (Revenue, Forecasts, and Optimization Insights)
+      // 1. Process Dashboard KPIs (Revenue, Utilization, etc.)
+      // Mapping backend keys to ensure the UI has the correct data context
       if (statsResult.status === 'fulfilled' && statsResult.value) {
-        setStats(statsResult.value);
+        const rawData = statsResult.value;
+        setStats({
+          ...rawData,
+          // Fallback mapping for consistency with JSX expectations
+          display_revenue: rawData.today_revenue || 0,
+          display_trend: rawData.income_growth || 0,
+        });
       }
 
-      // 2. Handle Machine Telemetry (Hardware status and calculated margins)
+      // 2. Process Machine Telemetry (Status, Profitability per unit)
       if (machinesResult.status === 'fulfilled') {
-        // Ensure data integrity: If backend sends null, default to empty array
-        const machineData = machinesResult.value || [];
-        setMachines(machineData);
+        setMachines(machinesResult.value || []);
+      }
+
+      // 3. Process AI Forecast Graph Data
+      // Ensures data is mapped into the format Recharts expects (day, bookings, income)
+      if (forecastResult.status === 'fulfilled' && forecastResult.value?.forecast) {
+        const mappedForecast = forecastResult.value.forecast.map(item => ({
+          day: item.label.split(',')[0], // Converts "May 10, Sun" to "May 10"
+          bookings: item.predicted_bookings || 0,
+          income: item.projected_income || 0
+        }));
+        setForecast(mappedForecast);
       }
       
       setLastUpdated(new Date());
     } catch (err) {
-      console.error("Dashboard Telemetry Failure:", err.message);
+      console.error("Critical Telemetry Failure:", err.message);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -60,23 +79,23 @@ const Dashboard = () => {
   }, []);
 
   /**
-   * REFRESH LIFECYCLE
-   * 60-second heartbeat to ensure cycle timers and profit margins 
-   * stay updated without manual page reloads.
+   * SYSTEM HEARTBEAT
+   * Automatically refreshes data every 60 seconds to keep machine timers
+   * and live revenue streams accurate without manual intervention.
    */
   useEffect(() => {
     loadDashboardData();
-    const interval = setInterval(() => loadDashboardData(true), 60000);
-    return () => clearInterval(interval);
+    const heartbeat = setInterval(() => loadDashboardData(true), 60000);
+    return () => clearInterval(heartbeat);
   }, [loadDashboardData]);
 
   const handleBookingSuccess = () => {
     setIsModalOpen(false);
-    // Immediate sync post-booking to update machine status to 'Busy'
+    // Immediate force-sync to update machine states to 'Busy' instantly
     loadDashboardData(true); 
   };
 
-  // --- LOADING STATE (PULSE ANIMATION) ---
+  // --- INITIAL LOAD STATE (CINEMATIC PULSE) ---
   if (loading && !stats && machines.length === 0) {
     return (
       <div className="flex h-screen items-center justify-center bg-slate-50">
@@ -86,7 +105,8 @@ const Dashboard = () => {
             <Activity className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-sky-500" size={24} />
           </div>
           <p className="text-slate-400 font-black text-[10px] uppercase tracking-[0.4em] mt-8 animate-pulse">
-Loading.....          </p>
+            Establishing Link...
+          </p>
         </div>
       </div>
     );
@@ -95,7 +115,7 @@ Loading.....          </p>
   return (
     <div className="p-8 bg-slate-50 min-h-screen space-y-10 font-sans">
 
-      {/* SECTION 1: HEADER & SYSTEM STATUS */}
+      {/* SECTION 1: HEADER & IDENTITY */}
       <div className="flex flex-col lg:flex-row justify-between items-start gap-6">
         <div>
           <div className="flex items-center gap-3 mb-1">
@@ -103,18 +123,18 @@ Loading.....          </p>
               <Monitor size={18} className="text-white" />
             </div>
             <h2 className="text-slate-900 font-black text-lg tracking-tight uppercase">
-              {localStorage.getItem('shop_name') || 'Laundromat Command'}
+              {localStorage.getItem('shop_name') || 'Main Command'}
             </h2>
             <div className="flex items-center gap-1.5 ml-2">
-               <div className={`w-2 h-2 rounded-full ${refreshing ? 'bg-sky-400 animate-ping' : 'bg-emerald-500'}`} />
-               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                 {refreshing ? 'Refreshing...' : 'Live'}
-               </span>
+                <div className={`w-2 h-2 rounded-full ${refreshing ? 'bg-sky-400 animate-ping' : 'bg-emerald-500'}`} />
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  {refreshing ? 'Syncing...' : 'Live'}
+                </span>
             </div>
           </div>
           <h1 className="text-6xl font-black text-slate-900 mt-2 tracking-tighter italic uppercase">Overview</h1>
           <p className="text-slate-500 text-sm font-bold mt-1 max-w-md">
-            Monitoring profitability and utility overhead for Naga City branch.
+            Managing operations and utility overhead for <span className="text-sky-500">Naga City</span> Branch.
           </p>
         </div>
 
@@ -122,7 +142,7 @@ Loading.....          </p>
           <div className="hidden md:flex flex-col items-end bg-white px-6 py-3 rounded-[28px] border border-slate-200 shadow-sm">
             <div className="flex items-center gap-2">
               <Calendar size={14} className="text-sky-500" />
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Date</span>
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Operation Date</span>
             </div>
             <span className="text-sm font-black text-slate-800">
               {new Date().toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' })}
@@ -137,36 +157,35 @@ Loading.....          </p>
         </div>
       </div>
 
-      {/* SECTION 2: KEY PERFORMANCE INDICATORS (KPIs) */}
+      {/* SECTION 2: KEY PERFORMANCE INDICATORS (KPIs) - Mapped to real backend keys */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
           title="Daily Revenue"
-          value={stats?.total_revenue ? `₱${Number(stats.total_revenue).toLocaleString()}` : "₱0"}
-          trend={stats?.revenue_trend || "+0%"}
+          value={stats?.today_revenue ? `₱${Number(stats.today_revenue).toLocaleString()}` : "₱0"}
+          trend={`${stats?.income_growth || 0}%`}
           type="revenue"
         />
         <StatCard
-          title="Utilization Rate"
+          title="Machine Utilization"
           value={stats?.utilization_rate ? `${stats.utilization_rate}%` : "0%"}
-          trend={stats?.utilization_trend || "Stable"}
+          trend="Active"
           type="utilization"
         />
         <StatCard
-          title="Avg. Ticket Size"
-          value={stats?.avg_income ? `₱${Number(stats.avg_income).toLocaleString()}` : "₱0"}
-          trend={stats?.income_trend || "0%"}
-          isNegative={stats?.income_trend?.toString().includes('-')}
+          title="AI Accuracy"
+          value={stats?.accuracy_rate ? `${stats.accuracy_rate}%` : "0%"}
+          trend="Stable"
           type="income"
         />
         <StatCard
-          title="Active Sessions"
-          value={stats?.pending_bookings || "0"}
-          trend={stats?.bookings_trend || "Active"}
+          title="Expected Bookings"
+          value={stats?.predicted_bookings_today || "0"}
+          trend="Today"
           type="bookings"
         />
       </div>
 
-      {/* SECTION 3: PREDICTIVE ANALYTICS & INSIGHTS */}
+      {/* SECTION 3: AI ANALYTICS & REVENUE FORECASTING */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 bg-white p-10 rounded-[56px] border border-slate-100 shadow-sm relative overflow-hidden">
           <div className="absolute top-0 right-0 w-64 h-64 bg-sky-50/50 rounded-full blur-3xl -mr-32 -mt-32 pointer-events-none" />
@@ -174,63 +193,62 @@ Loading.....          </p>
           <div className="flex justify-between items-start mb-10 relative z-10">
             <div>
               <div className="flex items-center gap-2 text-sky-500 mb-1">
-                <TrendingUp size={16} />
-                <span className="text-[10px] font-black uppercase tracking-widest">Prediction Engine</span>
+                <strong className="text-sky-500 font-black"><TrendingUp size={16} /></strong>
+                <span className="text-[10px] font-black uppercase tracking-widest">AI Prediction Engine</span>
               </div>
               <h2 className="text-3xl font-black text-slate-900 tracking-tight">Demand Forecast</h2>
               <p className="text-slate-400 text-xs font-bold mt-1">
-                Predicted revenue and volume for the next 7 days.
+                Projected revenue and volume for the next 7 operational days.
               </p>
             </div>
             <div className="flex flex-col items-end">
-                <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Last Sync</span>
+                <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Last Cloud Sync</span>
                 <span className="text-xs font-bold text-slate-500">{lastUpdated.toLocaleTimeString()}</span>
             </div>
           </div>
 
           <div className="h-80 w-full mb-10 relative z-10">
-            {stats?.forecast_data?.length > 0 ? (
-              <ForecastChart data={stats.forecast_data} />
+            {forecast.length > 0 ? (
+              <ForecastChart data={forecast} />
             ) : (
               <div className="h-full w-full flex flex-col items-center justify-center bg-slate-50/50 rounded-[40px] border-2 border-dashed border-slate-200">
-                <RefreshCw className="text-slate-200 mb-4 animate-spin-slow" size={48} />
+                <RefreshCw className="text-slate-200 mb-4 animate-spin" size={48} />
                 <p className="text-slate-400 font-black text-[10px] uppercase tracking-[0.2em]">
-                  Mapping data points...
+                  Analyzing Historical Data...
                 </p>
               </div>
             )}
           </div>
 
-          {/* SERVICE BREAKDOWN: Shows volume per service category */}
+          {/* SERVICE BREAKDOWN: Displays volume counts from the stats payload */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 border-t border-slate-50 pt-10 relative z-10">
             <BreakdownItem label="Wash Only" value={stats?.wash_only || 0} />
             <BreakdownItem label="Dry Only"  value={stats?.dry_only || 0} />
             <BreakdownItem label="Full Service" value={stats?.full_service || 0} />
-            <BreakdownItem label="Payload (kg)" value={`${stats?.total_weight || 0}`} />
+            <BreakdownItem label="Active Units" value={stats?.active_machines || 0} />
           </div>
         </div>
 
         <div className="lg:col-span-1">
-          {/* OptimizationTip: Displays dynamic AI suggestions based on overhead costs */}
           <OptimizationTip
             title={stats?.optimization?.title || "Operational Insight"}
-            message={stats?.optimization?.description || "Backend is monitoring electricity consumption for Dryers to maximize margin."}
-            suggestion={stats?.optimization?.action_text || "Processing Data"}
+            message={stats?.optimization?.description || "The AI system is analyzing historical power consumption to optimize your dryer cycles."}
+            suggestion={stats?.optimization?.action_text || "Insights Syncing..."}
           />
         </div>
       </div>
 
-      {/* SECTION 4: HARDWARE MONITORING GRID */}
+      {/* SECTION 4: HARDWARE TELEMETRY GRID */}
       <div className="bg-white p-10 rounded-[56px] border border-slate-100 shadow-sm">
         <div className="flex justify-between items-center mb-10">
           <div>
             <div className="flex items-center gap-2 text-emerald-500 mb-1">
               <CheckCircle size={16} />
-              <span className="text-[10px] font-black uppercase tracking-widest">Telemetry</span>
+              <span className="text-[10px] font-black uppercase tracking-widest">Hardware Telemetry</span>
             </div>
             <h2 className="text-3xl font-black text-slate-900 tracking-tight">Machine Status</h2>
             <p className="text-slate-400 text-xs font-bold">
-              Tracking cycle times and real-time net profitability.
+              Monitoring active cycles and individual net profitability rates.
             </p>
           </div>
           <button 
@@ -241,7 +259,6 @@ Loading.....          </p>
           </button>
         </div>
 
-        {/* MachineGrid: Maps the machine telemetry fixed in MachineCard.jsx */}
         <MachineGrid
           machines={machines}
           loading={loading && machines.length === 0}
@@ -258,7 +275,10 @@ Loading.....          </p>
   );
 };
 
-// --- DATA VISUALIZATION HELPER ---
+/**
+ * HELPER COMPONENT: BREAKDOWN ITEM
+ * Renders individual service metrics with hover effects.
+ */
 const BreakdownItem = ({ label, value }) => (
   <div className="group flex flex-col items-center justify-center p-6 rounded-[32px] hover:bg-slate-50 transition-all border border-transparent hover:border-slate-100">
     <p className="text-4xl font-black text-slate-900 group-hover:text-sky-500 transition-colors tracking-tighter">

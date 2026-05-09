@@ -62,21 +62,23 @@ export const apiService = {
         try {
             /**
              * Data Sanitization & Schema Alignment:
-             * Ensures machine IDs and numeric values are correctly typed as Int/Float.
-             * Added 'booking_timestamp' handling to align with the updated PostgreSQL schema.
+             * Converts inputs to specific types (Int/Float/Boolean) to match 
+             * the strict validation of the FastAPI/SQLAlchemy backend.
              */
             const payload = {
                 ...bookingData,
                 shop_id: bookingData.shop_id ? parseInt(bookingData.shop_id) : parseInt(localStorage.getItem('shop_id')),
                 washer_id: bookingData.washer_id ? parseInt(bookingData.washer_id) : null,
                 dryer_id: bookingData.dryer_id ? parseInt(bookingData.dryer_id) : null,
-                weight: parseFloat(bookingData.weight),
-                loads: parseInt(bookingData.loads),
-                total_price: parseFloat(bookingData.total_price),
+                weight: parseFloat(bookingData.weight || 0),
+                loads: parseInt(bookingData.loads || 1),
+                total_price: parseFloat(bookingData.total_price || 0),
                 add_detergent: Boolean(bookingData.add_detergent),
                 add_delivery: Boolean(bookingData.add_delivery),
                 is_rush: Boolean(bookingData.is_rush),
-                booking_timestamp: bookingData.booking_timestamp ? new Date(bookingData.booking_timestamp).toISOString() : new Date().toISOString()
+                booking_timestamp: bookingData.booking_timestamp 
+                    ? new Date(bookingData.booking_timestamp).toISOString() 
+                    : new Date().toISOString()
             };
 
             const response = await apiClient.post('/bookings/', payload);
@@ -89,7 +91,7 @@ export const apiService = {
 
     /**
      * Fetches bookings that are 'In Progress' or 'Ready' for the Terminal UI.
-     * Updated to support the new database columns to ensure data renders correctly.
+     * Supports new database columns to ensure data renders correctly in the table.
      */
     getActiveBookings: async () => {
         try {
@@ -102,7 +104,7 @@ export const apiService = {
     },
 
     /**
-     * UPDATED: Status Lifecycle Update
+     * Status Lifecycle Update:
      * Triggers machine release and accumulated profit logic in the backend.
      */
     updateBookingStatus: async (bookingId, newStatus) => {
@@ -134,8 +136,8 @@ export const apiService = {
 
     /**
      * DECOMMISSION HARDWARE (Delete)
-     * Permanently removes a machine unit from the database.
-     * Backend now supports ON DELETE SET NULL to preserve booking history.
+     * Permanently removes a machine unit.
+     * Backend supports ON DELETE SET NULL to preserve historical booking data.
      */
     deleteMachine: async (machineId) => {
         try {
@@ -195,14 +197,133 @@ export const apiService = {
 
     // --- ANALYTICS & INSIGHTS ---
 
+    /**
+     * Fetches real-time statistics and AI-generated predictions for today.
+     * Updates StatCards on the Dashboard.
+     */
     getDashboardStats: async () => {
         try {
-            const shopId = localStorage.getItem('shop_id');
-            if (!shopId) throw new Error("Session Expired: Missing shop_id");
-            const response = await apiClient.get(`/analytics/dashboard-summary/${shopId}`);
+            // Using the new controller endpoint created for analytics
+            const response = await apiClient.get('/analytics/dashboard-summary');
             return response.data;
         } catch (error) {
             console.error("Dashboard Stats Fetch Error:", error.response?.data?.detail || error.message);
+            throw error;
+        }
+    },
+
+    /**
+     * Fetches AI-generated 7-day projections and historical income trends.
+     * Used to populate the Recharts graph in the Financial Forecast section.
+     */
+    getForecastData: async () => {
+        try {
+            const response = await apiClient.get('/analytics/forecast-graph');
+            return response.data;
+        } catch (error) {
+            console.error("Forecast Data Fetch Error:", error.response?.data?.detail || error.message);
+            throw error;
+        }
+    },
+
+    /**
+     * Fetches service type popularity distribution.
+     * Helps in visualizing which services (Full Service vs. Self Service) dominate revenue.
+     */
+    getServiceDistribution: async () => {
+        try {
+            const response = await apiClient.get('/analytics/service-distribution');
+            return response.data;
+        } catch (error) {
+            console.error("Service Distribution Fetch Error:", error.response?.data?.detail || error.message);
+            throw error;
+        }
+    },
+
+    // --- OPTIMIZATION SETTINGS METHODS ---
+
+    /**
+     * Fetches current shop configuration including pricing and utility rates.
+     * Supported keys: full_service_price, regular_wash_price, titan_wash_price, comforter_price.
+     */
+    getSettings: async (shopId) => {
+        try {
+            const targetId = shopId || localStorage.getItem('shop_id');
+            const response = await apiClient.get(`/settings/${targetId}`);
+            return response.data;
+        } catch (error) {
+            console.error("Fetch Settings Error:", error.response?.data?.detail || error.message);
+            throw error;
+        }
+    },
+
+    /**
+     * Updates shop settings to adjust service pricing and operational costs.
+     * Sanitizes inputs to ensure floating point accuracy for the PostgreSQL backend.
+     */
+    updateSettings: async (shopId, settingsData) => {
+        try {
+            const targetId = shopId || localStorage.getItem('shop_id');
+            
+            // Explicitly convert numeric values to prevent "422 Unprocessable Entity" errors
+            const sanitizedPayload = {
+                ...settingsData,
+                full_service_price: settingsData.full_service_price !== undefined ? parseFloat(settingsData.full_service_price) : undefined,
+                regular_wash_price: settingsData.regular_wash_price !== undefined ? parseFloat(settingsData.regular_wash_price) : undefined,
+                titan_wash_price: settingsData.titan_wash_price !== undefined ? parseFloat(settingsData.titan_wash_price) : undefined,
+                comforter_price: settingsData.comforter_price !== undefined ? parseFloat(settingsData.comforter_price) : undefined,
+                electricity_rate: settingsData.electricity_rate !== undefined ? parseFloat(settingsData.electricity_rate) : undefined,
+                water_rate: settingsData.water_rate !== undefined ? parseFloat(settingsData.water_rate) : undefined,
+                detergent_cost_per_load: settingsData.detergent_cost_per_load !== undefined ? parseFloat(settingsData.detergent_cost_per_load) : undefined
+            };
+
+            const response = await apiClient.put(`/settings/${targetId}`, sanitizedPayload);
+            return response.data;
+        } catch (error) {
+            console.error("Update Settings Error:", error.response?.data?.detail || error.message);
+            throw error;
+        }
+    },
+
+    /**
+     * Fetches hardcoded factory default pricing for UI preview.
+     * Returns: Full Service, Regular Wash, Titan Wash, and Comforter defaults.
+     */
+    getSystemDefaults: async () => {
+        try {
+            const response = await apiClient.get('/settings/defaults');
+            return response.data;
+        } catch (error) {
+            console.error("Fetch System Defaults Error:", error.response?.data?.detail || error.message);
+            throw error;
+        }
+    },
+
+    /**
+     * Reverts the shop's database entry back to the original system factory settings.
+     */
+    resetToDefaults: async (shopId) => {
+        try {
+            const targetId = shopId || localStorage.getItem('shop_id');
+            const response = await apiClient.post(`/settings/${targetId}/reset`);
+            return response.data;
+        } catch (error) {
+            console.error("Reset Settings Error:", error.response?.data?.detail || error.message);
+            throw error;
+        }
+    },
+
+    /**
+     * Fetches pricing logic specifically for the Booking Modal.
+     * Ensures keys (Full Service, Regular Wash, etc.) are available for instant calculation.
+     */
+    getBookingPricing: async (shopId) => {
+        try {
+            const targetId = shopId || localStorage.getItem('shop_id');
+            const response = await apiClient.get(`/settings/${targetId}/pricing`);
+            return response.data;
+        } catch (error) {
+            console.error("Fetch Pricing Error:", error.response?.data?.detail || error.message);
             throw error;
         }
     },
