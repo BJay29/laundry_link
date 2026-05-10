@@ -200,10 +200,10 @@ export const apiService = {
     /**
      * Fetches real-time statistics and AI-generated predictions for today.
      * Updates StatCards on the Dashboard.
+     * Response includes: today_revenue, full_service, titan_wash, regular_wash, comforter, total_kg.
      */
     getDashboardStats: async () => {
         try {
-            // Using the new controller endpoint created for analytics
             const response = await apiClient.get('/analytics/dashboard-summary');
             return response.data;
         } catch (error) {
@@ -228,7 +228,7 @@ export const apiService = {
 
     /**
      * Fetches service type popularity distribution.
-     * Helps in visualizing which services (Full Service vs. Self Service) dominate revenue.
+     * Helps in visualizing which services (Full Service vs. Regular Wash, etc.) dominate revenue.
      */
     getServiceDistribution: async () => {
         try {
@@ -244,7 +244,6 @@ export const apiService = {
 
     /**
      * Fetches current shop configuration including pricing and utility rates.
-     * Supported keys: full_service_price, regular_wash_price, titan_wash_price, comforter_price.
      */
     getSettings: async (shopId) => {
         try {
@@ -265,7 +264,6 @@ export const apiService = {
         try {
             const targetId = shopId || localStorage.getItem('shop_id');
             
-            // Explicitly convert numeric values to prevent "422 Unprocessable Entity" errors
             const sanitizedPayload = {
                 ...settingsData,
                 full_service_price: settingsData.full_service_price !== undefined ? parseFloat(settingsData.full_service_price) : undefined,
@@ -287,7 +285,6 @@ export const apiService = {
 
     /**
      * Fetches hardcoded factory default pricing for UI preview.
-     * Returns: Full Service, Regular Wash, Titan Wash, and Comforter defaults.
      */
     getSystemDefaults: async () => {
         try {
@@ -315,7 +312,6 @@ export const apiService = {
 
     /**
      * Fetches pricing logic specifically for the Booking Modal.
-     * Ensures keys (Full Service, Regular Wash, etc.) are available for instant calculation.
      */
     getBookingPricing: async (shopId) => {
         try {

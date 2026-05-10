@@ -10,8 +10,8 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
-  Cell
 } from 'recharts';
+import { Activity } from 'lucide-react';
 
 /**
  * CustomTooltip Component
@@ -45,7 +45,7 @@ const CustomTooltip = ({ active, payload, label }) => {
 /**
  * ForecastChart
  * Visualizes the 7-day AI demand projection.
- * Uses a ComposedChart to overlay Projected Income (Line) over Bookings (Bar).
+ * Fixed: Added 'min-width: 0' and explicit height to prevent Recharts -1 dimensions error.
  */
 const ForecastChart = ({ data }) => {
   // Placeholder data to maintain layout structure if API is fetching or empty
@@ -60,7 +60,10 @@ const ForecastChart = ({ data }) => {
   ];
 
   return (
-    <div className="w-full h-full min-h-[350px] relative">
+    /* FIX: Wrapping in a div with 'min-width: 0' and 'height: 100%' 
+      prevents ResponsiveContainer from reporting -1 width/height in Flex/Grid layouts.
+    */
+    <div className="w-full h-full min-h-[350px] relative" style={{ minWidth: 0 }}>
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart
           data={chartData}
@@ -86,7 +89,6 @@ const ForecastChart = ({ data }) => {
             tickLine={false} 
             tick={{ fill: '#94A3B8', fontSize: 10, fontWeight: 800 }}
             dy={15}
-            // Ensure labels don't collide on small screens
             interval={0} 
           />
           
@@ -158,7 +160,7 @@ const ForecastChart = ({ data }) => {
         </ComposedChart>
       </ResponsiveContainer>
 
-      {/* BLUR OVERLAY: Triggers if backend returns an empty array during cooldowns */}
+      {/* BLUR OVERLAY: Triggers during data sync or if empty */}
       {(!data || data.length === 0) && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/40 backdrop-blur-[1.5px] rounded-3xl">
           <div className="bg-white/90 px-6 py-4 shadow-2xl shadow-slate-200/50 rounded-[24px] border border-slate-100 flex flex-col items-center">
