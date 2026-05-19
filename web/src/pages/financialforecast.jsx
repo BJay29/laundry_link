@@ -8,10 +8,35 @@ import {
   Package, 
   Minus,
   Zap,
-  Cpu
+  Cpu,
+  Sparkles
 } from 'lucide-react';
 import ForecastCharts from '../components/charts/forecastcharts';
 import apiService from '../services/APIservices';
+
+/**
+ * TYPEWRITER COMPONENT
+ * Handles the character-by-character typing animation for AI insights.
+ */
+const Typewriter = ({ text, speed = 20 }) => {
+  const [displayedText, setDisplayedText] = useState("");
+
+  useEffect(() => {
+    let i = 0;
+    setDisplayedText("");
+    const timer = setInterval(() => {
+      if (i < text.length) {
+        setDisplayedText((prev) => prev + text.charAt(i));
+        i++;
+      } else {
+        clearInterval(timer);
+      }
+    }, speed);
+    return () => clearInterval(timer);
+  }, [text, speed]);
+
+  return <span className="text-slate-600 font-semibold">{displayedText}</span>;
+};
 
 /**
  * FINANCIAL FORECAST COMPONENT
@@ -21,6 +46,7 @@ import apiService from '../services/APIservices';
 const FinancialForecast = () => {
   const [forecastData, setForecastData] = useState([]);
   const [accuracyMetrics, setAccuracyMetrics] = useState(null);
+  const [aiInsight, setAiInsight] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -64,6 +90,9 @@ const FinancialForecast = () => {
 
       if (forecastRes.status === 'fulfilled' && forecastRes.value?.forecast) {
         const rawForecast = forecastRes.value.forecast;
+        
+        // Capture AI Insight for the Typewriter effect
+        setAiInsight(forecastRes.value.ai_generated_insight || "No active insights generated.");
         
         // Map data for the Recharts ForecastCharts component
         setForecastData(rawForecast.map(item => ({
@@ -152,8 +181,6 @@ const FinancialForecast = () => {
 
   return (
     <div className="p-4 md:p-8 bg-slate-50 min-h-screen font-sans">
-      
-      {/* HEADER SECTION */}
       <div className="mb-10 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
         <div>
           <h1 className="text-3xl md:text-5xl font-black text-slate-900 tracking-tighter uppercase italic">Financial Forecast</h1>
@@ -171,32 +198,24 @@ const FinancialForecast = () => {
         </div>
       )}
 
+      {/* AI INSIGHT SECTION */}
+      {aiInsight && (
+        <div className="mb-8 bg-white border border-indigo-100 p-6 rounded-[32px] flex items-start gap-4 shadow-sm">
+          <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl">
+            <Sparkles size={20} />
+          </div>
+          <div>
+            <h4 className="text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-1">AI Executive Insight</h4>
+            <Typewriter text={aiInsight} />
+          </div>
+        </div>
+      )}
+
       {/* STRATEGIC KPI GRID */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <ForecastStatCard 
-          label="Projected Weekly Revenue" 
-          value={`₱${stats.totalRevenue.toLocaleString()}`} 
-          trend={stats.revenueTrend} 
-          status={stats.trendStatus} 
-          icon={<DollarSign className="text-emerald-500" />}
-          bgColor="bg-emerald-50"
-        />
-        <ForecastStatCard 
-          label="Expected Booking Volume" 
-          value={stats.totalBookings} 
-          trend={stats.bookingTrend} 
-          status={stats.bookingStatus} 
-          icon={<Package className="text-sky-500" />}
-          bgColor="bg-sky-50"
-        />
-        <ForecastStatCard 
-          label="Average Daily Target" 
-          value={`₱${stats.avgDaily.toLocaleString()}`} 
-          trend={stats.revenueTrend} 
-          status={stats.trendStatus} 
-          icon={<TrendingUp className="text-purple-500" />}
-          bgColor="bg-purple-50"
-        />
+        <ForecastStatCard label="Projected Weekly Revenue" value={`₱${stats.totalRevenue.toLocaleString()}`} trend={stats.revenueTrend} status={stats.trendStatus} icon={<DollarSign className="text-emerald-500" />} bgColor="bg-emerald-50" />
+        <ForecastStatCard label="Expected Booking Volume" value={stats.totalBookings} trend={stats.bookingTrend} status={stats.bookingStatus} icon={<Package className="text-sky-500" />} bgColor="bg-sky-50" />
+        <ForecastStatCard label="Average Daily Target" value={`₱${stats.avgDaily.toLocaleString()}`} trend={stats.revenueTrend} status={stats.trendStatus} icon={<TrendingUp className="text-purple-500" />} bgColor="bg-purple-50" />
       </div>
 
       {/* MAIN ANALYTICS CONTAINER */}
@@ -211,7 +230,6 @@ const FinancialForecast = () => {
           </div>
         </div>
 
-        {/* CHART AREA */}
         <div className="h-[350px] md:h-[450px] w-full relative mb-6" style={{ minWidth: '0' }}>
           {forecastData.length > 0 ? (
             <ForecastCharts data={forecastData} />
@@ -223,7 +241,6 @@ const FinancialForecast = () => {
           )}
         </div>
 
-        {/* HISTORICAL SERVICE DISTRIBUTION FOOTER */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-6 mt-auto pt-10 border-t border-slate-50">
           <BreakdownItem label="Full Service" value={stats.fullService} />
           <BreakdownItem label="Titan Wash" value={stats.titanWash} />
@@ -245,86 +262,38 @@ const FinancialForecast = () => {
               <p className="text-slate-400 text-xs font-bold italic">Mathematical accuracy validations evaluated against system stochastic processes.</p>
             </div>
           </div>
-
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {/* Model 1: Demand Prediction Engine */}
             <div className="border border-slate-100 p-6 md:p-8 rounded-[32px] bg-slate-50/50">
               <div className="flex justify-between items-start border-b border-slate-100 pb-4 mb-4">
                 <div>
                   <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider">Predictive Subsystem</h4>
                   <h3 className="text-md font-black text-slate-800 mt-0.5">Demand Forecasting Accuracy</h3>
                 </div>
-                <span className="px-2.5 py-1 text-[9px] font-black tracking-wider uppercase rounded-md bg-indigo-50 text-indigo-600">
-                  Stochastic
-                </span>
               </div>
               <div className="space-y-4">
                 <div className="flex justify-between items-end">
                   <span className="text-xs font-extrabold text-slate-500 uppercase tracking-wide">Confidence Index</span>
-                  <span className="text-xl font-black text-indigo-600">
-                    {accuracyMetrics.demand_forecasting_model?.accuracy_percentage}%
-                  </span>
+                  <span className="text-xl font-black text-indigo-600">{accuracyMetrics.demand_forecasting_model?.accuracy_percentage}%</span>
                 </div>
                 <div className="w-full bg-slate-200/70 h-2.5 rounded-full overflow-hidden">
-                  <div 
-                    className="bg-indigo-600 h-full rounded-full transition-all duration-500 shadow-[0_0_8px_rgba(79,70,229,0.4)]" 
-                    style={{ width: `${accuracyMetrics.demand_forecasting_model?.accuracy_percentage || 0}%` }}
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4 pt-3 mt-2 border-t border-slate-100 text-[11px] font-bold">
-                  <div>
-                    <span className="text-slate-400 block mb-0.5 uppercase tracking-wide">Evaluation Method</span>
-                    <span className="font-black text-slate-700 text-[10px] leading-tight block max-w-[180px]">
-                      {accuracyMetrics.demand_forecasting_model?.evaluation_method}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block mb-0.5 uppercase tracking-wide">Mean Absolute Error</span>
-                    <span className="font-black text-emerald-500 text-sm block mt-1">
-                      ± {accuracyMetrics.demand_forecasting_model?.mean_absolute_error}
-                    </span>
-                  </div>
+                  <div className="bg-indigo-600 h-full rounded-full transition-all duration-500 shadow-[0_0_8px_rgba(79,70,229,0.4)]" style={{ width: `${accuracyMetrics.demand_forecasting_model?.accuracy_percentage || 0}%` }} />
                 </div>
               </div>
             </div>
-
-            {/* Model 2: Utility Analytics Engine */}
             <div className="border border-slate-100 p-6 md:p-8 rounded-[32px] bg-slate-50/50">
               <div className="flex justify-between items-start border-b border-slate-100 pb-4 mb-4">
                 <div>
                   <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider">Consumption Subsystem</h4>
                   <h3 className="text-md font-black text-slate-800 mt-0.5">Utility Tracking Calibration</h3>
                 </div>
-                <span className="px-2.5 py-1 text-[9px] font-black tracking-wider uppercase rounded-md bg-cyan-50 text-cyan-600">
-                  Deterministic
-                </span>
               </div>
               <div className="space-y-4">
                 <div className="flex justify-between items-end">
                   <span className="text-xs font-extrabold text-slate-500 uppercase tracking-wide">Accuracy Calibration</span>
-                  <span className="text-xl font-black text-cyan-600">
-                    {accuracyMetrics.utility_telemetry_model?.accuracy_percentage}%
-                  </span>
+                  <span className="text-xl font-black text-cyan-600">{accuracyMetrics.utility_telemetry_model?.accuracy_percentage}%</span>
                 </div>
                 <div className="w-full bg-slate-200/70 h-2.5 rounded-full overflow-hidden">
-                  <div 
-                    className="bg-cyan-500 h-full rounded-full transition-all duration-500 shadow-[0_0_8px_rgba(6,182,212,0.4)]" 
-                    style={{ width: `${accuracyMetrics.utility_telemetry_model?.accuracy_percentage || 0}%` }}
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4 pt-3 mt-2 border-t border-slate-100 text-[11px] font-bold">
-                  <div>
-                    <span className="text-slate-400 block mb-0.5 uppercase tracking-wide">Mean Absolute Error</span>
-                    <span className="font-black text-slate-700 text-sm block mt-1">
-                      {accuracyMetrics.utility_telemetry_model?.mean_absolute_error}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block mb-0.5 uppercase tracking-wide">Calibration Check</span>
-                    <span className="font-black text-emerald-500 text-sm flex items-center gap-1.5 mt-1">
-                      <span className="w-2 h-2 bg-emerald-500 rounded-full inline-block animate-ping" /> OPTIMIZED
-                    </span>
-                  </div>
+                  <div className="bg-cyan-500 h-full rounded-full transition-all duration-500 shadow-[0_0_8px_rgba(6,182,212,0.4)]" style={{ width: `${accuracyMetrics.utility_telemetry_model?.accuracy_percentage || 0}%` }} />
                 </div>
               </div>
             </div>
@@ -335,9 +304,6 @@ const FinancialForecast = () => {
   );
 };
 
-/**
- * KPI Card Sub-component
- */
 const ForecastStatCard = ({ label, value, trend, status, icon, bgColor }) => {
   const getTrendStyles = () => {
     switch (status) {
@@ -346,9 +312,7 @@ const ForecastStatCard = ({ label, value, trend, status, icon, bgColor }) => {
       default: return { color: 'text-slate-400', Icon: Minus };
     }
   };
-
   const { color, Icon } = getTrendStyles();
-
   return (
     <div className="bg-white p-6 md:p-8 rounded-[32px] md:rounded-[40px] border border-slate-100 shadow-sm group hover:shadow-md transition-all">
       <div className="flex justify-between items-start">
@@ -368,9 +332,6 @@ const ForecastStatCard = ({ label, value, trend, status, icon, bgColor }) => {
   );
 };
 
-/**
- * Breakdown Item Sub-component
- */
 const BreakdownItem = ({ label, value }) => (
   <div className="flex flex-col items-center text-center">
     <p className="text-xl md:text-2xl font-black text-slate-900 mb-0.5 tracking-tighter">{value}</p>
