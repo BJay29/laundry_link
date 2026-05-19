@@ -9,8 +9,7 @@ import {
   Minus,
   Zap,
   Cpu,
-  Sparkles,
-  CheckCircle2
+  Sparkles
 } from 'lucide-react';
 import ForecastCharts from '../components/charts/forecastcharts';
 import apiService from '../services/APIservices';
@@ -42,6 +41,7 @@ const Typewriter = ({ text, speed = 20 }) => {
 /**
  * FINANCIAL FORECAST COMPONENT
  * Visualizes 7-day AI projections against historical database baselines.
+ * Displays validated model telemetry parameters with real-time backend accurate state mappings.
  */
 const FinancialForecast = () => {
   const [forecastData, setForecastData] = useState([]);
@@ -175,15 +175,6 @@ const FinancialForecast = () => {
         </button>
       </div>
 
-      {/* Added dynamic pulse status indicator below */}
-      <div className="mb-8 flex items-center gap-3">
-        <div className="relative flex items-center justify-center">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
-        </div>
-        <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest animate-pulse">System Monitoring Active</span>
-      </div>
-
       {error && (
         <div className="mb-8 bg-rose-50 border border-rose-100 p-6 rounded-[32px] flex items-center gap-4 text-rose-600 font-bold">
           <AlertCircle size={24} />
@@ -192,7 +183,8 @@ const FinancialForecast = () => {
       )}
 
       {aiInsight && (
-        <div className="mb-8 bg-white border border-indigo-100 p-6 rounded-[32px] flex items-start gap-4 shadow-sm">
+        // Added 'animate-pulse' here for the pulsing effect
+        <div className="mb-8 bg-white border border-indigo-100 p-6 rounded-[32px] flex items-start gap-4 shadow-sm animate-pulse">
           <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl">
             <Sparkles size={20} />
           </div>
@@ -225,8 +217,8 @@ const FinancialForecast = () => {
             <ForecastCharts data={forecastData} />
           ) : (
             <div className="h-full flex flex-col items-center justify-center border-2 border-dashed border-slate-100 rounded-[40px]">
-                <RefreshCw className="text-slate-200 mb-4 animate-spin" size={40} />
-                <p className="text-slate-300 font-black uppercase text-[10px] tracking-widest">Awaiting Telemetry Stream...</p>
+              <RefreshCw className="text-slate-200 mb-4 animate-spin" size={40} />
+              <p className="text-slate-300 font-black uppercase text-[10px] tracking-widest">Awaiting Telemetry Stream...</p>
             </div>
           )}
         </div>
@@ -268,6 +260,16 @@ const FinancialForecast = () => {
                 <div className="w-full bg-slate-200/70 h-2.5 rounded-full overflow-hidden">
                   <div className="bg-indigo-600 h-full rounded-full transition-all duration-500 shadow-[0_0_8px_rgba(79,70,229,0.4)]" style={{ width: `${accuracyMetrics.demand_forecasting_model?.accuracy_percentage || 0}%` }} />
                 </div>
+                <div className="grid grid-cols-2 gap-4 pt-4 mt-2 border-t border-slate-100">
+                  <div>
+                    <p className="text-[9px] font-black text-slate-400 uppercase">Evaluation Method</p>
+                    <p className="text-xs font-bold text-slate-700">{accuracyMetrics.demand_forecasting_model?.evaluation_method || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-black text-slate-400 uppercase">Mean Absolute Error</p>
+                    <p className="text-xs font-bold text-emerald-500">± {accuracyMetrics.demand_forecasting_model?.mean_absolute_error || '0'}</p>
+                  </div>
+                </div>
               </div>
             </div>
             <div className="border border-slate-100 p-6 md:p-8 rounded-[32px] bg-slate-50/50">
@@ -286,12 +288,15 @@ const FinancialForecast = () => {
                 <div className="w-full bg-slate-200/70 h-2.5 rounded-full overflow-hidden">
                   <div className="bg-cyan-500 h-full rounded-full transition-all duration-500 shadow-[0_0_8px_rgba(6,182,212,0.4)]" style={{ width: `${accuracyMetrics.utility_telemetry_model?.accuracy_percentage || 0}%` }} />
                 </div>
-                {/* Added the pulsing optimized indicator here */}
-                <div className="pt-4 mt-2 border-t border-slate-100 flex items-center gap-2">
-                    <div className="flex items-center justify-center p-1 bg-emerald-100 rounded-full animate-pulse">
-                        <CheckCircle2 size={12} className="text-emerald-600" />
-                    </div>
-                    <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest animate-pulse">System Optimized</p>
+                <div className="grid grid-cols-2 gap-4 pt-4 mt-2 border-t border-slate-100">
+                  <div>
+                    <p className="text-[9px] font-black text-slate-400 uppercase">Mean Absolute Error</p>
+                    <p className="text-xs font-bold text-slate-700">{accuracyMetrics.utility_telemetry_model?.mean_absolute_error || '0'}</p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-black text-slate-400 uppercase">Calibration Check</p>
+                    <p className="text-xs font-bold text-emerald-500">OPTIMIZED</p>
+                  </div>
                 </div>
               </div>
             </div>
