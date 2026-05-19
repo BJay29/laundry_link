@@ -14,7 +14,7 @@ const apiClient = axios.create({
 });
 
 /**
- * Request Interceptor:
+ * Request Interceptor:s
  * Automatically attaches the JWT Bearer token to every outgoing request
  * to ensure authorized access to protected routes.
  */
