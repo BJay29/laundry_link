@@ -16,7 +16,7 @@ import apiService from '../services/APIservices';
 /**
  * FINANCIAL FORECAST COMPONENT
  * Visualizes 7-day AI projections against historical database baselines.
- * Now displays model validation metrics for advanced algorithm accuracy tracking.
+ * Displays validated model telemetry parameters with real-time backend accurate state mappings.
  */
 const FinancialForecast = () => {
   const [forecastData, setForecastData] = useState([]);
@@ -262,26 +262,26 @@ const FinancialForecast = () => {
                 <div className="flex justify-between items-end">
                   <span className="text-xs font-extrabold text-slate-500 uppercase tracking-wide">Confidence Index</span>
                   <span className="text-xl font-black text-indigo-600">
-                    {accuracyMetrics.demand_forecasting_model?.confidence_rating}
+                    {accuracyMetrics.demand_forecasting_model?.accuracy_percentage}%
                   </span>
                 </div>
                 <div className="w-full bg-slate-200/70 h-2.5 rounded-full overflow-hidden">
                   <div 
                     className="bg-indigo-600 h-full rounded-full transition-all duration-500 shadow-[0_0_8px_rgba(79,70,229,0.4)]" 
-                    style={{ width: accuracyMetrics.demand_forecasting_model?.confidence_rating || '0%' }}
+                    style={{ width: `${accuracyMetrics.demand_forecasting_model?.accuracy_percentage || 0}%` }}
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4 pt-3 mt-2 border-t border-slate-100 text-[11px] font-bold">
                   <div>
-                    <span className="text-slate-400 block mb-0.5 uppercase tracking-wide">Iterations Verified</span>
-                    <span className="font-black text-slate-700 text-sm">
-                      {accuracyMetrics.demand_forecasting_model?.iterations_checked?.toLocaleString()} runs
+                    <span className="text-slate-400 block mb-0.5 uppercase tracking-wide">Evaluation Method</span>
+                    <span className="font-black text-slate-700 text-[10px] leading-tight block max-w-[180px]">
+                      {accuracyMetrics.demand_forecasting_model?.evaluation_method}
                     </span>
                   </div>
                   <div>
-                    <span className="text-slate-400 block mb-0.5 uppercase tracking-wide">Stability Deviation</span>
-                    <span className="font-black text-emerald-500 text-sm">
-                      ± {accuracyMetrics.demand_forecasting_model?.variance_buffer}%
+                    <span className="text-slate-400 block mb-0.5 uppercase tracking-wide">Mean Absolute Error</span>
+                    <span className="font-black text-emerald-500 text-sm block mt-1">
+                      ± {accuracyMetrics.demand_forecasting_model?.mean_absolute_error}
                     </span>
                   </div>
                 </div>
@@ -314,14 +314,14 @@ const FinancialForecast = () => {
                 </div>
                 <div className="grid grid-cols-2 gap-4 pt-3 mt-2 border-t border-slate-100 text-[11px] font-bold">
                   <div>
-                    <span className="text-slate-400 block mb-0.5 uppercase tracking-wide">Margin of Error Index</span>
-                    <span className="font-black text-slate-700 text-sm">
-                      {accuracyMetrics.utility_telemetry_model?.error_coefficient}
+                    <span className="text-slate-400 block mb-0.5 uppercase tracking-wide">Mean Absolute Error</span>
+                    <span className="font-black text-slate-700 text-sm block mt-1">
+                      {accuracyMetrics.utility_telemetry_model?.mean_absolute_error}
                     </span>
                   </div>
                   <div>
                     <span className="text-slate-400 block mb-0.5 uppercase tracking-wide">Calibration Check</span>
-                    <span className="font-black text-emerald-500 text-sm flex items-center gap-1.5">
+                    <span className="font-black text-emerald-500 text-sm flex items-center gap-1.5 mt-1">
                       <span className="w-2 h-2 bg-emerald-500 rounded-full inline-block animate-ping" /> OPTIMIZED
                     </span>
                   </div>
