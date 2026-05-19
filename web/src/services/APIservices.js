@@ -14,7 +14,7 @@ const apiClient = axios.create({
 });
 
 /**
- * Request Interceptor:s
+ * Request Interceptor:
  * Automatically attaches the JWT Bearer token to every outgoing request
  * to ensure authorized access to protected routes.
  */
@@ -248,6 +248,20 @@ export const apiService = {
             return response.data;
         } catch (error) {
             console.error("Operational Insights Fetch Error:", error.response?.data?.detail || error.message);
+            throw error;
+        }
+    },
+
+    /**
+     * Fetches mathematical verification matrices for the AI systems.
+     * Returns demand forecasting variance indices and utility validation values.
+     */
+    getAiAccuracyMetrics: async () => {
+        try {
+            const response = await apiClient.get('/analytics/ai-accuracy');
+            return response.data;
+        } catch (error) {
+            console.error("AI Accuracy Metrics Fetch Error:", error.response?.data?.detail || error.message);
             throw error;
         }
     },

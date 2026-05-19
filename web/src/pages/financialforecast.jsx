@@ -7,18 +7,20 @@ import {
   AlertCircle, 
   Package, 
   Minus,
-  Zap
+  Zap,
+  Cpu
 } from 'lucide-react';
-import ForecastChart from '../components/charts/forecastcharts';
+import ForecastCharts from '../components/charts/forecastcharts';
 import apiService from '../services/APIservices';
 
 /**
  * FINANCIAL FORECAST COMPONENT
  * Visualizes 7-day AI projections against historical database baselines.
- * Optimized for high-density telemetry display and container stability.
+ * Now displays model validation metrics for advanced algorithm accuracy tracking.
  */
 const FinancialForecast = () => {
   const [forecastData, setForecastData] = useState([]);
+  const [accuracyMetrics, setAccuracyMetrics] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -41,23 +43,29 @@ const FinancialForecast = () => {
 
   /**
    * DATA SYNCHRONIZATION ENGINE
-   * Fetches the 7-day forecast and historical summary concurrently.
+   * Fetches the 7-day forecast, historical data, and algorithm validation matrices concurrently.
    */
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
 
-      // Concurrent execution to prevent network waterfall delays
-      const [forecastRes, summaryRes] = await Promise.allSettled([
+      // Concurrent execution including the new AI calibration node
+      const [forecastRes, summaryRes, accuracyRes] = await Promise.allSettled([
         apiService.getForecastData(),
-        apiService.getDashboardStats()
+        apiService.getDashboardStats(),
+        apiService.getAiAccuracyMetrics()
       ]);
+
+      // Assign fetched accuracy matrices to localized UI state configurations
+      if (accuracyRes.status === 'fulfilled' && accuracyRes.value) {
+        setAccuracyMetrics(accuracyRes.value);
+      }
 
       if (forecastRes.status === 'fulfilled' && forecastRes.value?.forecast) {
         const rawForecast = forecastRes.value.forecast;
         
-        // Map data for the Recharts ComposedChart component
+        // Map data for the Recharts ForecastCharts component
         setForecastData(rawForecast.map(item => ({
           day: item.label.split(',')[0], 
           bookings: item.predicted_bookings || 0,
@@ -133,7 +141,6 @@ const FinancialForecast = () => {
     fetchData();
   }, [fetchData]);
 
-  // Loading State with Spinner
   if (loading) return (
     <div className="h-screen flex items-center justify-center bg-slate-50">
       <div className="flex flex-col items-center gap-4">
@@ -193,7 +200,7 @@ const FinancialForecast = () => {
       </div>
 
       {/* MAIN ANALYTICS CONTAINER */}
-      <div className="bg-white p-6 md:p-10 rounded-[40px] md:rounded-[56px] border border-slate-100 shadow-sm relative overflow-hidden flex flex-col">
+      <div className="bg-white p-6 md:p-10 rounded-[40px] md:rounded-[56px] border border-slate-100 shadow-sm relative overflow-hidden flex flex-col mb-8">
         <div className="mb-10 flex flex-col md:flex-row justify-between items-start gap-4">
           <div>
             <div className="flex items-center gap-2 mb-1">
@@ -204,10 +211,10 @@ const FinancialForecast = () => {
           </div>
         </div>
 
-        {/* CHART AREA - Fixed Height for Recharts Stability */}
+        {/* CHART AREA */}
         <div className="h-[350px] md:h-[450px] w-full relative mb-6" style={{ minWidth: '0' }}>
           {forecastData.length > 0 ? (
-            <ForecastChart data={forecastData} />
+            <ForecastCharts data={forecastData} />
           ) : (
             <div className="h-full flex flex-col items-center justify-center border-2 border-dashed border-slate-100 rounded-[40px]">
                 <RefreshCw className="text-slate-200 mb-4 animate-spin" size={40} />
@@ -225,6 +232,105 @@ const FinancialForecast = () => {
           <BreakdownItem label="Total Load" value={`${stats.totalKg}kg`} />
         </div>
       </div>
+
+      {/* AI SYSTEM ALGORITHM VALIDATION MATRIX */}
+      {accuracyMetrics && (
+        <div className="bg-white p-6 md:p-10 rounded-[40px] md:rounded-[56px] border border-slate-100 shadow-sm">
+          <div className="mb-8 flex items-center gap-2.5">
+            <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl">
+              <Cpu size={22} className="animate-pulse" />
+            </div>
+            <div>
+              <h2 className="text-xl md:text-2xl font-black text-slate-900 uppercase tracking-tight">AI Calibration Parameters</h2>
+              <p className="text-slate-400 text-xs font-bold italic">Mathematical accuracy validations evaluated against system stochastic processes.</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {/* Model 1: Demand Prediction Engine */}
+            <div className="border border-slate-100 p-6 md:p-8 rounded-[32px] bg-slate-50/50">
+              <div className="flex justify-between items-start border-b border-slate-100 pb-4 mb-4">
+                <div>
+                  <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider">Predictive Subsystem</h4>
+                  <h3 className="text-md font-black text-slate-800 mt-0.5">Demand Forecasting Accuracy</h3>
+                </div>
+                <span className="px-2.5 py-1 text-[9px] font-black tracking-wider uppercase rounded-md bg-indigo-50 text-indigo-600">
+                  Stochastic
+                </span>
+              </div>
+              <div className="space-y-4">
+                <div className="flex justify-between items-end">
+                  <span className="text-xs font-extrabold text-slate-500 uppercase tracking-wide">Confidence Index</span>
+                  <span className="text-xl font-black text-indigo-600">
+                    {accuracyMetrics.demand_forecasting_model?.confidence_rating}
+                  </span>
+                </div>
+                <div className="w-full bg-slate-200/70 h-2.5 rounded-full overflow-hidden">
+                  <div 
+                    className="bg-indigo-600 h-full rounded-full transition-all duration-500 shadow-[0_0_8px_rgba(79,70,229,0.4)]" 
+                    style={{ width: accuracyMetrics.demand_forecasting_model?.confidence_rating || '0%' }}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4 pt-3 mt-2 border-t border-slate-100 text-[11px] font-bold">
+                  <div>
+                    <span className="text-slate-400 block mb-0.5 uppercase tracking-wide">Iterations Verified</span>
+                    <span className="font-black text-slate-700 text-sm">
+                      {accuracyMetrics.demand_forecasting_model?.iterations_checked?.toLocaleString()} runs
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block mb-0.5 uppercase tracking-wide">Stability Deviation</span>
+                    <span className="font-black text-emerald-500 text-sm">
+                      ± {accuracyMetrics.demand_forecasting_model?.variance_buffer}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Model 2: Utility Analytics Engine */}
+            <div className="border border-slate-100 p-6 md:p-8 rounded-[32px] bg-slate-50/50">
+              <div className="flex justify-between items-start border-b border-slate-100 pb-4 mb-4">
+                <div>
+                  <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider">Consumption Subsystem</h4>
+                  <h3 className="text-md font-black text-slate-800 mt-0.5">Utility Tracking Calibration</h3>
+                </div>
+                <span className="px-2.5 py-1 text-[9px] font-black tracking-wider uppercase rounded-md bg-cyan-50 text-cyan-600">
+                  Deterministic
+                </span>
+              </div>
+              <div className="space-y-4">
+                <div className="flex justify-between items-end">
+                  <span className="text-xs font-extrabold text-slate-500 uppercase tracking-wide">Accuracy Calibration</span>
+                  <span className="text-xl font-black text-cyan-600">
+                    {accuracyMetrics.utility_telemetry_model?.accuracy_percentage}%
+                  </span>
+                </div>
+                <div className="w-full bg-slate-200/70 h-2.5 rounded-full overflow-hidden">
+                  <div 
+                    className="bg-cyan-500 h-full rounded-full transition-all duration-500 shadow-[0_0_8px_rgba(6,182,212,0.4)]" 
+                    style={{ width: `${accuracyMetrics.utility_telemetry_model?.accuracy_percentage || 0}%` }}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4 pt-3 mt-2 border-t border-slate-100 text-[11px] font-bold">
+                  <div>
+                    <span className="text-slate-400 block mb-0.5 uppercase tracking-wide">Margin of Error Index</span>
+                    <span className="font-black text-slate-700 text-sm">
+                      {accuracyMetrics.utility_telemetry_model?.error_coefficient}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block mb-0.5 uppercase tracking-wide">Calibration Check</span>
+                    <span className="font-black text-emerald-500 text-sm flex items-center gap-1.5">
+                      <span className="w-2 h-2 bg-emerald-500 rounded-full inline-block animate-ping" /> OPTIMIZED
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

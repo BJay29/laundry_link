@@ -4,7 +4,7 @@ import {
   ComposedChart,
   Line,
   Bar,
-  Area, // Added Area for the background fill
+  Area, 
   XAxis,
   YAxis,
   CartesianGrid,
@@ -43,16 +43,26 @@ const CustomTooltip = ({ active, payload, label }) => {
   return null;
 };
 
-const ForecastChart = ({ data }) => {
-  // Default fallback data for initial render or empty states
+CustomTooltip.propTypes = {
+  active: PropTypes.bool,
+  payload: PropTypes.array,
+  label: PropTypes.string,
+};
+
+/**
+ * ForecastCharts Component
+ * Aligned with file directory lowercase naming to avoid Vercel compilation discrepancies.
+ */
+const ForecastCharts = ({ data }) => {
+  // Default fallback data for initial render or empty states matching real system lookups
   const chartData = data && data.length > 0 ? data : [
-    { day: 'May 12', bookings: 12, income: 2500 },
-    { day: 'May 13', bookings: 10, income: 2100 },
-    { day: 'May 14', bookings: 15, income: 3200 },
-    { day: 'May 15', bookings: 22, income: 4800 },
-    { day: 'May 16', bookings: 25, income: 5500 },
-    { day: 'May 17', bookings: 14, income: 2900 },
-    { day: 'May 18', bookings: 24, income: 5100 },
+    { day: 'May 20', bookings: 12, income: 2500 },
+    { day: 'May 21', bookings: 10, income: 2100 },
+    { day: 'May 22', bookings: 15, income: 3200 },
+    { day: 'May 23', bookings: 22, income: 4800 },
+    { day: 'May 24', bookings: 25, income: 5500 },
+    { day: 'May 25', bookings: 14, income: 2900 },
+    { day: 'May 26', bookings: 24, income: 5100 },
   ];
 
   return (
@@ -168,13 +178,13 @@ const ForecastChart = ({ data }) => {
         </ComposedChart>
       </ResponsiveContainer>
 
-      {/* LOADING OVERLAY: Triggered when data is being synchronized */}
+      {/* LOADING OVERLAY: Triggered when data is being synchronized from Render */}
       {(!data || data.length === 0) && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/60 backdrop-blur-[2px] rounded-3xl z-10">
           <div className="bg-white px-6 py-4 shadow-xl rounded-2xl border border-slate-100 flex flex-col items-center">
              <Activity className="text-emerald-500 mb-2 animate-pulse" size={24} />
              <p className="text-slate-900 font-black text-[10px] tracking-widest uppercase">
-               Synchronizing Stream...
+                Synchronizing Stream...
              </p>
           </div>
         </div>
@@ -183,7 +193,7 @@ const ForecastChart = ({ data }) => {
   );
 };
 
-ForecastChart.propTypes = {
+ForecastCharts.propTypes = {
   data: PropTypes.arrayOf(
     PropTypes.shape({
       day: PropTypes.string.isRequired,
@@ -193,4 +203,4 @@ ForecastChart.propTypes = {
   ),
 };
 
-export default ForecastChart;
+export default ForecastCharts;

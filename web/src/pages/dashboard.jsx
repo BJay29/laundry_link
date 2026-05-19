@@ -13,7 +13,7 @@ import apiService from '../services/APIservices';
 
 // Component Imports
 import StatCard from '../components/ui/statcard';
-import ForecastChart from '../components/charts/forecastcharts';
+import ForecastCharts from '../components/charts/forecastcharts'; // Case aligned to match exact filesystem
 import OptimizationTip from '../components/ui/optimizationtip';
 import MachineGrid from '../components/machines/machinegrid';
 import BookingModal from '../components/modals/bookingmodal';
@@ -21,6 +21,7 @@ import BookingModal from '../components/modals/bookingmodal';
 /**
  * DASHBOARD COMPONENT
  * The central intelligence hub for LaundryLink.
+ * Visualizes running operational tasks, data telemetry streams, and hardware metrics.
  */
 const Dashboard = () => {
   // State Management
@@ -36,12 +37,14 @@ const Dashboard = () => {
 
   /**
    * DATA SYNCHRONIZATION ENGINE
+   * Fetches dashboard statistics, telemetry streams, and structural updates concurrently.
    */
   const loadDashboardData = useCallback(async (isRefresh = false) => {
     try {
       if (isRefresh) setRefreshing(true);
       else setLoading(true);
 
+      // Concurrent promises loop to fetch telemetry matrix parameters
       const [statsResult, machinesResult, forecastResult, insightResult] = await Promise.allSettled([
         apiService.getDashboardStats(),
         apiService.getMachines(),
@@ -78,7 +81,7 @@ const Dashboard = () => {
       // 4. Process Operational Insights (DSS)
       if (insightResult.status === 'fulfilled') {
         setInsightData(insightResult.value);
-        // Reset "Applied" state if a new maintenance issue pops up
+        // Reset Applied state if a new system configuration conflict arises
         if (insightResult.value.hasIssue) {
           setIsInsightApplied(false);
         }
@@ -93,7 +96,7 @@ const Dashboard = () => {
     }
   }, []);
 
-  // System Heartbeat - Refreshes every 60s
+  // System Heartbeat - Triggers an automated system polling interval check every 60 seconds
   useEffect(() => {
     loadDashboardData();
     const heartbeat = setInterval(() => loadDashboardData(true), 60000);
@@ -109,7 +112,7 @@ const Dashboard = () => {
     setIsInsightApplied(true);
   };
 
-  // --- INITIAL LOAD STATE ---
+  // --- INITIAL LOAD TRANSLATION LOOKUPS ---
   if (loading && !stats && machines.length === 0) {
     return (
       <div className="flex h-screen items-center justify-center bg-slate-50">
@@ -197,7 +200,7 @@ const Dashboard = () => {
           {/* FIXED HEIGHT WRAPPER FOR CHART */}
           <div className="h-[350px] w-full mb-10 relative" style={{ minHeight: '350px', minWidth: '0' }}>
             {forecast.length > 0 ? (
-              <ForecastChart data={forecast} />
+              <ForecastCharts data={forecast} />
             ) : (
               <div className="h-full w-full flex flex-col items-center justify-center bg-slate-50/50 rounded-[40px] border-2 border-dashed border-slate-200">
                 <RefreshCw className="text-slate-200 mb-4 animate-spin" size={48} />
@@ -253,6 +256,9 @@ const Dashboard = () => {
   );
 };
 
+/**
+ * Breakdown Item Sub-component
+ */
 const BreakdownItem = ({ label, value }) => (
   <div className="flex flex-col items-center justify-center p-4 rounded-[28px] hover:bg-slate-50 transition-all border border-transparent">
     <p className="text-2xl font-black text-slate-900 tracking-tighter">{value}</p>
