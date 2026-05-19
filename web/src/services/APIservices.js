@@ -240,7 +240,7 @@ export const apiService = {
 
     /**
      * Fetches real-time operational insights (DSS).
-     * Analyzes machine health and financial impact for the Dashboard Insight Card.
+     * Converts machine data into financial impact recommendations for the UI Insight Card.
      */
     getOperationalInsights: async () => {
         try {
@@ -254,11 +254,11 @@ export const apiService = {
 
     /**
      * Fetches mathematical verification matrices for the AI systems.
-     * Returns demand forecasting variance indices and utility validation values.
+     * Points directly to aligned endpoint context routes: '/analytics/accuracy'
      */
     getAiAccuracyMetrics: async () => {
         try {
-            const response = await apiClient.get('/analytics/ai-accuracy');
+            const response = await apiClient.get('/analytics/accuracy');
             return response.data;
         } catch (error) {
             console.error("AI Accuracy Metrics Fetch Error:", error.response?.data?.detail || error.message);
