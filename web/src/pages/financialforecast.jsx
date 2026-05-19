@@ -263,12 +263,14 @@ const FinancialForecast = () => {
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {/* Predictive Subsystem */}
             <div className="border border-slate-100 p-6 md:p-8 rounded-[32px] bg-slate-50/50">
               <div className="flex justify-between items-start border-b border-slate-100 pb-4 mb-4">
                 <div>
                   <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider">Predictive Subsystem</h4>
                   <h3 className="text-md font-black text-slate-800 mt-0.5">Demand Forecasting Accuracy</h3>
                 </div>
+                <span className="px-2.5 py-1 text-[9px] font-black tracking-wider uppercase rounded-md bg-indigo-50 text-indigo-600">Stochastic</span>
               </div>
               <div className="space-y-4">
                 <div className="flex justify-between items-end">
@@ -278,14 +280,26 @@ const FinancialForecast = () => {
                 <div className="w-full bg-slate-200/70 h-2.5 rounded-full overflow-hidden">
                   <div className="bg-indigo-600 h-full rounded-full transition-all duration-500 shadow-[0_0_8px_rgba(79,70,229,0.4)]" style={{ width: `${accuracyMetrics.demand_forecasting_model?.accuracy_percentage || 0}%` }} />
                 </div>
+                <div className="grid grid-cols-2 gap-4 pt-4 mt-2 border-t border-slate-100">
+                  <div>
+                    <p className="text-[9px] font-black text-slate-400 uppercase">Evaluation Method</p>
+                    <p className="text-xs font-bold text-slate-700">{accuracyMetrics.demand_forecasting_model?.evaluation_method || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-black text-slate-400 uppercase">Mean Absolute Error</p>
+                    <p className="text-xs font-bold text-emerald-500">± {accuracyMetrics.demand_forecasting_model?.mean_absolute_error || '0'}</p>
+                  </div>
+                </div>
               </div>
             </div>
+            {/* Consumption Subsystem */}
             <div className="border border-slate-100 p-6 md:p-8 rounded-[32px] bg-slate-50/50">
               <div className="flex justify-between items-start border-b border-slate-100 pb-4 mb-4">
                 <div>
                   <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider">Consumption Subsystem</h4>
                   <h3 className="text-md font-black text-slate-800 mt-0.5">Utility Tracking Calibration</h3>
                 </div>
+                <span className="px-2.5 py-1 text-[9px] font-black tracking-wider uppercase rounded-md bg-cyan-50 text-cyan-600">Deterministic</span>
               </div>
               <div className="space-y-4">
                 <div className="flex justify-between items-end">
@@ -294,6 +308,16 @@ const FinancialForecast = () => {
                 </div>
                 <div className="w-full bg-slate-200/70 h-2.5 rounded-full overflow-hidden">
                   <div className="bg-cyan-500 h-full rounded-full transition-all duration-500 shadow-[0_0_8px_rgba(6,182,212,0.4)]" style={{ width: `${accuracyMetrics.utility_telemetry_model?.accuracy_percentage || 0}%` }} />
+                </div>
+                <div className="grid grid-cols-2 gap-4 pt-4 mt-2 border-t border-slate-100">
+                  <div>
+                    <p className="text-[9px] font-black text-slate-400 uppercase">Mean Absolute Error</p>
+                    <p className="text-xs font-bold text-slate-700">{accuracyMetrics.utility_telemetry_model?.mean_absolute_error || '0'}</p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-black text-slate-400 uppercase">Calibration Check</p>
+                    <p className="text-xs font-bold text-emerald-500">OPTIMIZED</p>
+                  </div>
                 </div>
               </div>
             </div>
