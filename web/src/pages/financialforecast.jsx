@@ -50,7 +50,6 @@ const FinancialForecast = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // State for AI-generated aggregates and historical database baselines
   const [stats, setStats] = useState({
     totalRevenue: 0,
     totalBookings: 0,
@@ -76,47 +75,38 @@ const FinancialForecast = () => {
       setLoading(true);
       setError(null);
 
-      // Concurrent execution including the new AI calibration node
       const [forecastRes, summaryRes, accuracyRes] = await Promise.allSettled([
         apiService.getForecastData(),
         apiService.getDashboardStats(),
         apiService.getAiAccuracyMetrics()
       ]);
 
-      // Assign fetched accuracy matrices to localized UI state configurations
       if (accuracyRes.status === 'fulfilled' && accuracyRes.value) {
         setAccuracyMetrics(accuracyRes.value);
       }
 
       if (forecastRes.status === 'fulfilled' && forecastRes.value?.forecast) {
         const rawForecast = forecastRes.value.forecast;
-        
-        // Capture AI Insight for the Typewriter effect
         setAiInsight(forecastRes.value.ai_generated_insight || "No active insights generated.");
         
-        // Map data for the Recharts ForecastCharts component
         setForecastData(rawForecast.map(item => ({
           day: item.label.split(',')[0], 
           bookings: item.predicted_bookings || 0,
           income: item.projected_income || 0
         })));
 
-        // Calculate AI Projection Aggregates
         const totalProjectedRev = rawForecast.reduce((sum, item) => sum + (item.projected_income || 0), 0);
         const totalProjectedBook = rawForecast.reduce((sum, item) => sum + (item.predicted_bookings || 0), 0);
         
-        let lastWeekActualTotalIncome = 0;
-        let lastWeekActualTotalBookings = 0;
+        // Use values directly from backend summary response
+        let lastWeekIncome = 0;
+        let lastWeekBookings = 0;
         let dbActuals = { fs: 0, tw: 0, rw: 0, cf: 0, kg: 0, acc: 0 };
 
-        // Process Historical Data from Database
         if (summaryRes.status === 'fulfilled' && summaryRes.value) {
           const data = summaryRes.value;
-          
-          if (data.history && Array.isArray(data.history)) {
-            lastWeekActualTotalIncome = data.history.reduce((sum, day) => sum + (day.actual_income || 0), 0);
-            lastWeekActualTotalBookings = data.history.reduce((sum, day) => sum + (day.actual_bookings || 0), 0);
-          }
+          lastWeekIncome = data.last_week_revenue || 0;
+          lastWeekBookings = data.last_week_bookings || 0;
 
           dbActuals = {
             fs: data.full_service || 0,
@@ -128,7 +118,7 @@ const FinancialForecast = () => {
           };
         }
 
-        // Logic to compare Forecasted vs. Historical performance
+        // Trend calculation logic
         const calculateTrend = (projected, historical) => {
           if (historical === 0) return { percent: "0%", status: 'equal' };
           const diff = projected - historical;
@@ -139,8 +129,8 @@ const FinancialForecast = () => {
           return { percent: `${Math.abs(percent).toFixed(1)}%`, status };
         };
 
-        const revTrend = calculateTrend(totalProjectedRev, lastWeekActualTotalIncome);
-        const bookTrend = calculateTrend(totalProjectedBook, lastWeekActualTotalBookings);
+        const revTrend = calculateTrend(totalProjectedRev, lastWeekIncome);
+        const bookTrend = calculateTrend(totalProjectedBook, lastWeekBookings);
 
         setStats({
           totalRevenue: totalProjectedRev,
@@ -181,6 +171,7 @@ const FinancialForecast = () => {
 
   return (
     <div className="p-4 md:p-8 bg-slate-50 min-h-screen font-sans">
+      {/* ... rest of your existing JSX code remains exactly the same ... */}
       <div className="mb-10 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
         <div>
           <h1 className="text-3xl md:text-5xl font-black text-slate-900 tracking-tighter uppercase italic">Financial Forecast</h1>
@@ -198,7 +189,6 @@ const FinancialForecast = () => {
         </div>
       )}
 
-      {/* AI INSIGHT SECTION */}
       {aiInsight && (
         <div className="mb-8 bg-white border border-indigo-100 p-6 rounded-[32px] flex items-start gap-4 shadow-sm">
           <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl">
@@ -211,14 +201,12 @@ const FinancialForecast = () => {
         </div>
       )}
 
-      {/* STRATEGIC KPI GRID */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <ForecastStatCard label="Projected Weekly Revenue" value={`₱${stats.totalRevenue.toLocaleString()}`} trend={stats.revenueTrend} status={stats.trendStatus} icon={<DollarSign className="text-emerald-500" />} bgColor="bg-emerald-50" />
         <ForecastStatCard label="Expected Booking Volume" value={stats.totalBookings} trend={stats.bookingTrend} status={stats.bookingStatus} icon={<Package className="text-sky-500" />} bgColor="bg-sky-50" />
         <ForecastStatCard label="Average Daily Target" value={`₱${stats.avgDaily.toLocaleString()}`} trend={stats.revenueTrend} status={stats.trendStatus} icon={<TrendingUp className="text-purple-500" />} bgColor="bg-purple-50" />
       </div>
 
-      {/* MAIN ANALYTICS CONTAINER */}
       <div className="bg-white p-6 md:p-10 rounded-[40px] md:rounded-[56px] border border-slate-100 shadow-sm relative overflow-hidden flex flex-col mb-8">
         <div className="mb-10 flex flex-col md:flex-row justify-between items-start gap-4">
           <div>
@@ -250,7 +238,6 @@ const FinancialForecast = () => {
         </div>
       </div>
 
-      {/* AI SYSTEM ALGORITHM VALIDATION MATRIX */}
       {accuracyMetrics && (
         <div className="bg-white p-6 md:p-10 rounded-[40px] md:rounded-[56px] border border-slate-100 shadow-sm">
           <div className="mb-8 flex items-center gap-2.5">
@@ -263,7 +250,6 @@ const FinancialForecast = () => {
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {/* Predictive Subsystem */}
             <div className="border border-slate-100 p-6 md:p-8 rounded-[32px] bg-slate-50/50">
               <div className="flex justify-between items-start border-b border-slate-100 pb-4 mb-4">
                 <div>
@@ -292,7 +278,6 @@ const FinancialForecast = () => {
                 </div>
               </div>
             </div>
-            {/* Consumption Subsystem */}
             <div className="border border-slate-100 p-6 md:p-8 rounded-[32px] bg-slate-50/50">
               <div className="flex justify-between items-start border-b border-slate-100 pb-4 mb-4">
                 <div>
