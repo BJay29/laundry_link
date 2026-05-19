@@ -21,35 +21,35 @@ import BookingModal from '../components/modals/bookingmodal';
 /**
  * DASHBOARD COMPONENT
  * The central intelligence hub for LaundryLink.
- * Fixed: Applied layout stabilization for Recharts and mapped Avg. Per Service metric.
  */
 const Dashboard = () => {
   // State Management
   const [stats, setStats] = useState(null);
   const [forecast, setForecast] = useState([]);
   const [machines, setMachines] = useState([]);
+  const [insightData, setInsightData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isInsightApplied, setIsInsightApplied] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(new Date());
 
   /**
    * DATA SYNCHRONIZATION ENGINE
-   * Executes concurrent API calls to minimize network waterfall delays.
    */
   const loadDashboardData = useCallback(async (isRefresh = false) => {
     try {
       if (isRefresh) setRefreshing(true);
       else setLoading(true);
 
-      // Concurrent fetching for performance optimization
-      const [statsResult, machinesResult, forecastResult] = await Promise.allSettled([
+      const [statsResult, machinesResult, forecastResult, insightResult] = await Promise.allSettled([
         apiService.getDashboardStats(),
         apiService.getMachines(),
         apiService.getForecastData(),
+        apiService.getOperationalInsights(),
       ]);
 
-      // 1. Process Dashboard KPIs & Service Breakdowns
+      // 1. Process KPIs
       if (statsResult.status === 'fulfilled' && statsResult.value) {
         const rawData = statsResult.value;
         setStats({
@@ -57,11 +57,6 @@ const Dashboard = () => {
           display_revenue: rawData.today_revenue || 0,
           display_trend: rawData.income_growth || 0,
           avg_per_service: rawData.avg_per_service || 0,
-          full_service: rawData.full_service || 0,
-          titan_wash: rawData.titan_wash || 0,
-          regular_wash: rawData.regular_wash || 0,
-          comforter: rawData.comforter || 0,
-          total_kg: rawData.total_kg || 0
         });
       }
 
@@ -70,7 +65,7 @@ const Dashboard = () => {
         setMachines(machinesResult.value || []);
       }
 
-      // 3. Process AI Forecast Graph Data
+      // 3. Process AI Forecast Graph
       if (forecastResult.status === 'fulfilled' && forecastResult.value?.forecast) {
         const mappedForecast = forecastResult.value.forecast.map(item => ({
           day: item.label.split(',')[0], 
@@ -78,6 +73,15 @@ const Dashboard = () => {
           income: item.projected_income || 0
         }));
         setForecast(mappedForecast);
+      }
+
+      // 4. Process Operational Insights (DSS)
+      if (insightResult.status === 'fulfilled') {
+        setInsightData(insightResult.value);
+        // Reset "Applied" state if a new maintenance issue pops up
+        if (insightResult.value.hasIssue) {
+          setIsInsightApplied(false);
+        }
       }
       
       setLastUpdated(new Date());
@@ -89,10 +93,7 @@ const Dashboard = () => {
     }
   }, []);
 
-  /**
-   * SYSTEM HEARTBEAT
-   * Refreshes data every 60 seconds to keep the dashboard live.
-   */
+  // System Heartbeat - Refreshes every 60s
   useEffect(() => {
     loadDashboardData();
     const heartbeat = setInterval(() => loadDashboardData(true), 60000);
@@ -102,6 +103,10 @@ const Dashboard = () => {
   const handleBookingSuccess = () => {
     setIsModalOpen(false);
     loadDashboardData(true);
+  };
+
+  const handleApplyInsight = () => {
+    setIsInsightApplied(true);
   };
 
   // --- INITIAL LOAD STATE ---
@@ -114,7 +119,7 @@ const Dashboard = () => {
             <Activity className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-sky-500" size={24} />
           </div>
           <p className="text-slate-400 font-black text-[10px] uppercase tracking-[0.4em] mt-8 animate-pulse">
-            Establishing Link...
+            Syncing Command...
           </p>
         </div>
       </div>
@@ -124,7 +129,7 @@ const Dashboard = () => {
   return (
     <div className="p-8 bg-slate-50 min-h-screen space-y-10 font-sans">
 
-      {/* SECTION 1: HEADER & IDENTITY */}
+      {/* HEADER SECTION */}
       <div className="flex flex-col lg:flex-row justify-between items-start gap-6">
         <div>
           <div className="flex items-center gap-3 mb-1">
@@ -141,7 +146,7 @@ const Dashboard = () => {
                 </span>
             </div>
           </div>
-          <h1 className="text-6xl font-black text-slate-900 mt-2 tracking-tighter italic uppercase">Overview</h1>
+          <h1 className="text-6xl font-black text-slate-900 mt-2 tracking-tighter italic uppercase">Overview Dashboard</h1>
         </div>
 
         <div className="flex items-center gap-4 w-full lg:w-auto">
@@ -158,102 +163,81 @@ const Dashboard = () => {
             onClick={() => setIsModalOpen(true)}
             className="flex-1 lg:flex-none bg-sky-500 hover:bg-sky-600 text-white px-10 py-5 rounded-[28px] font-black transition-all shadow-xl shadow-sky-100 flex items-center justify-center gap-3 hover:scale-[1.03] active:scale-95"
           >
-            <Plus size={22} strokeWidth={4} /> NEW BOOKING
+            <Plus size={22} strokeWidth={4} /> ADD BOOKING
           </button>
         </div>
       </div>
 
-      {/* SECTION 2: KEY PERFORMANCE INDICATORS (KPIs) */}
+      {/* KPI GRID */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard
-          title="Daily Revenue"
-          value={stats?.today_revenue ? stats.today_revenue : 0}
-          trend={`${stats?.income_growth || 0}%`}
-          type="revenue"
-        />
-        <StatCard
-          title="Active Machines"
-          value={stats?.active_machines || "0"}
-          trend="Busy"
-          type="utilization"
-        />
-        <StatCard
-          title="Avg. Per Service"
-          value={stats?.avg_per_service ? stats.avg_per_service : 0}
-          trend="Stable"
-          type="revenue" 
-          icon={<DollarSign />} 
-        />
-        <StatCard
-          title="Expected Bookings"
-          value={stats?.predicted_bookings_today || "0"}
-          trend="Today"
-          type="bookings"
-        />
+        <StatCard title="Today Revenue" value={stats?.today_revenue || 0} trend={`${stats?.income_growth || 0}%`} type="revenue" />
+        <StatCard title="Active Machines" value={stats?.active_machines || "0"} trend="In Use" type="utilization" />
+        <StatCard title="Avg. Per Service" value={stats?.avg_per_service || 0} trend="Stable" type="revenue" icon={<DollarSign />} />
+        <StatCard title="Expected Bookings" value={stats?.predicted_bookings_today || "0"} trend="Forecast" type="bookings" />
       </div>
 
-      {/* SECTION 3: AI ANALYTICS & ACTUAL SERVICE BREAKDOWN */}
+      {/* ANALYTICS ROW */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 bg-white p-10 rounded-[56px] border border-slate-100 shadow-sm relative overflow-hidden flex flex-col">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-sky-50/50 rounded-full blur-3xl -mr-32 -mt-32 pointer-events-none" />
-          
-          <div className="flex justify-between items-start mb-10 relative z-10">
+        {/* CHART CONTAINER - Optimized for Recharts Stability */}
+        <div className="lg:col-span-2 bg-white p-10 rounded-[56px] border border-slate-100 shadow-sm flex flex-col min-w-0">
+          <div className="flex justify-between items-start mb-10">
             <div>
               <div className="flex items-center gap-2 text-sky-500 mb-1">
                 <TrendingUp size={16} />
                 <span className="text-[10px] font-black uppercase tracking-widest">AI Prediction Engine</span>
               </div>
-              <h2 className="text-3xl font-black text-slate-900 tracking-tight">Demand Forecast</h2>
+              <h2 className="text-3xl font-black text-slate-900 tracking-tight">Income & Booking Forecast</h2>
             </div>
-            <div className="flex flex-col items-end">
-                <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Last Cloud Sync</span>
-                <span className="text-xs font-bold text-slate-500">{lastUpdated.toLocaleTimeString()}</span>
+            <div className="text-right">
+                <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Last Sync</span>
+                <p className="text-xs font-bold text-slate-500">{lastUpdated.toLocaleTimeString()}</p>
             </div>
           </div>
 
-          {/* FIX: Wrapper div has a specific height and minWidth: 0 to stabilize Recharts dimensions */}
-          <div className="h-[350px] w-full mb-10 relative z-10" style={{ minWidth: 0 }}>
+          {/* FIXED HEIGHT WRAPPER FOR CHART */}
+          <div className="h-[350px] w-full mb-10 relative" style={{ minHeight: '350px', minWidth: '0' }}>
             {forecast.length > 0 ? (
               <ForecastChart data={forecast} />
             ) : (
               <div className="h-full w-full flex flex-col items-center justify-center bg-slate-50/50 rounded-[40px] border-2 border-dashed border-slate-200">
                 <RefreshCw className="text-slate-200 mb-4 animate-spin" size={48} />
-                <p className="text-slate-400 font-black text-[10px] uppercase tracking-[0.2em]">Analyzing Historical Data...</p>
+                <p className="text-slate-400 font-black text-[10px] uppercase tracking-widest">Aggregating Data...</p>
               </div>
             )}
           </div>
 
           {/* SERVICE BREAKDOWN FOOTER */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 border-t border-slate-50 pt-10 relative z-10 mt-auto">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 border-t border-slate-50 pt-10 mt-auto">
             <BreakdownItem label="Full Service" value={stats?.full_service || 0} />
             <BreakdownItem label="Titan Wash"   value={stats?.titan_wash || 0} />
             <BreakdownItem label="Regular Wash" value={stats?.regular_wash || 0} />
             <BreakdownItem label="Comforter"    value={stats?.comforter || 0} />
-            <BreakdownItem label="Total Weight" value={`${stats?.total_kg || 0}kg`} />
+            <BreakdownItem label="Total Load"   value={`${stats?.total_kg || 0}kg`} />
           </div>
         </div>
 
+        {/* DECISION SUPPORT CARD */}
         <div className="lg:col-span-1">
           <OptimizationTip
-            title={stats?.optimization?.title || "Operational Insight"}
-            message={stats?.optimization?.description || "Monitoring historical trends to optimize your energy consumption and machine allocation."}
-            suggestion={stats?.optimization?.action_text || "Insights Syncing..."}
+            data={insightData}
+            isApplied={isInsightApplied}
+            onApply={handleApplyInsight}
           />
         </div>
       </div>
 
-      {/* SECTION 4: HARDWARE TELEMETRY GRID */}
+      {/* HARDWARE TELEMETRY */}
       <div className="bg-white p-10 rounded-[56px] border border-slate-100 shadow-sm">
         <div className="flex justify-between items-center mb-10">
           <div>
             <div className="flex items-center gap-2 text-emerald-500 mb-1">
               <CheckCircle size={16} />
-              <span className="text-[10px] font-black uppercase tracking-widest">Hardware Telemetry</span>
+              <span className="text-[10px] font-black uppercase tracking-widest">Live status and profitability tracking</span>
             </div>
-            <h2 className="text-3xl font-black text-slate-900 tracking-tight">Machine Status</h2>
+            <h2 className="text-3xl font-black text-slate-900 tracking-tight">Real-Time Machine Monitoring</h2>
           </div>
-          <button onClick={() => loadDashboardData(true)} className="p-4 hover:bg-slate-50 rounded-2xl transition-all text-slate-400">
-            <RefreshCw size={20} className={refreshing ? 'animate-spin' : ''} />
+          <button onClick={() => loadDashboardData(true)} className="p-4 hover:bg-slate-50 rounded-2xl transition-all">
+            <RefreshCw size={20} className={refreshing ? 'animate-spin' : 'text-slate-300'} />
           </button>
         </div>
 
@@ -264,26 +248,15 @@ const Dashboard = () => {
         />
       </div>
 
-      <BookingModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onSubmit={handleBookingSuccess}
-      />
+      <BookingModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSubmit={handleBookingSuccess} />
     </div>
   );
 };
 
-/**
- * HELPER COMPONENT: BREAKDOWN ITEM
- */
 const BreakdownItem = ({ label, value }) => (
-  <div className="group flex flex-col items-center justify-center p-4 rounded-[28px] hover:bg-slate-50 transition-all border border-transparent hover:border-slate-100 text-center">
-    <p className="text-2xl font-black text-slate-900 group-hover:text-sky-500 transition-colors tracking-tighter">
-      {value}
-    </p>
-    <p className="text-slate-400 text-[9px] font-black uppercase mt-1 tracking-[0.1em] whitespace-nowrap">
-      {label}
-    </p>
+  <div className="flex flex-col items-center justify-center p-4 rounded-[28px] hover:bg-slate-50 transition-all border border-transparent">
+    <p className="text-2xl font-black text-slate-900 tracking-tighter">{value}</p>
+    <p className="text-slate-400 text-[9px] font-black uppercase mt-1 tracking-widest">{label}</p>
   </div>
 );
 

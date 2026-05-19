@@ -199,8 +199,7 @@ export const apiService = {
 
     /**
      * Fetches real-time statistics and AI-generated predictions for today.
-     * Updates StatCards on the Dashboard.
-     * Response includes: today_revenue, full_service, titan_wash, regular_wash, comforter, total_kg.
+     * Response includes: today_revenue, full_service, titan_wash, etc.
      */
     getDashboardStats: async () => {
         try {
@@ -214,7 +213,7 @@ export const apiService = {
 
     /**
      * Fetches AI-generated 7-day projections and historical income trends.
-     * Used to populate the Recharts graph in the Financial Forecast section.
+     * Used for the Financial Forecast Recharts graph.
      */
     getForecastData: async () => {
         try {
@@ -228,7 +227,6 @@ export const apiService = {
 
     /**
      * Fetches service type popularity distribution.
-     * Helps in visualizing which services (Full Service vs. Regular Wash, etc.) dominate revenue.
      */
     getServiceDistribution: async () => {
         try {
@@ -236,6 +234,20 @@ export const apiService = {
             return response.data;
         } catch (error) {
             console.error("Service Distribution Fetch Error:", error.response?.data?.detail || error.message);
+            throw error;
+        }
+    },
+
+    /**
+     * Fetches real-time operational insights (DSS).
+     * Analyzes machine health and financial impact for the Dashboard Insight Card.
+     */
+    getOperationalInsights: async () => {
+        try {
+            const response = await apiClient.get('/analytics/operational-insights');
+            return response.data;
+        } catch (error) {
+            console.error("Operational Insights Fetch Error:", error.response?.data?.detail || error.message);
             throw error;
         }
     },
@@ -258,7 +270,6 @@ export const apiService = {
 
     /**
      * Updates shop settings to adjust service pricing and operational costs.
-     * Sanitizes inputs to ensure floating point accuracy for the PostgreSQL backend.
      */
     updateSettings: async (shopId, settingsData) => {
         try {
@@ -297,7 +308,7 @@ export const apiService = {
     },
 
     /**
-     * Reverts the shop's database entry back to the original system factory settings.
+     * Reverts the shop's database entry back to original factory settings.
      */
     resetToDefaults: async (shopId) => {
         try {

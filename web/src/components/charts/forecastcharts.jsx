@@ -4,6 +4,7 @@ import {
   ComposedChart,
   Line,
   Bar,
+  Area, // Added Area for the background fill
   XAxis,
   YAxis,
   CartesianGrid,
@@ -15,7 +16,7 @@ import { Activity } from 'lucide-react';
 
 /**
  * CustomTooltip Component
- * Optimized for high-contrast visibility and currency formatting.
+ * High-contrast design matching the Dark Slate theme of your dashboard.
  */
 const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
@@ -42,41 +43,45 @@ const CustomTooltip = ({ active, payload, label }) => {
   return null;
 };
 
-/**
- * ForecastChart
- * Visualizes the 7-day AI demand projection.
- * Fixed: Added 'min-width: 0' and explicit height to prevent Recharts -1 dimensions error.
- */
 const ForecastChart = ({ data }) => {
-  // Placeholder data to maintain layout structure if API is fetching or empty
+  // Default fallback data for initial render or empty states
   const chartData = data && data.length > 0 ? data : [
-    { day: 'Mon', bookings: 0, income: 0 },
-    { day: 'Tue', bookings: 0, income: 0 },
-    { day: 'Wed', bookings: 0, income: 0 },
-    { day: 'Thu', bookings: 0, income: 0 },
-    { day: 'Fri', bookings: 0, income: 0 },
-    { day: 'Sat', bookings: 0, income: 0 },
-    { day: 'Sun', bookings: 0, income: 0 },
+    { day: 'May 12', bookings: 12, income: 2500 },
+    { day: 'May 13', bookings: 10, income: 2100 },
+    { day: 'May 14', bookings: 15, income: 3200 },
+    { day: 'May 15', bookings: 22, income: 4800 },
+    { day: 'May 16', bookings: 25, income: 5500 },
+    { day: 'May 17', bookings: 14, income: 2900 },
+    { day: 'May 18', bookings: 24, income: 5100 },
   ];
 
   return (
-    /* FIX: Wrapping in a div with 'min-width: 0' and 'height: 100%' 
-      prevents ResponsiveContainer from reporting -1 width/height in Flex/Grid layouts.
+    /* CONTAINER FIX: Explicit height prevents the -1 dimension error 
+       during the initial Recharts layout calculation.
     */
-    <div className="w-full h-full min-h-[350px] relative" style={{ minWidth: 0 }}>
-      <ResponsiveContainer width="100%" height="100%">
+    <div className="w-full h-[350px] min-h-[350px] relative overflow-hidden" style={{ minWidth: 0 }}>
+      
+      <ResponsiveContainer width="100%" height="100%" minHeight={300}>
         <ComposedChart
           data={chartData}
-          margin={{ top: 20, right: 0, bottom: 20, left: 0 }}
+          margin={{ top: 20, right: 10, bottom: 20, left: 10 }}
         >
-          {/* Definition for Bar Gradient */}
+          {/* SVG DEFINITIONS: Gradients for visual depth */}
           <defs>
+            {/* Dark Slate Gradient for the Bar Chart */}
             <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#0EA5E9" stopOpacity={1} />
-              <stop offset="100%" stopColor="#38BDF8" stopOpacity={0.8} />
+              <stop offset="0%" stopColor="#1E293B" stopOpacity={1} /> 
+              <stop offset="100%" stopColor="#334155" stopOpacity={0.9} />
+            </linearGradient>
+
+            {/* Subtle Emerald Gradient for the Area background */}
+            <linearGradient id="incomeGradient" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#10B981" stopOpacity={0.2} />
+              <stop offset="100%" stopColor="#10B981" stopOpacity={0} />
             </linearGradient>
           </defs>
 
+          {/* GRID: Horizontal only, low contrast for focus on data */}
           <CartesianGrid 
             strokeDasharray="3 3" 
             vertical={false} 
@@ -89,84 +94,87 @@ const ForecastChart = ({ data }) => {
             tickLine={false} 
             tick={{ fill: '#94A3B8', fontSize: 10, fontWeight: 800 }}
             dy={15}
-            interval={0} 
           />
           
-          {/* Left Axis: Volumetric Data (Bookings) */}
           <YAxis 
             yAxisId="left"
             axisLine={false} 
             tickLine={false} 
             tick={{ fill: '#94A3B8', fontSize: 10, fontWeight: 600 }}
-            width={35}
+            width={30}
           />
 
-          {/* Right Axis: Financial Data (Income) */}
           <YAxis 
             yAxisId="right" 
             orientation="right" 
             axisLine={false} 
             tickLine={false} 
             tick={{ fill: '#94A3B8', fontSize: 10, fontWeight: 600 }}
-            width={55}
+            width={50}
             tickFormatter={(value) => `₱${value >= 1000 ? (value/1000).toFixed(1) + 'k' : value}`}
           />
 
           <Tooltip 
             content={<CustomTooltip />} 
-            cursor={{ fill: '#F8FAFC', radius: 10 }}
+            cursor={{ fill: '#F1F5F9', radius: 10 }}
           />
           
           <Legend 
             verticalAlign="top" 
             align="right"
             iconType="circle"
-            iconSize={6}
+            iconSize={8}
             wrapperStyle={{ 
-              paddingBottom: '30px', 
+              paddingBottom: '20px', 
               fontSize: '10px', 
               fontWeight: '900', 
-              color: '#64748B', 
-              textTransform: 'uppercase', 
-              letterSpacing: '0.1em' 
+              textTransform: 'uppercase',
+              letterSpacing: '0.1em'
             }}
           />
 
-          {/* BAR: PREDICTED VOLUME */}
+          {/* BAR: Booking volume representing Hardware Load */}
           <Bar 
             yAxisId="left"
             dataKey="bookings" 
             name="Bookings" 
             fill="url(#barGradient)" 
-            radius={[8, 8, 0, 0]} 
-            barSize={32}
-            animationDuration={1200}
-            animationEasing="ease-out"
+            radius={[6, 6, 0, 0]} 
+            barSize={24}
           />
 
-          {/* LINE: PROJECTED REVENUE */}
+          {/* AREA FILL: Adds a subtle "glow" background to the Income line */}
+          <Area
+            yAxisId="right"
+            type="monotone"
+            dataKey="income"
+            stroke="none"
+            fill="url(#incomeGradient)"
+            connectNulls
+            tooltipType="none" // Prevents double tooltip entries
+          />
+
+          {/* LINE: Vibrant Emerald Green representing Projected Revenue */}
           <Line 
             yAxisId="right"
             type="monotone" 
             dataKey="income" 
             name="Income" 
             stroke="#10B981" 
-            strokeWidth={4}
-            dot={{ r: 4, fill: '#10B981', strokeWidth: 2, stroke: '#fff' }}
-            activeDot={{ r: 6, strokeWidth: 0, fill: '#059669' }}
-            animationDuration={1800}
-            animationEasing="ease-in-out"
+            strokeWidth={3}
+            dot={{ r: 5, fill: '#10B981', strokeWidth: 2, stroke: '#fff' }}
+            activeDot={{ r: 7, strokeWidth: 0, fill: '#059669' }}
           />
         </ComposedChart>
       </ResponsiveContainer>
 
-      {/* BLUR OVERLAY: Triggers during data sync or if empty */}
+      {/* LOADING OVERLAY: Triggered when data is being synchronized */}
       {(!data || data.length === 0) && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/40 backdrop-blur-[1.5px] rounded-3xl">
-          <div className="bg-white/90 px-6 py-4 shadow-2xl shadow-slate-200/50 rounded-[24px] border border-slate-100 flex flex-col items-center">
-             <Activity className="text-sky-400 mb-2 animate-pulse" size={20} />
-             <p className="text-slate-900 font-black text-[10px] tracking-[0.2em] uppercase">
-               Syncing Forecast...
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/60 backdrop-blur-[2px] rounded-3xl z-10">
+          <div className="bg-white px-6 py-4 shadow-xl rounded-2xl border border-slate-100 flex flex-col items-center">
+             <Activity className="text-emerald-500 mb-2 animate-pulse" size={24} />
+             <p className="text-slate-900 font-black text-[10px] tracking-widest uppercase">
+               Synchronizing Stream...
              </p>
           </div>
         </div>

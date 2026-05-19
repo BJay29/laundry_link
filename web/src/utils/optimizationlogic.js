@@ -1,12 +1,3 @@
-/**
- * UTILITY HELPERS: Predictive Metrics & Optimization Interpretation
- * This module converts raw backend telemetry into actionable business insights.
- * 
- * CALIBRATION PARAMETERS:
- * - Electricity (CASURECO II): ₱8.83/kWh
- * - Water (MNWD): ₱37.90/m3
- * - Hardware Draw: Dryer (5000W), Washer (1200W)
- */
 
 export const optimizationLogic = {
     /**
@@ -15,7 +6,6 @@ export const optimizationLogic = {
      * @param {number} value - The raw numeric value to format.
      */
     formatCurrency: (value) => {
-        // Fallback to 0 if value is null, undefined, or NaN to prevent UI breakage
         const safeValue = Number(value) || 0;
         return new Intl.NumberFormat('en-PH', {
             style: 'currency',
@@ -36,16 +26,15 @@ export const optimizationLogic = {
         if (isNaN(numericRate) || numericRate === 0) return 'text-slate-400';
         
         // Thresholds calibrated for local Naga City operational overhead
-        if (numericRate >= 65) return 'text-emerald-500';  // High Profit: Healthy margin after utility deduction
-        if (numericRate >= 35) return 'text-amber-500';    // Moderate: Typical for high-load electricity cycles
-        return 'text-rose-500';                            // Critical: Potential operating loss
+        if (numericRate >= 65) return 'text-emerald-500'; 
+        if (numericRate >= 35) return 'text-amber-500';    
+        return 'text-rose-500';                           
     },
 
     /**
      * Calculates the percentage of a specific budget consumed.
-     * Standard Shop Limits: Utilities (₱10,000) | Supplies (₱40,000).
-     * @param {number} currentTotal - Current accumulated cost.
-     * @param {number} budgetLimit - Total allocated budget for the period.
+     * @param {number} currentTotal 
+     * @param {number} budgetLimit 
      */
     calculateBudgetUsage: (currentTotal, budgetLimit) => {
         if (!budgetLimit || budgetLimit === 0) return 0;

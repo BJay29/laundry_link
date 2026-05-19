@@ -135,10 +135,10 @@ const ServiceTerminal = () => {
             {localStorage.getItem('shop_name') || 'Laundromat Terminal'}
           </h2>
           <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mb-4 opacity-60">
-            Operations Management Node
+            Real-Time Performance Dashboard
           </p>
           <h1 className="text-5xl font-black text-slate-900 tracking-tighter italic uppercase">Service Terminal</h1>
-          <p className="text-slate-400 text-sm mt-1 font-medium">Manage order fulfillment and monitor hardware occupancy.</p>
+          <p className="text-slate-400 text-sm mt-1 font-medium">Manage customer bookings and service orders.</p>
         </div>
 
         <div className="flex items-center gap-3 w-full lg:w-auto">
@@ -177,7 +177,7 @@ const ServiceTerminal = () => {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-slate-50 bg-slate-50/50">
-                  {['Intake Time', 'Customer Name', 'Service Type', 'Weight', 'Machines', 'Balance', 'Lifecycle', 'Operations'].map(h => (
+                  {[' Time', 'Customer Name', 'Service Type', 'Weight', 'Machines', 'Price', 'Status', 'Operations'].map(h => (
                     <th key={h} className="text-left px-8 py-6 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
                       {h}
                     </th>

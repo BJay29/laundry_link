@@ -128,7 +128,7 @@ const OptimizationSettings = () => {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50">
         <Loader2 className="animate-spin text-sky-500 mb-4" size={48} />
-        <p className="text-slate-500 font-bold tracking-tight">Synchronizing Shop Configurations...</p>
+        <p className="text-slate-500 font-bold tracking-tight">Loading...</p>
       </div>
     );
   }
@@ -139,7 +139,7 @@ const OptimizationSettings = () => {
       <div className="mb-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-4xl font-black text-slate-900 tracking-tighter">Optimization Settings</h1>
-          <p className="text-slate-500 font-bold text-sm mt-1 uppercase tracking-wider italic">Naga City Hub Calibration</p>
+          <p className="text-slate-500 font-bold text-sm mt-1 uppercase tracking-wider italic">Configure pricing and service parameters</p>
         </div>
         <button 
           onClick={handleSave}

@@ -1,58 +1,131 @@
 import React from 'react';
-import { Lightbulb, Clock, TrendingUp, CheckCircle2 } from 'lucide-react';
+import { 
+    Lightbulb, 
+    AlertCircle, 
+    CheckCircle2, 
+    TrendingDown, 
+    Clock, 
+    ArrowRight 
+} from 'lucide-react';
 
-const OptimizationTip = ({ title, message, suggestion, onApply }) => {
-  return (
-    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden flex flex-col h-full">
-      {/* Header with Icon and Title */}
-      <div className="p-5 flex items-center gap-4 bg-white border-b border-slate-50">
-        <div className="p-2.5 bg-sky-500 rounded-lg shadow-sm shadow-sky-200">
-          <Lightbulb className="w-6 h-6 text-white" />
+/**
+ * OptimizationTip Component
+ * Displays real-time Decision Support System (DSS) insights.
+ * * @param {Object} data - The insight object from the backend (InsightResponse).
+ * @param {boolean} isApplied - State to track if the recommendation was clicked.
+ * @param {Function} onApply - Callback function to handle the button click.
+ */
+const OptimizationTip = ({ data, isApplied, onApply }) => {
+    
+    // 1. Loading / Syncing State
+    if (!data) {
+        return (
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex flex-col h-full">
+                <div className="flex items-center gap-3 mb-6">
+                    <div className="p-2 bg-blue-500 rounded-xl">
+                        <Lightbulb className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                        <h3 className="font-bold text-slate-800">Operational Insight</h3>
+                        <p className="text-xs text-slate-400 uppercase tracking-wider font-semibold">Smart Recommendation</p>
+                    </div>
+                </div>
+                <div className="flex-1 flex flex-col items-center justify-center text-center space-y-4">
+                    <div className="w-12 h-12 border-4 border-blue-100 border-t-blue-500 rounded-full animate-spin"></div>
+                    <p className="text-slate-500 font-medium">Insights Syncing...</p>
+                </div>
+            </div>
+        );
+    }
+
+    const { hasIssue, problemMessage, impactDetail, suggestions } = data;
+
+    return (
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex flex-col h-full transition-all duration-300">
+            {/* Header */}
+            <div className="flex items-center gap-3 mb-6">
+                <div className={`p-2 rounded-xl ${hasIssue ? 'bg-amber-500' : 'bg-emerald-500'}`}>
+                    <Lightbulb className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                    <h3 className="font-bold text-slate-800">Operational Insight</h3>
+                    <p className="text-xs text-slate-400 uppercase tracking-wider font-semibold">
+                        {hasIssue ? 'Urgent Action Required' : 'System Healthy'}
+                    </p>
+                </div>
+            </div>
+
+            {/* Content Body */}
+            <div className="flex-1 space-y-5">
+                {hasIssue ? (
+                    <>
+                        {/* Issue Details */}
+                        <div className="bg-amber-50 rounded-xl p-4 border border-amber-100">
+                            <div className="flex gap-3">
+                                <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
+                                <div>
+                                    <p className="text-sm font-bold text-amber-900">{problemMessage}</p>
+                                    <div className="flex items-center gap-1.5 mt-1">
+                                        <TrendingDown className="w-4 h-4 text-rose-500" />
+                                        <p className="text-xs font-semibold text-rose-600">{impactDetail}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Suggestions List */}
+                        <div className="space-y-3">
+                            <p className="text-xs font-bold text-slate-400 uppercase ml-1">Recommended Steps</p>
+                            {suggestions.map((step, index) => (
+                                <div key={index} className="flex items-start gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                    <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center shrink-0 mt-0.5">
+                                        <span className="text-[10px] font-bold text-blue-600">{index + 1}</span>
+                                    </div>
+                                    <p className="text-sm text-slate-600 leading-relaxed">{step}</p>
+                                </div>
+                            ))}
+                        </div>
+                    </>
+                ) : (
+                    /* Healthy State (No Issues) */
+                    <div className="flex flex-col items-center justify-center h-full py-8 text-center">
+                        <div className="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mb-4">
+                            <CheckCircle2 className="w-10 h-10 text-emerald-500" />
+                        </div>
+                        <h4 className="font-bold text-slate-800">Operations Optimized</h4>
+                        <p className="text-sm text-slate-500 max-w-[200px] mt-2">
+                      Your shop is performing at peak efficiency. Revenue trends and service distribution are currently aligned with your weekly targets.</p>
+                    </div>
+                )}
+            </div>
+
+            {/* Action Button */}
+            <button
+                onClick={onApply}
+                disabled={!hasIssue || isApplied}
+                className={`mt-6 w-full py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all active:scale-95 shadow-sm
+                    ${isApplied 
+                        ? 'bg-emerald-500 text-white cursor-default' 
+                        : hasIssue 
+                            ? 'bg-blue-500 text-white hover:bg-blue-600' 
+                            : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                    }`}
+            >
+                {isApplied ? (
+                    <>
+                        <CheckCircle2 className="w-5 h-5" />
+                        Optimization Applied
+                    </>
+                ) : (
+                    <>
+                        <Clock className="w-5 h-5" />
+                        Apply Strategy
+                        <ArrowRight className="w-4 h-4" />
+                    </>
+                )}
+            </button>
         </div>
-        <div>
-          <h3 className="text-lg font-bold text-slate-900 leading-tight">
-            {title || "Optimization Tip"}
-          </h3>
-          <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">
-            Smart Recommendation
-          </p>
-        </div>
-      </div>
-
-      {/* Insight Body - Content matches the 'Low Booking Hours' look in image_6c8d37.png */}
-      <div className="p-6 flex-grow">
-        <div className="flex items-start gap-3 mb-6">
-          <div className="mt-1 p-1 bg-sky-50 rounded-full">
-            <Clock className="w-4 h-4 text-sky-500" />
-          </div>
-          <p className="text-slate-600 text-sm leading-relaxed">
-            {message || "Analyzing shop patterns to generate insights..."}
-          </p>
-        </div>
-
-        {/* Suggestion Highlight Box */}
-        {suggestion && (
-          <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 flex items-start gap-3">
-            <Lightbulb className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
-            <p className="text-sm font-medium text-slate-700">
-              {suggestion}
-            </p>
-          </div>
-        )}
-      </div>
-
-      {/* Action Footer */}
-      <div className="p-5 bg-white mt-auto">
-        <button 
-          onClick={onApply}
-          className="w-full py-3.5 bg-sky-500 hover:bg-sky-600 text-white rounded-xl font-bold text-sm transition-all shadow-lg shadow-sky-100 flex items-center justify-center gap-2 active:scale-[0.98]"
-        >
-          <CheckCircle2 size={18} />
-          Apply Suggestion
-        </button>
-      </div>
-    </div>
-  );
+    );
 };
 
 export default OptimizationTip;

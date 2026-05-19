@@ -10,10 +10,8 @@ const MachineCard = ({
   machine_number, 
   machine_type, 
   status, 
-  // Financial metrics calculated by PredictionService (backend)
   profitability_rate = 0, 
   net_profit_accumulated = 0, 
-  // Real-time telemetry fetched from machine_controller
   total_cycles = 0, 
   remaining_time = 0, 
   current_service_type = "None",
