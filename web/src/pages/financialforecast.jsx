@@ -9,7 +9,8 @@ import {
   Minus,
   Zap,
   Cpu,
-  Sparkles
+  Sparkles,
+  CheckCircle2
 } from 'lucide-react';
 import ForecastCharts from '../components/charts/forecastcharts';
 import apiService from '../services/APIservices';
@@ -41,7 +42,6 @@ const Typewriter = ({ text, speed = 20 }) => {
 /**
  * FINANCIAL FORECAST COMPONENT
  * Visualizes 7-day AI projections against historical database baselines.
- * Displays validated model telemetry parameters with real-time backend accurate state mappings.
  */
 const FinancialForecast = () => {
   const [forecastData, setForecastData] = useState([]);
@@ -66,10 +66,6 @@ const FinancialForecast = () => {
     totalKg: 0
   });
 
-  /**
-   * DATA SYNCHRONIZATION ENGINE
-   * Fetches the 7-day forecast, historical data, and algorithm validation matrices concurrently.
-   */
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
@@ -98,7 +94,6 @@ const FinancialForecast = () => {
         const totalProjectedRev = rawForecast.reduce((sum, item) => sum + (item.projected_income || 0), 0);
         const totalProjectedBook = rawForecast.reduce((sum, item) => sum + (item.predicted_bookings || 0), 0);
         
-        // Use values directly from backend summary response
         let lastWeekIncome = 0;
         let lastWeekBookings = 0;
         let dbActuals = { fs: 0, tw: 0, rw: 0, cf: 0, kg: 0, acc: 0 };
@@ -118,7 +113,6 @@ const FinancialForecast = () => {
           };
         }
 
-        // Trend calculation logic
         const calculateTrend = (projected, historical) => {
           if (historical === 0) return { percent: "0%", status: 'equal' };
           const diff = projected - historical;
@@ -171,7 +165,6 @@ const FinancialForecast = () => {
 
   return (
     <div className="p-4 md:p-8 bg-slate-50 min-h-screen font-sans">
-      {/* ... rest of your existing JSX code remains exactly the same ... */}
       <div className="mb-10 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
         <div>
           <h1 className="text-3xl md:text-5xl font-black text-slate-900 tracking-tighter uppercase italic">Financial Forecast</h1>
@@ -180,6 +173,15 @@ const FinancialForecast = () => {
         <button onClick={fetchData} className="p-4 bg-white border border-slate-200 rounded-2xl hover:bg-slate-100 transition-all shadow-sm active:scale-95">
           <RefreshCw size={20} className="text-slate-400" />
         </button>
+      </div>
+
+      {/* Added dynamic pulse status indicator below */}
+      <div className="mb-8 flex items-center gap-3">
+        <div className="relative flex items-center justify-center">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+        </div>
+        <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest animate-pulse">System Monitoring Active</span>
       </div>
 
       {error && (
@@ -266,16 +268,6 @@ const FinancialForecast = () => {
                 <div className="w-full bg-slate-200/70 h-2.5 rounded-full overflow-hidden">
                   <div className="bg-indigo-600 h-full rounded-full transition-all duration-500 shadow-[0_0_8px_rgba(79,70,229,0.4)]" style={{ width: `${accuracyMetrics.demand_forecasting_model?.accuracy_percentage || 0}%` }} />
                 </div>
-                <div className="grid grid-cols-2 gap-4 pt-4 mt-2 border-t border-slate-100">
-                  <div>
-                    <p className="text-[9px] font-black text-slate-400 uppercase">Evaluation Method</p>
-                    <p className="text-xs font-bold text-slate-700">{accuracyMetrics.demand_forecasting_model?.evaluation_method || 'N/A'}</p>
-                  </div>
-                  <div>
-                    <p className="text-[9px] font-black text-slate-400 uppercase">Mean Absolute Error</p>
-                    <p className="text-xs font-bold text-emerald-500">± {accuracyMetrics.demand_forecasting_model?.mean_absolute_error || '0'}</p>
-                  </div>
-                </div>
               </div>
             </div>
             <div className="border border-slate-100 p-6 md:p-8 rounded-[32px] bg-slate-50/50">
@@ -294,15 +286,12 @@ const FinancialForecast = () => {
                 <div className="w-full bg-slate-200/70 h-2.5 rounded-full overflow-hidden">
                   <div className="bg-cyan-500 h-full rounded-full transition-all duration-500 shadow-[0_0_8px_rgba(6,182,212,0.4)]" style={{ width: `${accuracyMetrics.utility_telemetry_model?.accuracy_percentage || 0}%` }} />
                 </div>
-                <div className="grid grid-cols-2 gap-4 pt-4 mt-2 border-t border-slate-100">
-                  <div>
-                    <p className="text-[9px] font-black text-slate-400 uppercase">Mean Absolute Error</p>
-                    <p className="text-xs font-bold text-slate-700">{accuracyMetrics.utility_telemetry_model?.mean_absolute_error || '0'}</p>
-                  </div>
-                  <div>
-                    <p className="text-[9px] font-black text-slate-400 uppercase">Calibration Check</p>
-                    <p className="text-xs font-bold text-emerald-500">OPTIMIZED</p>
-                  </div>
+                {/* Added the pulsing optimized indicator here */}
+                <div className="pt-4 mt-2 border-t border-slate-100 flex items-center gap-2">
+                    <div className="flex items-center justify-center p-1 bg-emerald-100 rounded-full animate-pulse">
+                        <CheckCircle2 size={12} className="text-emerald-600" />
+                    </div>
+                    <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest animate-pulse">System Optimized</p>
                 </div>
               </div>
             </div>
