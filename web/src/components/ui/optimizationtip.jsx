@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
     Lightbulb, 
     AlertCircle, 
@@ -10,13 +10,34 @@ import {
 
 /**
  * OptimizationTip Component
- * Displays real-time Decision Support System (DSS) insights.
- * * @param {Object} data - The insight object from the backend (InsightResponse).
+ * Displays real-time Decision Support System (DSS) insights with a typewriter effect.
+ * @param {Object} data - The insight object from the backend (InsightResponse).
  * @param {boolean} isApplied - State to track if the recommendation was clicked.
  * @param {Function} onApply - Callback function to handle the button click.
  */
 const OptimizationTip = ({ data, isApplied, onApply }) => {
+    const [displayedText, setDisplayedText] = useState("");
     
+    // Typewriter effect: Triggered when the component mounts or data changes
+    useEffect(() => {
+        if (!data || !data.hasIssue) return;
+
+        const fullText = data.problemMessage || "";
+        let i = 0;
+        setDisplayedText(""); // Reset text on new insight
+
+        const interval = setInterval(() => {
+            if (i < fullText.length) {
+                setDisplayedText((prev) => prev + fullText.charAt(i));
+                i++;
+            } else {
+                clearInterval(interval);
+            }
+        }, 30); // Typing speed in milliseconds
+
+        return () => clearInterval(interval);
+    }, [data]);
+
     // 1. Loading / Syncing State
     if (!data) {
         return (
@@ -38,7 +59,7 @@ const OptimizationTip = ({ data, isApplied, onApply }) => {
         );
     }
 
-    const { hasIssue, problemMessage, impactDetail, suggestions } = data;
+    const { hasIssue, impactDetail, suggestions } = data;
 
     return (
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex flex-col h-full transition-all duration-300">
@@ -59,12 +80,12 @@ const OptimizationTip = ({ data, isApplied, onApply }) => {
             <div className="flex-1 space-y-5">
                 {hasIssue ? (
                     <>
-                        {/* Issue Details */}
+                        {/* Issue Details with Typewriter Text */}
                         <div className="bg-amber-50 rounded-xl p-4 border border-amber-100">
                             <div className="flex gap-3">
                                 <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
                                 <div>
-                                    <p className="text-sm font-bold text-amber-900">{problemMessage}</p>
+                                    <p className="text-sm font-bold text-amber-900">{displayedText}</p>
                                     <div className="flex items-center gap-1.5 mt-1">
                                         <TrendingDown className="w-4 h-4 text-rose-500" />
                                         <p className="text-xs font-semibold text-rose-600">{impactDetail}</p>
@@ -94,7 +115,8 @@ const OptimizationTip = ({ data, isApplied, onApply }) => {
                         </div>
                         <h4 className="font-bold text-slate-800">Operations Optimized</h4>
                         <p className="text-sm text-slate-500 max-w-[200px] mt-2">
-                      Your shop is performing at peak efficiency. Revenue trends and service distribution are currently aligned with your weekly targets.</p>
+                            Your shop is performing at peak efficiency. Revenue trends and service distribution are currently aligned with your weekly targets.
+                        </p>
                     </div>
                 )}
             </div>
