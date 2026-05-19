@@ -66,6 +66,10 @@ const FinancialForecast = () => {
     totalKg: 0
   });
 
+  /**
+   * DATA SYNCHRONIZATION ENGINE
+   * Fetches the 7-day forecast, historical data, and algorithm validation matrices concurrently.
+   */
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
@@ -183,8 +187,7 @@ const FinancialForecast = () => {
       )}
 
       {aiInsight && (
-        // Added 'animate-pulse' here for the pulsing effect
-        <div className="mb-8 bg-white border border-indigo-100 p-6 rounded-[32px] flex items-start gap-4 shadow-sm animate-pulse">
+        <div className="mb-8 bg-white border border-indigo-100 p-6 rounded-[32px] flex items-start gap-4 shadow-sm">
           <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl">
             <Sparkles size={20} />
           </div>
@@ -295,7 +298,10 @@ const FinancialForecast = () => {
                   </div>
                   <div>
                     <p className="text-[9px] font-black text-slate-400 uppercase">Calibration Check</p>
-                    <p className="text-xs font-bold text-emerald-500">OPTIMIZED</p>
+                    {/* Pulsing and Glowing Effect Applied Here */}
+                    <p className="text-xs font-black text-emerald-500 animate-pulse drop-shadow-[0_0_8px_rgba(16,185,129,0.8)]">
+                      OPTIMIZED
+                    </p>
                   </div>
                 </div>
               </div>
