@@ -3,20 +3,20 @@ import { X, Save, Package } from 'lucide-react';
 
 /**
  * INVENTORY MODAL
- * A dedicated modal for updating stock levels, reorder points, usage rates, and categories.
- * Supports both creating new items and editing existing ones.
+ * Handles creation and editing of inventory items.
+ * Optimized for state synchronization and reliable submission.
  */
 const InventoryModal = ({ isOpen, onClose, item, onSave }) => {
   const [formData, setFormData] = useState({
     item_name: '',
     category: 'General',
-    current_stock: '',
-    reorder_point: '',
+    current_stock: 0,
+    reorder_point: 0,
     unit: 'pcs',
-    usage_rate: ''
+    usage_rate: 0
   });
 
-  // Sync modal data whenever the selected item changes
+  // Sync state whenever the item prop changes
   useEffect(() => {
     if (item) {
       setFormData({
@@ -44,17 +44,26 @@ const InventoryModal = ({ isOpen, onClose, item, onSave }) => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    
+    // Safety check: Ensure required data is present
+    if (!formData.item_name) {
+      alert("Item name is required!");
+      return;
+    }
+
+    // Call the parent onSave function
     onSave(item ? item.id : null, formData);
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-white rounded-[32px] p-8 w-full max-w-sm shadow-2xl border border-slate-100">
         <div className="flex justify-between items-start mb-6">
           <div className="p-3 bg-violet-50 text-violet-600 rounded-2xl">
             <Package size={24} />
           </div>
           <button 
+            type="button"
             onClick={onClose} 
             className="p-2 text-slate-400 hover:bg-slate-100 rounded-xl transition-colors"
           >
@@ -70,19 +79,18 @@ const InventoryModal = ({ isOpen, onClose, item, onSave }) => {
         </p>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          {!item && (
-            <div>
-              <label className="block text-xs font-black text-slate-400 uppercase tracking-wider mb-2">Item Name</label>
-              <input 
-                type="text"
-                value={formData.item_name}
-                onChange={(e) => setFormData({...formData, item_name: e.target.value})}
-                className="w-full px-4 py-3 bg-slate-50 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-violet-500 outline-none font-bold"
-                placeholder="e.g., Detergent Powder"
-                required
-              />
-            </div>
-          )}
+          <div>
+            <label className="block text-xs font-black text-slate-400 uppercase tracking-wider mb-2">Item Name</label>
+            <input 
+              type="text"
+              value={formData.item_name}
+              onChange={(e) => setFormData({...formData, item_name: e.target.value})}
+              className="w-full px-4 py-3 bg-slate-50 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-violet-500 outline-none font-bold"
+              placeholder="e.g., Detergent Powder"
+              disabled={!!item} // Disable name editing if in edit mode
+              required
+            />
+          </div>
 
           <div>
             <label className="block text-xs font-black text-slate-400 uppercase tracking-wider mb-2">Category</label>
