@@ -195,6 +195,35 @@ export const apiService = {
         }
     },
 
+    // --- INVENTORY METHODS ---
+
+    /**
+     * Fetches all inventory items for the shop.
+     */
+    getInventory: async (shopId) => {
+        try {
+            const targetId = shopId || localStorage.getItem('shop_id');
+            const response = await apiClient.get(`/inventory/?shop_id=${targetId}`);
+            return response.data;
+        } catch (error) {
+            console.error("Fetch Inventory Error:", error.response?.data?.detail || error.message);
+            throw error;
+        }
+    },
+
+    /**
+     * Updates inventory stock levels.
+     */
+    updateStock: async (itemId, stockData) => {
+        try {
+            const response = await apiClient.put(`/inventory/${itemId}`, stockData);
+            return response.data;
+        } catch (error) {
+            console.error("Update Stock Error:", error.response?.data?.detail || error.message);
+            throw error;
+        }
+    },
+
     // --- ANALYTICS & INSIGHTS ---
 
     /**

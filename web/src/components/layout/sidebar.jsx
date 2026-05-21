@@ -7,7 +7,8 @@ import {
   Settings, 
   LogOut,
   AlertCircle,
-  X
+  X,
+  Package // Added Package icon for Inventory
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 
@@ -36,6 +37,11 @@ const Sidebar = () => {
       name: 'Machine Hub', 
       icon: <Cpu size={20} />, 
       path: '/machines' 
+    },
+    { 
+      name: 'Inventory', // Added Inventory navigation item
+      icon: <Package size={20} />, 
+      path: '/inventory' 
     },
     { 
       name: 'Financial Forecast', 
