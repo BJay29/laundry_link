@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { getInventory, updateStock } from '../services/APIservices';
-import InventoryTable from '../components/ui/InventoryTable';
-import InventoryModal from '../components/modals/InventoryModal';
+import InventoryTable from '../components/ui/inventorytable';
+import InventoryModal from '../components/modals/inventorymodal';
 
 /**
  * INVENTORY PAGE
@@ -18,8 +18,9 @@ const InventoryPage = () => {
 
     const loadInventory = async () => {
         try {
-            // Assuming shop_id=1 as per your system architecture
-            const response = await getInventory(1); 
+            // Using a dynamic shop_id from localStorage for better architecture
+            const shopId = localStorage.getItem('shop_id') || 1;
+            const response = await getInventory(shopId); 
             setItems(response.data);
         } catch (error) {
             console.error("Error loading inventory:", error);
