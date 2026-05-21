@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { apiService } from '../services/APIservices';
-import InventoryTable from '../components/ui/inventoryTable';
-import InventoryModal from '../components/modals/InventoryModal';
-import InventoryCharts from '../components/charts/inventoryCharts';
+import InventoryTable from '../components/ui/inventorytable';
+import InventoryModal from '../components/modals/inventorymodal';
+import InventoryCharts from '../components/charts/inventorycharts';
 import { Search, AlertCircle, RefreshCw, Filter } from 'lucide-react';
 
 /**
