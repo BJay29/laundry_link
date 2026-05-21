@@ -51,12 +51,13 @@ const InventoryModal = ({ isOpen, onClose, item, onSave }) => {
       return;
     }
 
-    // Call the parent onSave function with sanitized numeric data
+    // Call the parent onSave function with sanitized numeric data and mandatory unit field
     const finalData = {
       ...formData,
-      current_stock: parseFloat(formData.current_stock),
-      reorder_point: parseFloat(formData.reorder_point),
-      usage_rate: parseFloat(formData.usage_rate)
+      current_stock: parseFloat(formData.current_stock || 0),
+      reorder_point: parseFloat(formData.reorder_point || 0),
+      usage_rate: parseFloat(formData.usage_rate || 0),
+      unit: formData.unit || 'pcs' // Ensure unit is always sent
     };
 
     onSave(item ? item.id : null, finalData);
