@@ -19,13 +19,13 @@ const Login = () => {
     setErrorMessage('');
 
     try {
-      // API call to FastAPI backend via the authentication service
+      // API call to FastAPI backend via the authentication services
       const response = await authService.login(email, password);
 
       console.log("Authentication Successful:", response);
       
       // Navigate to dashboard based on user role defined in PostgreSQL
-      // Session management (localStorage) is handled within authService.login
+      // Session management (localStorage) is handled within authService.loginssswdwdwd
       if (response.user.role === 'owner') {
         navigate('/dashboard'); 
       } else {
