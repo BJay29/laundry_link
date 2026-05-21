@@ -47,7 +47,7 @@ function App() {
         {/* Redirect root path to login by default */}
         <Route path="/" element={<Navigate to="/login" replace />} />
         
-        {/* Wildcard route to handle 404s or undefined paths by redirecting to login */}
+        {/* Wildcard route to handle 404s or undefined paths by redirecting to logins */}
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </BrowserRouter>
