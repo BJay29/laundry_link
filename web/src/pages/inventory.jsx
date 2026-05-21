@@ -3,7 +3,6 @@ import { apiService } from '../services/APIservices';
 import InventoryTable from '../components/ui/inventorytable';
 import InventoryModal from '../components/modals/inventorymodal';
 import InventoryCharts from '../components/charts/inventorycharts';
-import { toast, Toaster } from 'react-hot-toast'; // Import react-hot-toast
 
 /**
  * INVENTORY PAGE
@@ -21,6 +20,7 @@ const InventoryPage = () => {
 
     const loadInventory = async () => {
         try {
+            // Default to 1 if no shop_id found in storage
             const shopId = localStorage.getItem('shop_id') || 1;
             const inventory = await apiService.getInventory(shopId);
             
@@ -45,30 +45,28 @@ const InventoryPage = () => {
 
     const handleSave = async (item_id, data) => {
         try {
+            const shopId = parseInt(localStorage.getItem('shop_id')) || 1;
+
             if (item_id) {
                 // Update existing item
                 await apiService.updateStock(item_id, data);
-                toast.success("Inventory item updated successfully!");
+                alert("Inventory item updated successfully!");
             } else {
                 // Add new item
-                const shopId = localStorage.getItem('shop_id') || 1;
-                await apiService.addInventoryItem({ ...data, shop_id: parseInt(shopId) });
-                toast.success("New item added to inventory!");
+                await apiService.addInventoryItem({ ...data, shop_id: shopId });
+                alert("New item added to inventory!");
             }
             
             setIsModalOpen(false);
             loadInventory(); // Refresh list after a successful action
         } catch (error) {
             console.error("Error saving inventory item:", error);
-            toast.error("Failed to save item. Please check your connection.");
+            alert("Failed to save item. Please check your connection and try again.");
         }
     };
 
     return (
         <div className="p-8 bg-slate-50 min-h-screen">
-            {/* Toast Notifications Container */}
-            <Toaster position="top-right" reverseOrder={false} />
-
             <div className="max-w-6xl mx-auto">
                 <div className="flex justify-between items-center mb-8">
                     <div>
