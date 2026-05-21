@@ -9,8 +9,9 @@ import Login from './pages/login';
 import Dashboard from './pages/dashboard';
 import ServiceTerminal from './pages/serviceterminal';
 import MachineHub from './pages/machinehub';
+import InventoryPage from './pages/inventory'; // Newly imported Inventory page
 import FinancialForecast from './pages/financialforecast';
-import OptimizationSettings from './pages/optimizationsettings'; // Newly added import
+import OptimizationSettings from './pages/optimizationsettings'; 
 
 function App() {
   return (
@@ -30,6 +31,9 @@ function App() {
           
           {/* Monitoring and management of laundry machinery */}
           <Route path="/machines" element={<MachineHub />} />
+
+          {/* Inventory management for shop supplies */}
+          <Route path="/inventory" element={<InventoryPage />} />
           
           {/* Revenue and booking projections based on historical data */}
           <Route path="/forecast" element={<FinancialForecast />} />
