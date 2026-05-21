@@ -1,9 +1,9 @@
 import React from 'react';
-import { Edit3, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Edit3, AlertTriangle, CheckCircle2, Gauge } from 'lucide-react';
 
 /**
  * INVENTORY TABLE
- * Displays inventory items with color-coded status and triggerable update actions.
+ * Displays inventory items with color-coded status, usage rates, and triggerable update actions.
  */
 const InventoryTable = ({ items, onEdit }) => {
   return (
@@ -13,6 +13,7 @@ const InventoryTable = ({ items, onEdit }) => {
           <tr className="bg-slate-50 border-b border-slate-100">
             <th className="py-5 px-8 text-xs font-black text-slate-400 uppercase tracking-widest">Item Name</th>
             <th className="py-5 px-8 text-xs font-black text-slate-400 uppercase tracking-widest text-center">Current Stock</th>
+            <th className="py-5 px-8 text-xs font-black text-slate-400 uppercase tracking-widest text-center">Usage Rate</th>
             <th className="py-5 px-8 text-xs font-black text-slate-400 uppercase tracking-widest text-center">Status</th>
             <th className="py-5 px-8 text-xs font-black text-slate-400 uppercase tracking-widest text-center">Actions</th>
           </tr>
@@ -23,6 +24,12 @@ const InventoryTable = ({ items, onEdit }) => {
               <td className="py-6 px-8 font-black text-slate-800">{item.item_name}</td>
               <td className="py-6 px-8 text-center font-bold text-slate-600">
                 {item.current_stock} <span className="text-slate-400 text-xs">{item.unit}</span>
+              </td>
+              <td className="py-6 px-8 text-center text-slate-600 font-medium">
+                <div className="flex items-center justify-center gap-1.5">
+                  <Gauge size={14} className="text-violet-500" />
+                  {item.usage_rate} <span className="text-slate-400 text-xs italic">/load</span>
+                </div>
               </td>
               <td className="py-6 px-8 flex justify-center">
                 {item.current_stock <= item.reorder_point ? (

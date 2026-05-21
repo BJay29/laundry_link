@@ -39,12 +39,22 @@ export const getInventory = async (shopId) => {
     }
 };
 
+export const addInventoryItem = async (itemData) => {
+    try {
+        const response = await apiClient.post('/inventory/', itemData);
+        return response.data;
+    } catch (error) {
+        console.error("Add Inventory Item Error:", error.response?.data?.detail || error.message);
+        throw error;
+    }
+};
+
 export const updateStock = async (itemId, stockData) => {
     try {
         const response = await apiClient.put(`/inventory/${itemId}`, stockData);
         return response.data;
     } catch (error) {
-        console.error("Update Stock Error:", error.response?.data?.detail || error.message);
+        console.error("Update Stock/Usage Rate Error:", error.response?.data?.detail || error.message);
         throw error;
     }
 };
@@ -200,9 +210,10 @@ export const apiService = {
         }
     },
 
-    // --- INVENTORY METHODS (Included in object too) ---
+    // --- INVENTORY METHODS ---
 
     getInventory,
+    addInventoryItem,
     updateStock,
 
     // --- ANALYTICS & INSIGHTS ---

@@ -3,24 +3,36 @@ import { X, Save, Package } from 'lucide-react';
 
 /**
  * INVENTORY MODAL
- * A dedicated modal for updating stock levels and reorder points.
- * @param {boolean} isOpen - Controls visibility of the modal.
- * @param {Function} onClose - Function to close the modal.
- * @param {Object} item - The inventory item currently selected for editing.
- * @param {Function} onSave - Function to persist changes to the backend.
+ * A dedicated modal for updating stock levels, reorder points, and usage rates.
+ * Supports both creating new items and editing existing ones.
  */
 const InventoryModal = ({ isOpen, onClose, item, onSave }) => {
   const [formData, setFormData] = useState({
+    item_name: '',
     current_stock: '',
-    reorder_point: ''
+    reorder_point: '',
+    unit: 'pcs',
+    usage_rate: ''
   });
 
   // Sync modal data whenever the selected item changes
   useEffect(() => {
     if (item) {
       setFormData({
+        item_name: item.item_name || '',
         current_stock: item.current_stock || 0,
-        reorder_point: item.reorder_point || 0
+        reorder_point: item.reorder_point || 0,
+        unit: item.unit || 'pcs',
+        usage_rate: item.usage_rate || 0
+      });
+    } else {
+      // Reset form for adding new item
+      setFormData({
+        item_name: '',
+        current_stock: 0,
+        reorder_point: 0,
+        unit: 'pcs',
+        usage_rate: 0
       });
     }
   }, [item]);
@@ -29,7 +41,7 @@ const InventoryModal = ({ isOpen, onClose, item, onSave }) => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSave(item.id, formData);
+    onSave(item ? item.id : null, formData);
   };
 
   return (
@@ -48,17 +60,28 @@ const InventoryModal = ({ isOpen, onClose, item, onSave }) => {
         </div>
 
         <h3 className="text-xl font-black text-slate-900 tracking-tight mb-1">
-          Update {item?.item_name}
+          {item ? `Update ${item.item_name}` : "Add New Inventory Item"}
         </h3>
         <p className="text-slate-500 text-sm font-medium mb-6">
-          Modify stock levels and reorder alerts.
+          {item ? "Modify stock levels and reorder alerts." : "Define item details and consumption rate."}
         </p>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          {!item && (
+            <div>
+              <label className="block text-xs font-black text-slate-400 uppercase tracking-wider mb-2">Item Name</label>
+              <input 
+                type="text"
+                value={formData.item_name}
+                onChange={(e) => setFormData({...formData, item_name: e.target.value})}
+                className="w-full px-4 py-3 bg-slate-50 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-violet-500 outline-none font-bold"
+                required
+              />
+            </div>
+          )}
+
           <div>
-            <label className="block text-xs font-black text-slate-400 uppercase tracking-wider mb-2">
-              Current Stock ({item?.unit})
-            </label>
+            <label className="block text-xs font-black text-slate-400 uppercase tracking-wider mb-2">Current Stock</label>
             <input 
               type="number"
               value={formData.current_stock}
@@ -66,10 +89,20 @@ const InventoryModal = ({ isOpen, onClose, item, onSave }) => {
               className="w-full px-4 py-3 bg-slate-50 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-violet-500 outline-none font-bold"
             />
           </div>
+
           <div>
-            <label className="block text-xs font-black text-slate-400 uppercase tracking-wider mb-2">
-              Reorder Point
-            </label>
+            <label className="block text-xs font-black text-slate-400 uppercase tracking-wider mb-2">Usage Rate (per load)</label>
+            <input 
+              type="number"
+              step="0.1"
+              value={formData.usage_rate}
+              onChange={(e) => setFormData({...formData, usage_rate: parseFloat(e.target.value) || 0})}
+              className="w-full px-4 py-3 bg-slate-50 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-violet-500 outline-none font-bold"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-black text-slate-400 uppercase tracking-wider mb-2">Reorder Point</label>
             <input 
               type="number"
               value={formData.reorder_point}
@@ -83,7 +116,7 @@ const InventoryModal = ({ isOpen, onClose, item, onSave }) => {
             className="w-full py-4 mt-2 bg-violet-600 hover:bg-violet-700 text-white font-black rounded-2xl transition-all shadow-lg shadow-violet-500/25 active:scale-95 flex items-center justify-center gap-2"
           >
             <Save size={18} />
-            Save Changes
+            {item ? "Save Changes" : "Add Item"}
           </button>
         </form>
       </div>
