@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { apiService } from '../services/apiservice';
+import { apiService } from '../services/APIservices';
 import InventoryTable from '../components/ui/inventorytable';
 import InventoryModal from '../components/modals/inventorymodal';
 
