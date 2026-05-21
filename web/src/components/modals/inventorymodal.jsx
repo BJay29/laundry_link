@@ -22,10 +22,10 @@ const InventoryModal = ({ isOpen, onClose, item, onSave }) => {
       setFormData({
         item_name: item.item_name || '',
         category: item.category || 'General',
-        current_stock: item.current_stock || 0,
-        reorder_point: item.reorder_point || 0,
+        current_stock: parseFloat(item.current_stock) || 0,
+        reorder_point: parseFloat(item.reorder_point) || 0,
         unit: item.unit || 'pcs',
-        usage_rate: item.usage_rate || 0
+        usage_rate: parseFloat(item.usage_rate) || 0
       });
     } else {
       // Reset form for adding new item
@@ -51,8 +51,15 @@ const InventoryModal = ({ isOpen, onClose, item, onSave }) => {
       return;
     }
 
-    // Call the parent onSave function
-    onSave(item ? item.id : null, formData);
+    // Call the parent onSave function with sanitized numeric data
+    const finalData = {
+      ...formData,
+      current_stock: parseFloat(formData.current_stock),
+      reorder_point: parseFloat(formData.reorder_point),
+      usage_rate: parseFloat(formData.usage_rate)
+    };
+
+    onSave(item ? item.id : null, finalData);
   };
 
   return (
@@ -113,7 +120,7 @@ const InventoryModal = ({ isOpen, onClose, item, onSave }) => {
               <input 
                 type="number"
                 value={formData.current_stock}
-                onChange={(e) => setFormData({...formData, current_stock: parseFloat(e.target.value) || 0})}
+                onChange={(e) => setFormData({...formData, current_stock: e.target.value})}
                 className="w-full px-4 py-3 bg-slate-50 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-violet-500 outline-none font-bold"
               />
             </div>
@@ -122,7 +129,7 @@ const InventoryModal = ({ isOpen, onClose, item, onSave }) => {
               <input 
                 type="number"
                 value={formData.reorder_point}
-                onChange={(e) => setFormData({...formData, reorder_point: parseFloat(e.target.value) || 0})}
+                onChange={(e) => setFormData({...formData, reorder_point: e.target.value})}
                 className="w-full px-4 py-3 bg-slate-50 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-violet-500 outline-none font-bold"
               />
             </div>
@@ -134,7 +141,7 @@ const InventoryModal = ({ isOpen, onClose, item, onSave }) => {
               type="number"
               step="0.01"
               value={formData.usage_rate}
-              onChange={(e) => setFormData({...formData, usage_rate: parseFloat(e.target.value) || 0})}
+              onChange={(e) => setFormData({...formData, usage_rate: e.target.value})}
               className="w-full px-4 py-3 bg-slate-50 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-violet-500 outline-none font-bold"
             />
           </div>

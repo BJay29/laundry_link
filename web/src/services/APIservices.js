@@ -41,7 +41,15 @@ export const getInventory = async (shopId) => {
 
 export const addInventoryItem = async (itemData) => {
     try {
-        const response = await apiClient.post('/inventory/', itemData);
+        // Sanitize data to ensure types match FastAPI Pydantic schemas
+        const sanitizedData = {
+            ...itemData,
+            current_stock: parseFloat(itemData.current_stock || 0),
+            reorder_point: parseFloat(itemData.reorder_point || 0),
+            usage_rate: parseFloat(itemData.usage_rate || 0),
+            shop_id: parseInt(itemData.shop_id || localStorage.getItem('shop_id'))
+        };
+        const response = await apiClient.post('/inventory/', sanitizedData);
         return response.data;
     } catch (error) {
         console.error("Add Inventory Item Error:", error.response?.data?.detail || error.message);
@@ -51,7 +59,14 @@ export const addInventoryItem = async (itemData) => {
 
 export const updateStock = async (itemId, stockData) => {
     try {
-        const response = await apiClient.put(`/inventory/${itemId}`, stockData);
+        // Sanitize data for updates as well
+        const sanitizedData = {
+            ...stockData,
+            current_stock: stockData.current_stock !== undefined ? parseFloat(stockData.current_stock) : undefined,
+            reorder_point: stockData.reorder_point !== undefined ? parseFloat(stockData.reorder_point) : undefined,
+            usage_rate: stockData.usage_rate !== undefined ? parseFloat(stockData.usage_rate) : undefined
+        };
+        const response = await apiClient.put(`/inventory/${itemId}`, sanitizedData);
         return response.data;
     } catch (error) {
         console.error("Update Stock/Usage Rate Error:", error.response?.data?.detail || error.message);
@@ -64,7 +79,7 @@ export const updateStock = async (itemId, stockData) => {
  */
 export const recordItemUsage = async (itemId, quantity) => {
     try {
-        const response = await apiClient.post(`/inventory/${itemId}/use?quantity=${quantity}`);
+        const response = await apiClient.post(`/inventory/${itemId}/use?quantity=${parseFloat(quantity)}`);
         return response.data;
     } catch (error) {
         console.error("Record Item Usage Error:", error.response?.data?.detail || error.message);
