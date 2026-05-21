@@ -1,110 +1,416 @@
 import React, { useState, useEffect } from 'react';
 import { apiService } from '../services/APIservices';
-import InventoryTable from '../components/ui/inventorytable';
-import InventoryModal from '../components/modals/inventorymodal';
-import InventoryCharts from '../components/charts/inventorycharts';
+import InventoryTable from '../components/ui/inventoryTable';
+import InventoryModal from '../components/modals/InventoryModal';
+import InventoryCharts from '../components/charts/inventoryCharts';
+import { Search, AlertCircle, RefreshCw, Filter } from 'lucide-react';
 
 /**
  * INVENTORY PAGE
  * Main dashboard for tracking supply levels and managing inventory data.
- * Supports updating stock levels, viewing analytics, and managing items.
+ * Features:
+ * - Real-time inventory tracking
+ * - Stock level monitoring with visual indicators
+ * - Add, edit, and delete inventory items
+ * - Analytics charts for consumption trends
+ * - Search and filter functionality
+ * - Record item usage
+ * - Error handling and loading states
+ * - Responsive design
  */
 const InventoryPage = () => {
-    const [items, setItems] = useState([]);
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [selectedItem, setSelectedItem] = useState(null);
+  // State Management
+  const [items, setItems] = useState([]);
+  const [filteredItems, setFilteredItems] = useState([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedItem, setSelectedItem] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [modalLoading, setModalLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [successMessage, setSuccessMessage] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterStatus, setFilterStatus] = useState('ALL');
+  const [sortConfig, setSortConfig] = useState({
+    key: 'item_name',
+    order: 'asc'
+  });
 
-    useEffect(() => {
+  // Auto-dismiss success message after 3 seconds
+  useEffect(() => {
+    if (successMessage) {
+      const timer = setTimeout(() => setSuccessMessage(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [successMessage]);
+
+  /**
+   * Load inventory items from API on component mount
+   */
+  useEffect(() => {
+    loadInventory();
+  }, []);
+
+  /**
+   * Filter and search items whenever items, searchTerm, or filterStatus changes
+   */
+  useEffect(() => {
+    filterAndSearchItems();
+  }, [items, searchTerm, filterStatus]);
+
+  /**
+   * Get shop ID from localStorage with fallback
+   */
+  const getShopId = () => {
+    const rawShopId = localStorage.getItem('shop_id');
+    return rawShopId ? parseInt(rawShopId, 10) : 1;
+  };
+
+  /**
+   * Determine item status based on stock levels
+   */
+  const getItemStatus = (item) => {
+    const stock = parseFloat(item.current_stock) || 0;
+    const reorder = parseFloat(item.reorder_point) || 0;
+
+    if (stock <= 0) return 'OUT_OF_STOCK';
+    if (stock <= reorder * 0.5) return 'CRITICAL';
+    if (stock <= reorder) return 'LOW';
+    return 'ADEQUATE';
+  };
+
+  /**
+   * Filter items based on search term and status filter
+   */
+  const filterAndSearchItems = () => {
+    let filtered = items;
+
+    // Apply search filter
+    if (searchTerm) {
+      filtered = filtered.filter(item =>
+        item.item_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.category.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
+    // Apply status filter
+    if (filterStatus !== 'ALL') {
+      filtered = filtered.filter(item => getItemStatus(item) === filterStatus);
+    }
+
+    // Apply sorting
+    filtered.sort((a, b) => {
+      let aValue, bValue;
+
+      switch (sortConfig.key) {
+        case 'item_name':
+          aValue = a.item_name.toLowerCase();
+          bValue = b.item_name.toLowerCase();
+          break;
+        case 'current_stock':
+          aValue = parseFloat(a.current_stock) || 0;
+          bValue = parseFloat(b.current_stock) || 0;
+          break;
+        case 'category':
+          aValue = (a.category || '').toLowerCase();
+          bValue = (b.category || '').toLowerCase();
+          break;
+        default:
+          aValue = a.item_name;
+          bValue = b.item_name;
+      }
+
+      if (sortConfig.order === 'asc') {
+        return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
+      } else {
+        return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
+      }
+    });
+
+    setFilteredItems(filtered);
+  };
+
+  /**
+   * Load inventory items from API
+   */
+  const loadInventory = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const shopId = getShopId();
+      const inventory = await apiService.getInventory(shopId);
+
+      // Ensure inventory is an array
+      const itemsArray = Array.isArray(inventory) ? inventory : [];
+      setItems(itemsArray);
+
+      console.log('Inventory loaded successfully:', itemsArray.length, 'items');
+    } catch (err) {
+      console.error('Error loading inventory:', err);
+      setError('Failed to load inventory. Please try again.');
+      setItems([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /**
+   * Handle opening modal for editing an existing item
+   */
+  const handleEdit = (item) => {
+    setSelectedItem(item);
+    setIsModalOpen(true);
+  };
+
+  /**
+   * Handle opening modal for adding a new item
+   */
+  const handleAdd = () => {
+    setSelectedItem(null);
+    setIsModalOpen(true);
+  };
+
+  /**
+   * Handle deleting an inventory item
+   */
+  const handleDelete = async (itemId) => {
+    try {
+      await apiService.deleteInventoryItem(itemId);
+      setSuccessMessage('Item deleted successfully');
+      loadInventory();
+    } catch (err) {
+      console.error('Error deleting item:', err);
+      setError('Failed to delete item. Please try again.');
+    }
+  };
+
+  /**
+   * Handle recording item usage
+   */
+  const handleRecordUsage = async (itemId) => {
+    const quantity = prompt('Enter quantity used:');
+    if (quantity && !isNaN(parseFloat(quantity))) {
+      try {
+        await apiService.recordItemUsage(itemId, parseFloat(quantity));
+        setSuccessMessage('Usage recorded successfully');
         loadInventory();
-    }, []);
+      } catch (err) {
+        console.error('Error recording usage:', err);
+        setError('Failed to record usage. Please try again.');
+      }
+    }
+  };
 
-    const loadInventory = async () => {
-        try {
-            // Retrieve shop_id safely from local storage
-            const rawShopId = localStorage.getItem('shop_id');
-            const shopId = rawShopId ? parseInt(rawShopId) : 1;
-            
-            const inventory = await apiService.getInventory(shopId);
-            
-            console.log("Fetched Inventory Data:", inventory);
-            
-            setItems(Array.isArray(inventory) ? inventory : []);
-        } catch (error) {
-            console.error("Error loading inventory:", error);
-            setItems([]);
-        }
-    };
+  /**
+   * Handle saving (adding or updating) an inventory item
+   */
+  const handleSave = async (itemId, data) => {
+    try {
+      setModalLoading(true);
+      const shopId = getShopId();
 
-    const handleEdit = (item) => {
-        setSelectedItem(item);
-        setIsModalOpen(true);
-    };
+      if (itemId) {
+        // Update existing item
+        await apiService.updateStock(itemId, data);
+        setSuccessMessage('Inventory item updated successfully');
+      } else {
+        // Add new item
+        await apiService.addInventoryItem({ ...data, shop_id: shopId });
+        setSuccessMessage('New item added to inventory');
+      }
 
-    const handleAdd = () => {
-        setSelectedItem(null); // Clear selection for new item mode
-        setIsModalOpen(true);
-    };
+      setIsModalOpen(false);
+      setSelectedItem(null);
+      loadInventory();
+    } catch (err) {
+      console.error('Error saving inventory item:', err);
+      const errorMessage = err.response?.data?.detail || 'Failed to save item. Please check your connection and try again.';
+      setError(errorMessage);
+    } finally {
+      setModalLoading(false);
+    }
+  };
 
-    const handleSave = async (item_id, data) => {
-        try {
-            const rawShopId = localStorage.getItem('shop_id');
-            const shopId = rawShopId ? parseInt(rawShopId) : 1;
+  /**
+   * Calculate inventory statistics
+   */
+  const getStats = () => {
+    const total = items.length;
+    const adequate = items.filter(item => getItemStatus(item) === 'ADEQUATE').length;
+    const low = items.filter(item => getItemStatus(item) === 'LOW').length;
+    const critical = items.filter(item => 
+      ['CRITICAL', 'OUT_OF_STOCK'].includes(getItemStatus(item))
+    ).length;
 
-            if (item_id) {
-                // Update existing item
-                await apiService.updateStock(item_id, data);
-                alert("Inventory item updated successfully!");
-            } else {
-                // Add new item with shop_id included in payload
-                await apiService.addInventoryItem({ ...data, shop_id: shopId });
-                alert("New item added to inventory!");
-            }
-            
-            setIsModalOpen(false);
-            loadInventory(); // Refresh list after a successful action
-        } catch (error) {
-            console.error("Error saving inventory item:", error);
-            alert("Failed to save item. Please check your connection and try again.");
-        }
-    };
+    return { total, adequate, low, critical };
+  };
 
-    return (
-        <div className="p-8 bg-slate-50 min-h-screen">
-            <div className="max-w-6xl mx-auto">
-                <div className="flex justify-between items-center mb-8">
-                    <div>
-                        <h1 className="text-3xl font-black text-slate-900 tracking-tight">Inventory Management</h1>
-                        <p className="text-slate-500 font-medium">Track and optimize your laundry supply consumables.</p>
-                    </div>
-                    <button 
-                        onClick={handleAdd}
-                        className="bg-violet-600 hover:bg-violet-700 text-white font-black py-3 px-6 rounded-2xl transition-all shadow-lg shadow-violet-500/25 active:scale-95"
-                    >
-                        + Add New Item
-                    </button>
-                </div>
+  const stats = getStats();
 
-                {/* Inventory Stock Analysis Chart */}
-                <InventoryCharts items={items} />
-
-                {/* Main Inventory Data Table */}
-                <div className="mt-8">
-                    <InventoryTable 
-                        items={items} 
-                        onEdit={handleEdit} 
-                    />
-                </div>
-
-                {/* Inventory Management Modal */}
-                <InventoryModal 
-                    isOpen={isModalOpen}
-                    onClose={() => setIsModalOpen(false)}
-                    item={selectedItem}
-                    onSave={handleSave}
-                />
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Page Header */}
+      <div className="bg-white border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 py-6">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+              <h1 className="text-3xl md:text-4xl font-bold text-gray-900">
+                Inventory Management
+              </h1>
+              <p className="text-gray-600 mt-1">
+                Track and optimize your laundry supply consumables
+              </p>
             </div>
+            <button 
+              onClick={handleAdd}
+              className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-6 rounded-lg transition-colors inline-flex items-center gap-2"
+            >
+              <span>+</span> Add New Item
+            </button>
+          </div>
         </div>
-    );
+      </div>
+
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        
+        {/* Error Alert */}
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
+            <AlertCircle size={20} className="text-red-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-red-900 font-semibold">Error</p>
+              <p className="text-red-700 text-sm mt-1">{error}</p>
+            </div>
+            <button
+              onClick={() => setError(null)}
+              className="text-red-500 hover:text-red-700 flex-shrink-0"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
+        {/* Success Alert */}
+        {successMessage && (
+          <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg flex items-start gap-3">
+            <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+              <span className="text-white text-sm">✓</span>
+            </div>
+            <p className="text-green-900 font-semibold">{successMessage}</p>
+          </div>
+        )}
+
+        {/* Statistics Cards */}
+        {!loading && items.length > 0 && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+            <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+              <p className="text-gray-600 text-sm font-medium">Total Items</p>
+              <p className="text-3xl font-bold text-gray-900 mt-1">{stats.total}</p>
+            </div>
+            <div className="bg-white p-4 rounded-lg border border-green-200 shadow-sm">
+              <p className="text-gray-600 text-sm font-medium">✅ Adequate</p>
+              <p className="text-3xl font-bold text-green-600 mt-1">{stats.adequate}</p>
+            </div>
+            <div className="bg-white p-4 rounded-lg border border-yellow-200 shadow-sm">
+              <p className="text-gray-600 text-sm font-medium">⚠️ Low Stock</p>
+              <p className="text-3xl font-bold text-yellow-600 mt-1">{stats.low}</p>
+            </div>
+            <div className="bg-white p-4 rounded-lg border border-red-200 shadow-sm">
+              <p className="text-gray-600 text-sm font-medium">🔴 Critical</p>
+              <p className="text-3xl font-bold text-red-600 mt-1">{stats.critical}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Inventory Stock Analysis Chart */}
+        <InventoryCharts items={items} loading={loading} />
+
+        {/* Search and Filter Section */}
+        <div className="mt-8 bg-white rounded-lg border border-gray-200 shadow-sm p-4">
+          <div className="flex flex-col md:flex-row gap-4">
+            {/* Search Input */}
+            <div className="flex-1 relative">
+              <Search size={18} className="absolute left-3 top-3 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search items by name or category..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+              />
+            </div>
+
+            {/* Filter Dropdown */}
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+            >
+              <option value="ALL">All Status</option>
+              <option value="ADEQUATE">✅ Adequate</option>
+              <option value="LOW">⚠️ Low Stock</option>
+              <option value="CRITICAL">🔴 Critical</option>
+              <option value="OUT_OF_STOCK">Out of Stock</option>
+            </select>
+
+            {/* Refresh Button */}
+            <button
+              onClick={loadInventory}
+              className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-lg transition-colors inline-flex items-center gap-2"
+            >
+              <RefreshCw size={18} />
+              Refresh
+            </button>
+          </div>
+        </div>
+
+        {/* Inventory Data Table */}
+        <div className="mt-8">
+          {loading ? (
+            <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-8 text-center">
+              <div className="inline-block">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-2"></div>
+                <p className="text-gray-600">Loading inventory...</p>
+              </div>
+            </div>
+          ) : filteredItems.length > 0 ? (
+            <InventoryTable 
+              items={filteredItems}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+              onRecordUsage={handleRecordUsage}
+              loading={false}
+              sortBy={sortConfig.key}
+              sortOrder={sortConfig.order}
+            />
+          ) : (
+            <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-12 text-center">
+              <Filter size={32} className="mx-auto text-gray-400 mb-3" />
+              <p className="text-gray-600 font-semibold">No items found</p>
+              <p className="text-gray-500 text-sm mt-1">
+                {searchTerm || filterStatus !== 'ALL' 
+                  ? 'Try adjusting your search or filter criteria' 
+                  : 'Add your first inventory item to get started'}
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Inventory Management Modal */}
+      <InventoryModal 
+        isOpen={isModalOpen}
+        onClose={() => {
+          setIsModalOpen(false);
+          setSelectedItem(null);
+        }}
+        item={selectedItem}
+        onSave={handleSave}
+        loading={modalLoading}
+      />
+    </div>
+  );
 };
 
 export default InventoryPage;

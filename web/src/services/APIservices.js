@@ -46,8 +46,9 @@ export const addInventoryItem = async (itemData) => {
             ...itemData,
             current_stock: parseFloat(itemData.current_stock || 0),
             reorder_point: parseFloat(itemData.reorder_point || 0),
-            usage_rate: parseFloat(itemData.usage_rate || 0),
-            unit: itemData.unit || 'pcs',
+            usage_rate: parseFloat(itemData.usage_rate || 0.05),
+            category: itemData.category || 'General',
+            unit: itemData.unit || 'kg',
             shop_id: parseInt(itemData.shop_id || localStorage.getItem('shop_id'))
         };
         const response = await apiClient.post('/inventory/', sanitizedData);
@@ -65,12 +66,23 @@ export const updateStock = async (itemId, stockData) => {
             ...stockData,
             current_stock: stockData.current_stock !== undefined ? parseFloat(stockData.current_stock) : undefined,
             reorder_point: stockData.reorder_point !== undefined ? parseFloat(stockData.reorder_point) : undefined,
-            usage_rate: stockData.usage_rate !== undefined ? parseFloat(stockData.usage_rate) : undefined
+            usage_rate: stockData.usage_rate !== undefined ? parseFloat(stockData.usage_rate) : undefined,
+            category: stockData.category || undefined
         };
         const response = await apiClient.put(`/inventory/${itemId}`, sanitizedData);
         return response.data;
     } catch (error) {
         console.error("Update Stock/Usage Rate Error:", error.response?.data?.detail || error.message);
+        throw error;
+    }
+};
+
+export const deleteInventoryItem = async (itemId) => {
+    try {
+        const response = await apiClient.delete(`/inventory/${itemId}`);
+        return response.data;
+    } catch (error) {
+        console.error("Delete Inventory Item Error:", error.response?.data?.detail || error.message);
         throw error;
     }
 };
@@ -88,17 +100,15 @@ export const recordItemUsage = async (itemId, quantity) => {
     }
 };
 
-// --- NEW ANALYTICS & GRAPH ENDPOINTS ---
-
 /**
  * Fetches consumption trend for a specific item.
  */
-export const getItemUsageGraph = async (itemId, days = 7) => {
+export const getItemAnalytics = async (itemId, days = 7) => {
     try {
-        const response = await apiClient.get(`/inventory/${itemId}/usage-graph?days=${days}`);
+        const response = await apiClient.get(`/inventory/${itemId}/analytics?days=${days}`);
         return response.data;
     } catch (error) {
-        console.error("Fetch Usage Graph Error:", error.response?.data?.detail || error.message);
+        console.error("Fetch Item Analytics Error:", error.response?.data?.detail || error.message);
         throw error;
     }
 };
@@ -106,13 +116,13 @@ export const getItemUsageGraph = async (itemId, days = 7) => {
 /**
  * Fetches dashboard statistics and alerts for inventory health checks.
  */
-export const getInventoryAlerts = async (shopId) => {
+export const getInventoryDashboardStats = async (shopId) => {
     try {
         const targetId = shopId || localStorage.getItem('shop_id');
         const response = await apiClient.get(`/inventory/shop/${targetId}/alerts`);
         return response.data;
     } catch (error) {
-        console.error("Fetch Inventory Alerts Error:", error.response?.data?.detail || error.message);
+        console.error("Fetch Inventory Dashboard Stats Error:", error.response?.data?.detail || error.message);
         throw error;
     }
 };
@@ -273,9 +283,10 @@ export const apiService = {
     getInventory,
     addInventoryItem,
     updateStock,
+    deleteInventoryItem,
     recordItemUsage,
-    getItemUsageGraph,
-    getInventoryAlerts,
+    getItemAnalytics,
+    getInventoryDashboardStats,
 
     // --- ANALYTICS & INSIGHTS ---
 
