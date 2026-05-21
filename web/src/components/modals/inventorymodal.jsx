@@ -3,12 +3,13 @@ import { X, Save, Package } from 'lucide-react';
 
 /**
  * INVENTORY MODAL
- * A dedicated modal for updating stock levels, reorder points, and usage rates.
+ * A dedicated modal for updating stock levels, reorder points, usage rates, and categories.
  * Supports both creating new items and editing existing ones.
  */
 const InventoryModal = ({ isOpen, onClose, item, onSave }) => {
   const [formData, setFormData] = useState({
     item_name: '',
+    category: 'General',
     current_stock: '',
     reorder_point: '',
     unit: 'pcs',
@@ -20,6 +21,7 @@ const InventoryModal = ({ isOpen, onClose, item, onSave }) => {
     if (item) {
       setFormData({
         item_name: item.item_name || '',
+        category: item.category || 'General',
         current_stock: item.current_stock || 0,
         reorder_point: item.reorder_point || 0,
         unit: item.unit || 'pcs',
@@ -29,6 +31,7 @@ const InventoryModal = ({ isOpen, onClose, item, onSave }) => {
       // Reset form for adding new item
       setFormData({
         item_name: '',
+        category: 'General',
         current_stock: 0,
         reorder_point: 0,
         unit: 'pcs',
@@ -75,38 +78,55 @@ const InventoryModal = ({ isOpen, onClose, item, onSave }) => {
                 value={formData.item_name}
                 onChange={(e) => setFormData({...formData, item_name: e.target.value})}
                 className="w-full px-4 py-3 bg-slate-50 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-violet-500 outline-none font-bold"
+                placeholder="e.g., Detergent Powder"
                 required
               />
             </div>
           )}
 
           <div>
-            <label className="block text-xs font-black text-slate-400 uppercase tracking-wider mb-2">Current Stock</label>
-            <input 
-              type="number"
-              value={formData.current_stock}
-              onChange={(e) => setFormData({...formData, current_stock: parseFloat(e.target.value) || 0})}
+            <label className="block text-xs font-black text-slate-400 uppercase tracking-wider mb-2">Category</label>
+            <select 
+              value={formData.category}
+              onChange={(e) => setFormData({...formData, category: e.target.value})}
               className="w-full px-4 py-3 bg-slate-50 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-violet-500 outline-none font-bold"
-            />
+            >
+              <option value="General">General</option>
+              <option value="Detergent">Detergent</option>
+              <option value="Softener">Softener</option>
+              <option value="Packaging">Packaging</option>
+              <option value="Cleaning">Cleaning</option>
+            </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-black text-slate-400 uppercase tracking-wider mb-2">Stock</label>
+              <input 
+                type="number"
+                value={formData.current_stock}
+                onChange={(e) => setFormData({...formData, current_stock: parseFloat(e.target.value) || 0})}
+                className="w-full px-4 py-3 bg-slate-50 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-violet-500 outline-none font-bold"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-black text-slate-400 uppercase tracking-wider mb-2">Reorder</label>
+              <input 
+                type="number"
+                value={formData.reorder_point}
+                onChange={(e) => setFormData({...formData, reorder_point: parseFloat(e.target.value) || 0})}
+                className="w-full px-4 py-3 bg-slate-50 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-violet-500 outline-none font-bold"
+              />
+            </div>
           </div>
 
           <div>
             <label className="block text-xs font-black text-slate-400 uppercase tracking-wider mb-2">Usage Rate (per load)</label>
             <input 
               type="number"
-              step="0.1"
+              step="0.01"
               value={formData.usage_rate}
               onChange={(e) => setFormData({...formData, usage_rate: parseFloat(e.target.value) || 0})}
-              className="w-full px-4 py-3 bg-slate-50 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-violet-500 outline-none font-bold"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-black text-slate-400 uppercase tracking-wider mb-2">Reorder Point</label>
-            <input 
-              type="number"
-              value={formData.reorder_point}
-              onChange={(e) => setFormData({...formData, reorder_point: parseFloat(e.target.value) || 0})}
               className="w-full px-4 py-3 bg-slate-50 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-violet-500 outline-none font-bold"
             />
           </div>

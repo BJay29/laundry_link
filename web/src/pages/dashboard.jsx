@@ -7,16 +7,18 @@ import {
   Activity, 
   TrendingUp, 
   CheckCircle, 
-  DollarSign 
+  DollarSign,
+  History
 } from 'lucide-react';
 import apiService from '../services/APIservices';
 
 // Component Imports
 import StatCard from '../components/ui/statcard';
-import ForecastCharts from '../components/charts/forecastcharts'; // Case aligned to match exact filesystem
+import ForecastCharts from '../components/charts/forecastcharts';
 import OptimizationTip from '../components/ui/optimizationtip';
 import MachineGrid from '../components/machines/machinegrid';
 import BookingModal from '../components/modals/bookingmodal';
+import HistoryModal from '../components/modals/historymodal'; 
 
 /**
  * DASHBOARD COMPONENT
@@ -32,6 +34,7 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isInsightApplied, setIsInsightApplied] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(new Date());
 
@@ -44,7 +47,6 @@ const Dashboard = () => {
       if (isRefresh) setRefreshing(true);
       else setLoading(true);
 
-      // Concurrent promises loop to fetch telemetry matrix parameters
       const [statsResult, machinesResult, forecastResult, insightResult] = await Promise.allSettled([
         apiService.getDashboardStats(),
         apiService.getMachines(),
@@ -59,6 +61,7 @@ const Dashboard = () => {
           ...rawData,
           display_revenue: rawData.today_revenue || 0,
           display_trend: rawData.income_growth || 0,
+          // Ensure average is calculated or provided safely
           avg_per_service: rawData.avg_per_service || 0,
         });
       }
@@ -81,8 +84,7 @@ const Dashboard = () => {
       // 4. Process Operational Insights (DSS)
       if (insightResult.status === 'fulfilled') {
         setInsightData(insightResult.value);
-        // Reset Applied state if a new system configuration conflict arises
-        if (insightResult.value.hasIssue) {
+        if (insightResult.value?.hasIssue) {
           setIsInsightApplied(false);
         }
       }
@@ -162,6 +164,14 @@ const Dashboard = () => {
               {new Date().toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' })}
             </span>
           </div>
+          
+          <button
+            onClick={() => setIsHistoryOpen(true)}
+            className="bg-white border border-slate-200 text-slate-600 p-5 rounded-[28px] font-black transition-all hover:bg-slate-100 flex items-center justify-center gap-3"
+          >
+            <History size={22} />
+          </button>
+
           <button
             onClick={() => setIsModalOpen(true)}
             className="flex-1 lg:flex-none bg-sky-500 hover:bg-sky-600 text-white px-10 py-5 rounded-[28px] font-black transition-all shadow-xl shadow-sky-100 flex items-center justify-center gap-3 hover:scale-[1.03] active:scale-95"
@@ -175,13 +185,13 @@ const Dashboard = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard title="Today Revenue" value={stats?.today_revenue || 0} trend={`${stats?.income_growth || 0}%`} type="revenue" />
         <StatCard title="Active Machines" value={stats?.active_machines || "0"} trend="In Use" type="utilization" />
-        <StatCard title="Avg. Per Service" value={stats?.avg_per_service || 0} trend="Stable" type="revenue" icon={<DollarSign />} />
+        {/* Pass the value clearly as a number to trigger the formatting engine */}
+        <StatCard title="Avg. Per Service" value={Number(stats?.avg_per_service || 0)} trend="Stable" type="revenue" icon={<DollarSign />} />
         <StatCard title="Expected Bookings" value={stats?.predicted_bookings_today || "0"} trend="Forecast" type="bookings" />
       </div>
 
       {/* ANALYTICS ROW */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* CHART CONTAINER - Optimized for Recharts Stability */}
         <div className="lg:col-span-2 bg-white p-10 rounded-[56px] border border-slate-100 shadow-sm flex flex-col min-w-0">
           <div className="flex justify-between items-start mb-10">
             <div>
@@ -197,7 +207,6 @@ const Dashboard = () => {
             </div>
           </div>
 
-          {/* FIXED HEIGHT WRAPPER FOR CHART */}
           <div className="h-[350px] w-full mb-10 relative" style={{ minHeight: '350px', minWidth: '0' }}>
             {forecast.length > 0 ? (
               <ForecastCharts data={forecast} />
@@ -209,7 +218,6 @@ const Dashboard = () => {
             )}
           </div>
 
-          {/* SERVICE BREAKDOWN FOOTER */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4 border-t border-slate-50 pt-10 mt-auto">
             <BreakdownItem label="Full Service" value={stats?.full_service || 0} />
             <BreakdownItem label="Titan Wash"   value={stats?.titan_wash || 0} />
@@ -219,7 +227,6 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* DECISION SUPPORT CARD */}
         <div className="lg:col-span-1">
           <OptimizationTip
             data={insightData}
@@ -252,13 +259,11 @@ const Dashboard = () => {
       </div>
 
       <BookingModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSubmit={handleBookingSuccess} />
+      <HistoryModal isOpen={isHistoryOpen} onClose={() => setIsHistoryOpen(false)} />
     </div>
   );
 };
 
-/**
- * Breakdown Item Sub-component
- */
 const BreakdownItem = ({ label, value }) => (
   <div className="flex flex-col items-center justify-center p-4 rounded-[28px] hover:bg-slate-50 transition-all border border-transparent">
     <p className="text-2xl font-black text-slate-900 tracking-tighter">{value}</p>

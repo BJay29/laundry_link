@@ -15,7 +15,7 @@ import {
 /**
  * STATCARD COMPONENT
  * A high-density data visualization component for the LaundryLink dashboard.
- * Fixed: Updated value formatting to handle currency and custom icon injections.
+ * Fixed: Updated value formatting to handle currency, decimal precision, and custom icon injections.
  */
 const StatCard = ({ title, value, trend, type, isNegative, icon }) => {
   
@@ -37,7 +37,7 @@ const StatCard = ({ title, value, trend, type, isNegative, icon }) => {
       isCurrency: false,
     },
     income: { 
-      icon: <Coins size={20} strokeWidth={2.5} />, // Replaced Zap with Coins for financial feel
+      icon: <Coins size={20} strokeWidth={2.5} />, 
       bgColor: 'bg-amber-50',
       textColor: 'text-amber-600',
       isCurrency: true,
@@ -61,21 +61,28 @@ const StatCard = ({ title, value, trend, type, isNegative, icon }) => {
 
   /**
    * VALUE FORMATTING ENGINE
-   * Detects if the value already has a currency symbol; if not, and theme isCurrency is true, it prepends ₱.
+   * Detects if the value is a number, handles decimal rounding for averages,
+   * and prepends currency symbol if required.
    */
   const displayValue = () => {
+    // Handle null/undefined
     if (value === null || value === undefined) {
       return theme.isCurrency ? "₱0" : "0";
     }
 
-    // If the value is a string and already contains the Peso symbol, return as is
+    // If already formatted as string
     if (typeof value === 'string' && value.includes('₱')) {
       return value;
     }
 
-    // Format numbers with commas and currency symbol if required
+    // Format numbers
     if (typeof value === 'number') {
-      const formatted = value.toLocaleString();
+      // Use toFixed(2) for averages (like Avg. Per Service) to avoid long decimals
+      // or toLocaleString for standard currency
+      const formatted = value % 1 === 0 
+        ? value.toLocaleString() 
+        : value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      
       return theme.isCurrency ? `₱${formatted}` : formatted;
     }
 
@@ -99,8 +106,7 @@ const StatCard = ({ title, value, trend, type, isNegative, icon }) => {
           </h3>
         </div>
         
-        {/* THEMATIC ICON CONTAINER 
-            Uses injected icon prop if available, otherwise uses theme default. */}
+        {/* THEMATIC ICON CONTAINER */}
         <div className={`p-3.5 rounded-2xl shadow-sm transition-all duration-500 group-hover:rotate-6 group-hover:scale-110 ${theme.bgColor} ${theme.textColor}`}>
           {icon ? React.cloneElement(icon, { size: 20, strokeWidth: 2.5 }) : theme.icon}
         </div>

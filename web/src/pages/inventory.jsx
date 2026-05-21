@@ -2,11 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { apiService } from '../services/APIservices';
 import InventoryTable from '../components/ui/inventorytable';
 import InventoryModal from '../components/modals/inventorymodal';
+import InventoryCharts from '../components/ui/inventorycharts';
 
 /**
  * INVENTORY PAGE
  * Main dashboard for tracking supply levels and managing inventory data.
- * Supports updating stock levels and configuring usage rates per item.
+ * Supports updating stock levels, viewing analytics, and managing items.
  */
 const InventoryPage = () => {
     const [items, setItems] = useState([]);
@@ -68,17 +69,22 @@ const InventoryPage = () => {
                     </div>
                     <button 
                         onClick={handleAdd}
-                        className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors"
+                        className="bg-violet-600 hover:bg-violet-700 text-white font-black py-3 px-6 rounded-2xl transition-all shadow-lg shadow-violet-500/25 active:scale-95"
                     >
                         + Add New Item
                     </button>
                 </div>
 
+                {/* Inventory Stock Analysis Chart */}
+                <InventoryCharts items={items} />
+
                 {/* Main Inventory Data Table */}
-                <InventoryTable 
-                    items={items} 
-                    onEdit={handleEdit} 
-                />
+                <div className="mt-8">
+                    <InventoryTable 
+                        items={items} 
+                        onEdit={handleEdit} 
+                    />
+                </div>
 
                 {/* Inventory Management Modal */}
                 <InventoryModal 

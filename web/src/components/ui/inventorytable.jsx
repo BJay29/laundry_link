@@ -1,18 +1,28 @@
 import React from 'react';
-import { Edit3, AlertTriangle, CheckCircle2, Gauge } from 'lucide-react';
+import { Edit3, AlertTriangle, CheckCircle2, Gauge, Tag } from 'lucide-react';
 
 /**
  * INVENTORY TABLE
- * Displays inventory items with color-coded status, usage rates, and triggerable update actions.
+ * Displays inventory items with color-coded status, category tags, 
+ * usage rates, and interactive action buttons for stock management.
  */
 const InventoryTable = ({ items, onEdit }) => {
+  if (!items || items.length === 0) {
+    return (
+      <div className="w-full bg-white rounded-[24px] p-12 text-center border border-slate-100 shadow-sm">
+        <p className="text-slate-400 font-medium">No inventory items found.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full bg-white rounded-[24px] shadow-sm border border-slate-100 overflow-hidden">
       <table className="w-full text-left border-collapse">
         <thead>
           <tr className="bg-slate-50 border-b border-slate-100">
             <th className="py-5 px-8 text-xs font-black text-slate-400 uppercase tracking-widest">Item Name</th>
-            <th className="py-5 px-8 text-xs font-black text-slate-400 uppercase tracking-widest text-center">Current Stock</th>
+            <th className="py-5 px-8 text-xs font-black text-slate-400 uppercase tracking-widest text-center">Category</th>
+            <th className="py-5 px-8 text-xs font-black text-slate-400 uppercase tracking-widest text-center">Stock</th>
             <th className="py-5 px-8 text-xs font-black text-slate-400 uppercase tracking-widest text-center">Usage Rate</th>
             <th className="py-5 px-8 text-xs font-black text-slate-400 uppercase tracking-widest text-center">Status</th>
             <th className="py-5 px-8 text-xs font-black text-slate-400 uppercase tracking-widest text-center">Actions</th>
@@ -22,15 +32,24 @@ const InventoryTable = ({ items, onEdit }) => {
           {items.map((item) => (
             <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
               <td className="py-6 px-8 font-black text-slate-800">{item.item_name}</td>
-              <td className="py-6 px-8 text-center font-bold text-slate-600">
-                {item.current_stock} <span className="text-slate-400 text-xs">{item.unit}</span>
+              
+              <td className="py-6 px-8 text-center">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[10px] font-bold uppercase tracking-wide">
+                  <Tag size={10} /> {item.category || 'General'}
+                </span>
               </td>
+
+              <td className="py-6 px-8 text-center font-bold text-slate-600">
+                {item.current_stock} <span className="text-slate-400 text-xs font-medium">{item.unit}</span>
+              </td>
+
               <td className="py-6 px-8 text-center text-slate-600 font-medium">
                 <div className="flex items-center justify-center gap-1.5">
                   <Gauge size={14} className="text-violet-500" />
                   {item.usage_rate} <span className="text-slate-400 text-xs italic">/load</span>
                 </div>
               </td>
+
               <td className="py-6 px-8 flex justify-center">
                 {item.current_stock <= item.reorder_point ? (
                   <span className="flex items-center gap-2 px-3 py-1 bg-red-50 text-red-600 rounded-full text-[11px] font-black uppercase">
@@ -42,6 +61,7 @@ const InventoryTable = ({ items, onEdit }) => {
                   </span>
                 )}
               </td>
+
               <td className="py-6 px-8 text-center">
                 <button 
                   onClick={() => onEdit(item)}

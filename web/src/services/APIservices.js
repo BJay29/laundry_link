@@ -59,6 +59,19 @@ export const updateStock = async (itemId, stockData) => {
     }
 };
 
+/**
+ * Records item usage for consumption tracking and graph analytics.
+ */
+export const recordItemUsage = async (itemId, quantity) => {
+    try {
+        const response = await apiClient.post(`/inventory/${itemId}/use?quantity=${quantity}`);
+        return response.data;
+    } catch (error) {
+        console.error("Record Item Usage Error:", error.response?.data?.detail || error.message);
+        throw error;
+    }
+};
+
 // --- API SERVICE OBJECT (KEEPING EXISTING STRUCTURE) ---
 
 export const apiService = {
@@ -215,6 +228,7 @@ export const apiService = {
     getInventory,
     addInventoryItem,
     updateStock,
+    recordItemUsage,
 
     // --- ANALYTICS & INSIGHTS ---
 
@@ -264,6 +278,16 @@ export const apiService = {
             return response.data;
         } catch (error) {
             console.error("AI Accuracy Metrics Fetch Error:", error.response?.data?.detail || error.message);
+            throw error;
+        }
+    },
+
+    getWeeklyHistory: async () => {
+        try {
+            const response = await apiClient.get('/analytics/weekly-history');
+            return response.data;
+        } catch (error) {
+            console.error("Weekly History Fetch Error:", error.response?.data?.detail || error.message);
             throw error;
         }
     },
