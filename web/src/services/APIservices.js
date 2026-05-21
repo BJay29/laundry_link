@@ -26,6 +26,31 @@ apiClient.interceptors.request.use((config) => {
     return config;
 });
 
+// --- INDIVIDUAL EXPORTS FOR NAMED IMPORTS ---
+
+export const getInventory = async (shopId) => {
+    try {
+        const targetId = shopId || localStorage.getItem('shop_id');
+        const response = await apiClient.get(`/inventory/?shop_id=${targetId}`);
+        return response.data;
+    } catch (error) {
+        console.error("Fetch Inventory Error:", error.response?.data?.detail || error.message);
+        throw error;
+    }
+};
+
+export const updateStock = async (itemId, stockData) => {
+    try {
+        const response = await apiClient.put(`/inventory/${itemId}`, stockData);
+        return response.data;
+    } catch (error) {
+        console.error("Update Stock Error:", error.response?.data?.detail || error.message);
+        throw error;
+    }
+};
+
+// --- API SERVICE OBJECT (KEEPING EXISTING STRUCTURE) ---
+
 export const apiService = {
     
     // --- AUTHENTICATION METHODS ---
@@ -35,7 +60,6 @@ export const apiService = {
             const response = await apiClient.post('/auth/login', { email, password });
             const { user, access_token } = response.data;
 
-            // Persist session data in LocalStorage for state management across refreshes
             localStorage.setItem('token', access_token);
             localStorage.setItem('user_email', user.email);
             localStorage.setItem('shop_id', user.shop_id);
@@ -51,7 +75,6 @@ export const apiService = {
     },
 
     logout: () => {
-        // Clear all stored session data and redirect to the login portal
         localStorage.clear();
         window.location.href = '/login';
     },
@@ -60,11 +83,6 @@ export const apiService = {
     
     createBooking: async (bookingData) => {
         try {
-            /**
-             * Data Sanitization & Schema Alignment:
-             * Converts inputs to specific types (Int/Float/Boolean) to match 
-             * the strict validation of the FastAPI/SQLAlchemy backend.
-             */
             const payload = {
                 ...bookingData,
                 shop_id: bookingData.shop_id ? parseInt(bookingData.shop_id) : parseInt(localStorage.getItem('shop_id')),
@@ -89,10 +107,6 @@ export const apiService = {
         }
     },
 
-    /**
-     * Fetches bookings that are 'In Progress' or 'Ready' for the Terminal UI.
-     * Supports new database columns to ensure data renders correctly in the table.
-     */
     getActiveBookings: async () => {
         try {
             const response = await apiClient.get('/bookings/active');
@@ -103,10 +117,6 @@ export const apiService = {
         }
     },
 
-    /**
-     * Status Lifecycle Update:
-     * Triggers machine release and accumulated profit logic in the backend.
-     */
     updateBookingStatus: async (bookingId, newStatus) => {
         try {
             const response = await apiClient.patch(`/bookings/${bookingId}/status`, { 
@@ -134,11 +144,6 @@ export const apiService = {
         }
     },
 
-    /**
-     * DECOMMISSION HARDWARE (Delete)
-     * Permanently removes a machine unit.
-     * Backend supports ON DELETE SET NULL to preserve historical booking data.
-     */
     deleteMachine: async (machineId) => {
         try {
             const response = await apiClient.delete(`/machines/${machineId}`);
@@ -195,41 +200,13 @@ export const apiService = {
         }
     },
 
-    // --- INVENTORY METHODS ---
+    // --- INVENTORY METHODS (Included in object too) ---
 
-    /**
-     * Fetches all inventory items for the shop.
-     */
-    getInventory: async (shopId) => {
-        try {
-            const targetId = shopId || localStorage.getItem('shop_id');
-            const response = await apiClient.get(`/inventory/?shop_id=${targetId}`);
-            return response.data;
-        } catch (error) {
-            console.error("Fetch Inventory Error:", error.response?.data?.detail || error.message);
-            throw error;
-        }
-    },
-
-    /**
-     * Updates inventory stock levels.
-     */
-    updateStock: async (itemId, stockData) => {
-        try {
-            const response = await apiClient.put(`/inventory/${itemId}`, stockData);
-            return response.data;
-        } catch (error) {
-            console.error("Update Stock Error:", error.response?.data?.detail || error.message);
-            throw error;
-        }
-    },
+    getInventory,
+    updateStock,
 
     // --- ANALYTICS & INSIGHTS ---
 
-    /**
-     * Fetches real-time statistics and AI-generated predictions for today.
-     * Response includes: today_revenue, full_service, titan_wash, etc.
-     */
     getDashboardStats: async () => {
         try {
             const response = await apiClient.get('/analytics/dashboard-summary');
@@ -240,10 +217,6 @@ export const apiService = {
         }
     },
 
-    /**
-     * Fetches AI-generated 7-day projections and historical income trends.
-     * Used for the Financial Forecast Recharts graph.
-     */
     getForecastData: async () => {
         try {
             const response = await apiClient.get('/analytics/forecast-graph');
@@ -254,9 +227,6 @@ export const apiService = {
         }
     },
 
-    /**
-     * Fetches service type popularity distribution.
-     */
     getServiceDistribution: async () => {
         try {
             const response = await apiClient.get('/analytics/service-distribution');
@@ -267,10 +237,6 @@ export const apiService = {
         }
     },
 
-    /**
-     * Fetches real-time operational insights (DSS).
-     * Converts machine data into financial impact recommendations for the UI Insight Card.
-     */
     getOperationalInsights: async () => {
         try {
             const response = await apiClient.get('/analytics/operational-insights');
@@ -281,10 +247,6 @@ export const apiService = {
         }
     },
 
-    /**
-     * Fetches mathematical verification matrices for the AI systems.
-     * Points directly to aligned endpoint context routes: '/analytics/accuracy'
-     */
     getAiAccuracyMetrics: async () => {
         try {
             const response = await apiClient.get('/analytics/accuracy');
@@ -297,9 +259,6 @@ export const apiService = {
 
     // --- OPTIMIZATION SETTINGS METHODS ---
 
-    /**
-     * Fetches current shop configuration including pricing and utility rates.
-     */
     getSettings: async (shopId) => {
         try {
             const targetId = shopId || localStorage.getItem('shop_id');
@@ -311,13 +270,9 @@ export const apiService = {
         }
     },
 
-    /**
-     * Updates shop settings to adjust service pricing and operational costs.
-     */
     updateSettings: async (shopId, settingsData) => {
         try {
             const targetId = shopId || localStorage.getItem('shop_id');
-            
             const sanitizedPayload = {
                 ...settingsData,
                 full_service_price: settingsData.full_service_price !== undefined ? parseFloat(settingsData.full_service_price) : undefined,
@@ -337,9 +292,6 @@ export const apiService = {
         }
     },
 
-    /**
-     * Fetches hardcoded factory default pricing for UI preview.
-     */
     getSystemDefaults: async () => {
         try {
             const response = await apiClient.get('/settings/defaults');
@@ -350,9 +302,6 @@ export const apiService = {
         }
     },
 
-    /**
-     * Reverts the shop's database entry back to original factory settings.
-     */
     resetToDefaults: async (shopId) => {
         try {
             const targetId = shopId || localStorage.getItem('shop_id');
@@ -364,9 +313,6 @@ export const apiService = {
         }
     },
 
-    /**
-     * Fetches pricing logic specifically for the Booking Modal.
-     */
     getBookingPricing: async (shopId) => {
         try {
             const targetId = shopId || localStorage.getItem('shop_id');
