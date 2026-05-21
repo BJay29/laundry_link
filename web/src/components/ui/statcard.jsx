@@ -9,7 +9,8 @@ import {
   ArrowUpRight, 
   ArrowDownRight,
   Zap,
-  Coins
+  Coins,
+  Package
 } from 'lucide-react';
 
 /**
@@ -47,6 +48,12 @@ const StatCard = ({ title, value, trend, type, isNegative, icon }) => {
       bgColor: 'bg-indigo-50',
       textColor: 'text-indigo-600',
       isCurrency: false,
+    },
+    inventory: {
+      icon: <Package size={20} strokeWidth={2.5} />,
+      bgColor: 'bg-violet-50',
+      textColor: 'text-violet-600',
+      isCurrency: false,
     }
   };
 
@@ -71,17 +78,16 @@ const StatCard = ({ title, value, trend, type, isNegative, icon }) => {
     }
 
     // If already formatted as string
-    if (typeof value === 'string' && value.includes('₱')) {
+    if (typeof value === 'string' && (value.includes('₱') || value.includes('%'))) {
       return value;
     }
 
     // Format numbers
     if (typeof value === 'number') {
-      // Use toFixed(2) for averages (like Avg. Per Service) to avoid long decimals
-      // or toLocaleString for standard currency
+      // Use toFixed(2) for averages or toLocaleString for standard numbers
       const formatted = value % 1 === 0 
         ? value.toLocaleString() 
-        : value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        : value.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
       
       return theme.isCurrency ? `₱${formatted}` : formatted;
     }
@@ -128,7 +134,7 @@ const StatCard = ({ title, value, trend, type, isNegative, icon }) => {
         </div>
         
         <span className="text-slate-300 text-[9px] font-black uppercase tracking-widest">
-          {type === 'utilization' ? 'Currently' : 'vs. Yesterday'}
+          {type === 'utilization' || type === 'inventory' ? 'Currently' : 'vs. Yesterday'}
         </span>
       </div>
 
@@ -144,7 +150,7 @@ StatCard.propTypes = {
   title: PropTypes.string.isRequired,
   value: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
   trend: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
-  type: PropTypes.oneOf(['revenue', 'utilization', 'income', 'bookings']),
+  type: PropTypes.oneOf(['revenue', 'utilization', 'income', 'bookings', 'inventory']),
   isNegative: PropTypes.bool,
   icon: PropTypes.element
 };

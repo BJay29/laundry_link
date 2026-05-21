@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, Package, Scale } from 'lucide-react'; // Added Scale icon for unit
+import { X, Save, Package } from 'lucide-react'; 
 
 /**
  * INVENTORY MODAL
@@ -49,13 +49,22 @@ const InventoryModal = ({ isOpen, onClose, item, onSave }) => {
       return;
     }
 
+    // Get shop_id from local storage to ensure backend constraint compliance
+    const shopId = localStorage.getItem('shop_id');
+    
+    if (!shopId) {
+      alert("Session error: Shop ID not found. Please log in again.");
+      return;
+    }
+
     // Include all fields in the final payload
     const finalData = {
       ...formData,
       current_stock: parseFloat(formData.current_stock || 0),
       reorder_point: parseFloat(formData.reorder_point || 0),
       usage_rate: parseFloat(formData.usage_rate || 0),
-      unit: formData.unit || 'pcs'
+      unit: formData.unit || 'pcs',
+      shop_id: parseInt(shopId) // Ensure shop_id is included as an integer
     };
 
     onSave(item ? item.id : null, finalData);

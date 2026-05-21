@@ -20,8 +20,10 @@ const InventoryPage = () => {
 
     const loadInventory = async () => {
         try {
-            // Default to 1 if no shop_id found in storage
-            const shopId = localStorage.getItem('shop_id') || 1;
+            // Retrieve shop_id safely from local storage
+            const rawShopId = localStorage.getItem('shop_id');
+            const shopId = rawShopId ? parseInt(rawShopId) : 1;
+            
             const inventory = await apiService.getInventory(shopId);
             
             console.log("Fetched Inventory Data:", inventory);
@@ -45,14 +47,15 @@ const InventoryPage = () => {
 
     const handleSave = async (item_id, data) => {
         try {
-            const shopId = parseInt(localStorage.getItem('shop_id')) || 1;
+            const rawShopId = localStorage.getItem('shop_id');
+            const shopId = rawShopId ? parseInt(rawShopId) : 1;
 
             if (item_id) {
                 // Update existing item
                 await apiService.updateStock(item_id, data);
                 alert("Inventory item updated successfully!");
             } else {
-                // Add new item
+                // Add new item with shop_id included in payload
                 await apiService.addInventoryItem({ ...data, shop_id: shopId });
                 alert("New item added to inventory!");
             }

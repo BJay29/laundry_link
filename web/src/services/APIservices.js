@@ -47,6 +47,7 @@ export const addInventoryItem = async (itemData) => {
             current_stock: parseFloat(itemData.current_stock || 0),
             reorder_point: parseFloat(itemData.reorder_point || 0),
             usage_rate: parseFloat(itemData.usage_rate || 0),
+            unit: itemData.unit || 'pcs',
             shop_id: parseInt(itemData.shop_id || localStorage.getItem('shop_id'))
         };
         const response = await apiClient.post('/inventory/', sanitizedData);
@@ -87,7 +88,36 @@ export const recordItemUsage = async (itemId, quantity) => {
     }
 };
 
-// --- API SERVICE OBJECT (KEEPING EXISTING STRUCTURE) ---
+// --- NEW ANALYTICS & GRAPH ENDPOINTS ---
+
+/**
+ * Fetches consumption trend for a specific item.
+ */
+export const getItemUsageGraph = async (itemId, days = 7) => {
+    try {
+        const response = await apiClient.get(`/inventory/${itemId}/usage-graph?days=${days}`);
+        return response.data;
+    } catch (error) {
+        console.error("Fetch Usage Graph Error:", error.response?.data?.detail || error.message);
+        throw error;
+    }
+};
+
+/**
+ * Fetches dashboard statistics and alerts for inventory health checks.
+ */
+export const getInventoryAlerts = async (shopId) => {
+    try {
+        const targetId = shopId || localStorage.getItem('shop_id');
+        const response = await apiClient.get(`/inventory/shop/${targetId}/alerts`);
+        return response.data;
+    } catch (error) {
+        console.error("Fetch Inventory Alerts Error:", error.response?.data?.detail || error.message);
+        throw error;
+    }
+};
+
+// --- API SERVICE OBJECT ---
 
 export const apiService = {
     
@@ -244,6 +274,8 @@ export const apiService = {
     addInventoryItem,
     updateStock,
     recordItemUsage,
+    getItemUsageGraph,
+    getInventoryAlerts,
 
     // --- ANALYTICS & INSIGHTS ---
 
