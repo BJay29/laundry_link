@@ -9,7 +9,8 @@ import {
   Minus,
   Zap,
   Cpu,
-  Sparkles
+  Sparkles,
+  RotateCcw
 } from 'lucide-react';
 import ForecastCharts from '../components/charts/forecastcharts';
 import apiService from '../services/APIservices';
@@ -49,6 +50,7 @@ const FinancialForecast = () => {
   const [aiInsight, setAiInsight] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isRetraining, setIsRetraining] = useState(false);
 
   const [stats, setStats] = useState({
     totalRevenue: 0,
@@ -161,6 +163,22 @@ const FinancialForecast = () => {
     }
   }, []);
 
+  /**
+   * Triggers manual retraining of the AI model.
+   */
+  const handleRetrain = async () => {
+    try {
+      setIsRetraining(true);
+      await apiService.triggerAiRetraining();
+      alert("AI Model retraining initiated successfully.");
+      fetchData(); // Refresh data after training
+    } catch (err) {
+      alert("Failed to initiate retraining. Please try again later.");
+    } finally {
+      setIsRetraining(false);
+    }
+  };
+
   useEffect(() => {
     fetchData();
   }, [fetchData]);
@@ -181,9 +199,15 @@ const FinancialForecast = () => {
           <h1 className="text-3xl md:text-5xl font-black text-slate-900 tracking-tighter uppercase italic">Financial Forecast</h1>
           <p className="text-slate-500 font-bold text-sm">Automated projections analyzed against cross-referenced historical data.</p>
         </div>
-        <button onClick={fetchData} className="p-4 bg-white border border-slate-200 rounded-2xl hover:bg-slate-100 transition-all shadow-sm active:scale-95">
-          <RefreshCw size={20} className="text-slate-400" />
-        </button>
+        <div className="flex gap-2">
+            <button onClick={handleRetrain} disabled={isRetraining} className={`flex items-center gap-2 p-4 bg-indigo-600 text-white rounded-2xl transition-all shadow-sm active:scale-95 ${isRetraining ? 'opacity-50 cursor-not-allowed' : 'hover:bg-indigo-700'}`}>
+                <RotateCcw size={20} className={isRetraining ? 'animate-spin' : ''} />
+                <span className="font-bold text-sm">Retrain AI</span>
+            </button>
+            <button onClick={fetchData} className="p-4 bg-white border border-slate-200 rounded-2xl hover:bg-slate-100 transition-all shadow-sm active:scale-95">
+            <RefreshCw size={20} className="text-slate-400" />
+            </button>
+        </div>
       </div>
 
       {error && (
@@ -205,12 +229,14 @@ const FinancialForecast = () => {
         </div>
       )}
 
+      {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <ForecastStatCard label="Projected Weekly Revenue" value={`₱${stats.totalRevenue.toLocaleString()}`} trend={stats.revenueTrend} status={stats.trendStatus} icon={<DollarSign className="text-emerald-500" />} bgColor="bg-emerald-50" />
         <ForecastStatCard label="Expected Booking Volume" value={stats.totalBookings} trend={stats.bookingTrend} status={stats.bookingStatus} icon={<Package className="text-sky-500" />} bgColor="bg-sky-50" />
         <ForecastStatCard label="Average Daily Target" value={`₱${stats.avgDaily.toLocaleString()}`} trend={stats.revenueTrend} status={stats.trendStatus} icon={<TrendingUp className="text-purple-500" />} bgColor="bg-purple-50" />
       </div>
 
+      {/* Chart Section */}
       <div className="bg-white p-6 md:p-10 rounded-[40px] md:rounded-[56px] border border-slate-100 shadow-sm relative overflow-hidden flex flex-col mb-8">
         <div className="mb-10 flex flex-col md:flex-row justify-between items-start gap-4">
           <div>
@@ -242,6 +268,7 @@ const FinancialForecast = () => {
         </div>
       </div>
 
+      {/* AI Accuracy Section */}
       {accuracyMetrics && (
         <div className="bg-white p-6 md:p-10 rounded-[40px] md:rounded-[56px] border border-slate-100 shadow-sm">
           <div className="mb-8 flex items-center gap-2.5">

@@ -74,9 +74,6 @@ export const addInventoryItem = async (itemData) => {
 
 export const updateStock = async (itemId, stockData) => {
     try {
-        // Build payload explicitly — never use || undefined because JSON.stringify
-        // silently drops keys with undefined values, causing fields to be ignored by the backend.
-        // Every field is always included so the PUT request sends a full update.
         const sanitizedData = {
             item_name: stockData.item_name,
             category: stockData.category,
@@ -86,7 +83,6 @@ export const updateStock = async (itemId, stockData) => {
             usage_rate: parseFloat(stockData.usage_rate),
             shop_id: stockData.shop_id
         };
-        // Debug logs: verify what is actually being sent to the backend
         console.log('[updateStock] itemId:', itemId);
         console.log('[updateStock] sanitizedData:', JSON.stringify(sanitizedData));
         const response = await apiClient.put(`/inventory/${itemId}`, sanitizedData);
@@ -147,6 +143,19 @@ export const getAiAccuracyMetrics = async () => {
         return response.data;
     } catch (error) {
         console.error("Fetch AI Accuracy Metrics Error:", error.response?.data?.detail || error.message);
+        throw error;
+    }
+};
+
+/**
+ * Triggers AI model retraining.
+ */
+export const triggerAiRetraining = async () => {
+    try {
+        const response = await apiClient.post('/analytics/retrain-model');
+        return response.data;
+    } catch (error) {
+        console.error("Trigger AI Retraining Error:", error.response?.data?.detail || error.message);
         throw error;
     }
 };
@@ -378,6 +387,7 @@ export const apiService = {
     },
 
     getAiAccuracyMetrics,
+    triggerAiRetraining,
 
     // --- OPTIMIZATION SETTINGS METHODS ---
 
