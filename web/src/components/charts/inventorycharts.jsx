@@ -17,7 +17,7 @@ import {
  * Automatically highlights items in red if they drop below the safety threshold.
  * Uses color coding: Violet for adequate stock, Red for low stock items.
  */
-const InventoryCharts = ({ items, loading = false }) => {
+const InventoryCharts = ({ items = [], loading = false }) => {
   // Check if items array is valid
   if (!items || items.length === 0) {
     return (
@@ -41,14 +41,14 @@ const InventoryCharts = ({ items, loading = false }) => {
     );
   }
 
-  // Prepare data for the chart with explicit numeric conversion
+  // Prepare data for the chart with explicit numeric conversion and safety checks
   const chartData = items.map(item => ({
-    name: item.item_name.length > 15 ? item.item_name.substring(0, 15) + '...' : item.item_name,
-    fullName: item.item_name,
-    stock: parseFloat(item.current_stock) || 0,
-    reorder: parseFloat(item.reorder_point) || 0,
-    unit: item.unit,
-    category: item.category
+    name: (item?.item_name || 'Unknown').length > 15 ? (item?.item_name || '').substring(0, 15) + '...' : (item?.item_name || 'Unknown'),
+    fullName: item?.item_name || 'Unknown',
+    stock: parseFloat(item?.current_stock) || 0,
+    reorder: parseFloat(item?.reorder_point) || 0,
+    unit: item?.unit || '',
+    category: item?.category || 'General'
   }));
 
   // Calculate the average reorder point to show a general trend line

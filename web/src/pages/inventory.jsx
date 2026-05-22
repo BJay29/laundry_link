@@ -69,8 +69,8 @@ const InventoryPage = () => {
    * Determine item status based on stock levels
    */
   const getItemStatus = (item) => {
-    const stock = parseFloat(item.current_stock) || 0;
-    const reorder = parseFloat(item.reorder_point) || 0;
+    const stock = parseFloat(item?.current_stock) || 0;
+    const reorder = parseFloat(item?.reorder_point) || 0;
 
     if (stock <= 0) return 'OUT_OF_STOCK';
     if (stock <= reorder * 0.5) return 'CRITICAL';
@@ -82,13 +82,13 @@ const InventoryPage = () => {
    * Filter items based on search term and status filter
    */
   const filterAndSearchItems = () => {
-    let filtered = items;
+    let filtered = [...items];
 
     // Apply search filter
     if (searchTerm) {
       filtered = filtered.filter(item =>
-        item.item_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.category.toLowerCase().includes(searchTerm.toLowerCase())
+        (item?.item_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (item?.category || '').toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
@@ -103,20 +103,20 @@ const InventoryPage = () => {
 
       switch (sortConfig.key) {
         case 'item_name':
-          aValue = a.item_name.toLowerCase();
-          bValue = b.item_name.toLowerCase();
+          aValue = (a?.item_name || '').toLowerCase();
+          bValue = (b?.item_name || '').toLowerCase();
           break;
         case 'current_stock':
-          aValue = parseFloat(a.current_stock) || 0;
-          bValue = parseFloat(b.current_stock) || 0;
+          aValue = parseFloat(a?.current_stock) || 0;
+          bValue = parseFloat(b?.current_stock) || 0;
           break;
         case 'category':
-          aValue = (a.category || '').toLowerCase();
-          bValue = (b.category || '').toLowerCase();
+          aValue = (a?.category || '').toLowerCase();
+          bValue = (b?.category || '').toLowerCase();
           break;
         default:
-          aValue = a.item_name;
-          bValue = b.item_name;
+          aValue = a?.item_name || '';
+          bValue = b?.item_name || '';
       }
 
       if (sortConfig.order === 'asc') {
@@ -143,8 +143,6 @@ const InventoryPage = () => {
       // Ensure inventory is an array
       const itemsArray = Array.isArray(inventory) ? inventory : [];
       setItems(itemsArray);
-
-      console.log('Inventory loaded successfully:', itemsArray.length, 'items');
     } catch (err) {
       console.error('Error loading inventory:', err);
       setError('Failed to load inventory. Please try again.');

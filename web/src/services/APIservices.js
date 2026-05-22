@@ -39,6 +39,20 @@ export const getInventory = async (shopId) => {
     }
 };
 
+/**
+ * Fetches inventory grouped by category for booking dropdowns.
+ */
+export const getInventoryCategories = async (shopId) => {
+    try {
+        const targetId = shopId || localStorage.getItem('shop_id');
+        const response = await apiClient.get(`/inventory/categories?shop_id=${targetId}`);
+        return response.data;
+    } catch (error) {
+        console.error("Fetch Inventory Categories Error:", error.response?.data?.detail || error.message);
+        throw error;
+    }
+};
+
 export const addInventoryItem = async (itemData) => {
     try {
         // Sanitize data to ensure types match FastAPI Pydantic schemas
@@ -166,6 +180,8 @@ export const apiService = {
                 shop_id: bookingData.shop_id ? parseInt(bookingData.shop_id) : parseInt(localStorage.getItem('shop_id')),
                 washer_id: bookingData.washer_id ? parseInt(bookingData.washer_id) : null,
                 dryer_id: bookingData.dryer_id ? parseInt(bookingData.dryer_id) : null,
+                inventory_item_id: bookingData.inventory_item_id ? parseInt(bookingData.inventory_item_id) : null,
+                inventory_quantity_used: bookingData.inventory_quantity_used ? parseFloat(bookingData.inventory_quantity_used) : null,
                 weight: parseFloat(bookingData.weight || 0),
                 loads: parseInt(bookingData.loads || 1),
                 total_price: parseFloat(bookingData.total_price || 0),
@@ -281,6 +297,7 @@ export const apiService = {
     // --- INVENTORY METHODS ---
 
     getInventory,
+    getInventoryCategories,
     addInventoryItem,
     updateStock,
     deleteInventoryItem,
@@ -330,12 +347,12 @@ export const apiService = {
         }
     },
 
-    getAiAccuracyMetrics: async () => {
+    getModelMetrics: async () => {
         try {
-            const response = await apiClient.get('/analytics/accuracy');
+            const response = await apiClient.get('/analytics/model-metrics');
             return response.data;
         } catch (error) {
-            console.error("AI Accuracy Metrics Fetch Error:", error.response?.data?.detail || error.message);
+            console.error("AI Model Metrics Fetch Error:", error.response?.data?.detail || error.message);
             throw error;
         }
     },

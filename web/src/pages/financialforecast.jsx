@@ -81,10 +81,14 @@ const FinancialForecast = () => {
         apiService.getAiAccuracyMetrics()
       ]);
 
+      // Handle Accuracy Metrics with safety check
       if (accuracyRes.status === 'fulfilled' && accuracyRes.value) {
         setAccuracyMetrics(accuracyRes.value);
+      } else {
+        console.warn("AI Accuracy metrics unavailable.");
       }
 
+      // Handle Forecast and Stats Data
       if (forecastRes.status === 'fulfilled' && forecastRes.value?.forecast) {
         const rawForecast = forecastRes.value.forecast;
         setAiInsight(forecastRes.value.ai_generated_insight || "No active insights generated.");
@@ -145,6 +149,8 @@ const FinancialForecast = () => {
           comforter: dbActuals.cf,
           totalKg: dbActuals.kg
         });
+      } else {
+        throw new Error("Failed to load forecast data stream.");
       }
     } catch (err) {
       console.error("Financial Sync Failure:", err);
@@ -298,7 +304,6 @@ const FinancialForecast = () => {
                   </div>
                   <div>
                     <p className="text-[9px] font-black text-slate-400 uppercase">Calibration Check</p>
-                    {/* Pulsing and Glowing Effect Applied Here */}
                     <p className="text-xs font-black text-emerald-500 animate-pulse drop-shadow-[0_0_8px_rgba(16,185,129,0.8)]">
                       OPTIMIZED
                     </p>

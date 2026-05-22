@@ -18,10 +18,10 @@ const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
   // Default values are now aligned with the latest DB schema keys from the controller
   const [dbRates, setDbRates] = useState({
     regular_wash_price: 65,
-    titan_wash_price: 100, // Updated to match latest controller default
+    titan_wash_price: 100,
     comforter_price: 150,
     full_service_price: 210,
-    detergent_cost_per_load: 10 // Updated to match latest controller default
+    detergent_cost_per_load: 10
   });
 
   const [formData, setFormData] = useState({
@@ -65,13 +65,13 @@ const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
           
           // Sync with Network Response: Mapping backend keys to state
           if (settings) {
-           setDbRates({
-  regular_wash_price: Number(settings["Regular Wash"] || 65),
-  titan_wash_price: Number(settings["Titan Wash"] || 100),
-  comforter_price: Number(settings["Comforter"] || 150),
-  full_service_price: Number(settings["Full Service"] || 210),
-  detergent_cost_per_load: Number(settings["detergent_fee"] || 10)
-});
+            setDbRates({
+              regular_wash_price: Number(settings["Regular Wash"] || 65),
+              titan_wash_price: Number(settings["Titan Wash"] || 100),
+              comforter_price: Number(settings["Comforter"] || 150),
+              full_service_price: Number(settings["Full Service"] || 210),
+              detergent_cost_per_load: Number(settings["detergent_fee"] || 10)
+            });
           }
         } catch (error) {
           console.error("Error fetching modal data:", error);
@@ -101,25 +101,22 @@ const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
       base = dbRates.full_service_price * loads;
     } 
     else if (formData.serviceType === 'Regular Wash') {
-      // Regular wash typically handles standard 8kg capacity
       loads = Math.ceil(Number(formData.weight) / 8) || 1;
       base = dbRates.regular_wash_price * loads;
     } 
     else if (formData.serviceType === 'Titan Wash') {
-      // Titan wash handles heavy 12kg capacity loads
       loads = Math.ceil(Number(formData.weight) / 12) || 1;
       base = dbRates.titan_wash_price * loads; 
     } 
     else if (formData.serviceType === 'Comforter') {
-      // Comforter service is usually per-piece/per-kg flat rate
       base = dbRates.comforter_price * Number(formData.weight);
       loads = 1; 
     }
 
     // Apply Add-on costs (Detergent is multiplied by total loads)
     if (formData.addDetergent) base += (dbRates.detergent_cost_per_load * loads); 
-    if (formData.addDelivery) base += 70; // Fixed delivery fee for Naga College Foundation area
-    if (formData.isRush) base *= 1.4; // 40% Rush premium for priority processing
+    if (formData.addDelivery) base += 70; // Fixed delivery fee
+    if (formData.isRush) base *= 1.4; // 40% Rush premium
 
     setFormData(prev => ({ 
       ...prev, 
@@ -148,7 +145,6 @@ const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
     }
 
     const statusLower = currentStatus?.toLowerCase();
-    // Logic: Machines are selectable if Available, Idle, or just starting (Ready)
     const isSelectable = statusLower === 'available' || statusLower === 'idle' || statusLower === 'ready' || !currentStatus;
     
     if (!isSelectable) return;
@@ -178,12 +174,9 @@ const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
     setIsSubmitting(true);
 
     try {
-      /**
-       * FINAL SANITIZATION:
-       * Ensures all numeric types are strictly cast before transmission to avoid 422 errors.
-       */
+      // Ensure values are sanitized and handled safely
       const payload = {
-        customer_name: String(formData.customerName).trim(),
+        customer_name: String(formData.customerName || '').trim(),
         service_type: String(formData.serviceType),
         category: String(formData.itemType),
         weight: parseFloat(formData.weight || 0),
@@ -195,7 +188,7 @@ const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
         booking_mode: String(bookingMode),
         add_detergent: Boolean(formData.addDetergent),
         add_delivery: Boolean(formData.addDelivery),
-        shop_id: parseInt(apiService.getShopId()),
+        shop_id: parseInt(apiService.getShopId() || 0),
         booking_timestamp: actualBookingTime 
             ? (actualBookingTime instanceof Date ? actualBookingTime.toISOString() : actualBookingTime)
             : new Date().toISOString()
@@ -206,7 +199,7 @@ const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
       if (onSubmit) onSubmit(response);
       onClose();
       
-      // Reset form state after successful creation
+      // Reset form state
       setFormData({
         customerName: '',
         serviceType: 'Full Service',

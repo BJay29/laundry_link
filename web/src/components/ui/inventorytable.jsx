@@ -16,7 +16,7 @@ import { Edit3, AlertTriangle, CheckCircle2, Gauge, Tag, AlertOctagon, Trash2, T
  * - Loading state
  */
 const InventoryTable = ({ 
-  items, 
+  items = [], 
   onEdit, 
   onDelete,
   onRecordUsage,
@@ -50,8 +50,8 @@ const InventoryTable = ({
    * Returns object with label, color classes, and icon
    */
   const getStatus = (item) => {
-    const stock = parseFloat(item.current_stock) || 0;
-    const reorder = parseFloat(item.reorder_point) || 0;
+    const stock = parseFloat(item?.current_stock) || 0;
+    const reorder = parseFloat(item?.reorder_point) || 0;
 
     if (stock <= 0) {
       return {
@@ -126,28 +126,28 @@ const InventoryTable = ({
 
       switch (localSortBy) {
         case 'item_name':
-          aVal = a.item_name.toLowerCase();
-          bVal = b.item_name.toLowerCase();
+          aVal = (a?.item_name || '').toLowerCase();
+          bVal = (b?.item_name || '').toLowerCase();
           break;
         case 'category':
-          aVal = (a.category || 'General').toLowerCase();
-          bVal = (b.category || 'General').toLowerCase();
+          aVal = (a?.category || 'General').toLowerCase();
+          bVal = (b?.category || 'General').toLowerCase();
           break;
         case 'current_stock':
-          aVal = parseFloat(a.current_stock) || 0;
-          bVal = parseFloat(b.current_stock) || 0;
+          aVal = parseFloat(a?.current_stock) || 0;
+          bVal = parseFloat(b?.current_stock) || 0;
           break;
         case 'usage_rate':
-          aVal = parseFloat(a.usage_rate) || 0;
-          bVal = parseFloat(b.usage_rate) || 0;
+          aVal = parseFloat(a?.usage_rate) || 0;
+          bVal = parseFloat(b?.usage_rate) || 0;
           break;
         case 'status':
           aVal = getStatus(a).priority;
           bVal = getStatus(b).priority;
           break;
         default:
-          aVal = a.item_name;
-          bVal = b.item_name;
+          aVal = a?.item_name || '';
+          bVal = b?.item_name || '';
       }
 
       if (aVal < bVal) return localSortOrder === 'asc' ? -1 : 1;
@@ -222,30 +222,30 @@ const InventoryTable = ({
 
           {/* Table Body */}
           <tbody className="divide-y divide-gray-100">
-            {sortedItems.map((item, index) => {
+            {sortedItems.map((item) => {
               const status = getStatus(item);
-              const categoryColor = getCategoryColor(item.category || 'General');
-              const reorderPoint = parseFloat(item.reorder_point) || 0;
-              const currentStock = parseFloat(item.current_stock) || 0;
-              const daysUntilDepletion = currentStock > 0 ? Math.ceil(currentStock / (parseFloat(item.usage_rate) || 0.05)) : 0;
+              const categoryColor = getCategoryColor(item?.category || 'General');
+              const reorderPoint = parseFloat(item?.reorder_point) || 0;
+              const currentStock = parseFloat(item?.current_stock) || 0;
+              const daysUntilDepletion = currentStock > 0 ? Math.ceil(currentStock / (parseFloat(item?.usage_rate) || 0.05)) : 0;
 
               return (
                 <tr 
-                  key={item.id} 
+                  key={item?.id || Math.random()} 
                   className="hover:bg-gray-50 transition-colors group"
                 >
                   {/* Item Name */}
                   <td className="py-5 px-6 font-semibold text-gray-900">
                     <div className="flex flex-col">
-                      <span>{item.item_name}</span>
-                      <span className="text-xs text-gray-500 font-normal">ID: {item.id}</span>
+                      <span>{item?.item_name || 'Unnamed Item'}</span>
+                      <span className="text-xs text-gray-500 font-normal">ID: {item?.id || 'N/A'}</span>
                     </div>
                   </td>
 
                   {/* Category */}
                   <td className="py-5 px-6 text-center">
                     <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 ${categoryColor} rounded-full text-xs font-semibold`}>
-                      <Tag size={12} /> {item.category || 'General'}
+                      <Tag size={12} /> {item?.category || 'General'}
                     </span>
                   </td>
 
@@ -255,7 +255,7 @@ const InventoryTable = ({
                       <span className={`font-bold text-lg ${currentStock <= reorderPoint ? 'text-red-600' : 'text-gray-900'}`}>
                         {currentStock.toFixed(2)}
                       </span>
-                      <span className="text-xs text-gray-500">{item.unit}</span>
+                      <span className="text-xs text-gray-500">{item?.unit || ''}</span>
                     </div>
                   </td>
 
@@ -263,7 +263,7 @@ const InventoryTable = ({
                   <td className="py-5 px-6 text-center">
                     <div className="flex flex-col items-center">
                       <span className="font-semibold text-gray-700">{reorderPoint.toFixed(2)}</span>
-                      <span className="text-xs text-gray-500">{item.unit}</span>
+                      <span className="text-xs text-gray-500">{item?.unit || ''}</span>
                     </div>
                   </td>
 
@@ -271,7 +271,7 @@ const InventoryTable = ({
                   <td className="py-5 px-6 text-center">
                     <div className="flex items-center justify-center gap-1.5 text-gray-700">
                       <Gauge size={14} className="text-blue-500" />
-                      <span className="font-semibold">{(parseFloat(item.usage_rate) || 0).toFixed(2)}</span>
+                      <span className="font-semibold">{(parseFloat(item?.usage_rate) || 0).toFixed(2)}</span>
                       <span className="text-xs text-gray-500">/day</span>
                     </div>
                   </td>
@@ -297,7 +297,7 @@ const InventoryTable = ({
                       {/* Record Usage Button */}
                       {onRecordUsage && (
                         <button 
-                          onClick={() => onRecordUsage(item.id)}
+                          onClick={() => onRecordUsage(item?.id)}
                           className="p-2 bg-blue-100 hover:bg-blue-500 hover:text-white text-blue-600 rounded-lg transition-all active:scale-95 tooltip"
                           title="Record usage"
                         >
@@ -318,8 +318,8 @@ const InventoryTable = ({
                       {onDelete && (
                         <button 
                           onClick={() => {
-                            if (window.confirm(`Delete "${item.item_name}"?`)) {
-                              onDelete(item.id);
+                            if (window.confirm(`Delete "${item?.item_name}"?`)) {
+                              onDelete(item?.id);
                             }
                           }}
                           className="p-2 bg-red-100 hover:bg-red-500 hover:text-white text-red-600 rounded-lg transition-all active:scale-95 tooltip"
@@ -343,34 +343,25 @@ const InventoryTable = ({
           <div>
             <p className="text-gray-600">Adequate Stock</p>
             <p className="text-lg font-bold text-green-600">
-              {sortedItems.filter(item => {
-                const status = getStatus(item);
-                return status.label === 'Adequate';
-              }).length}
+              {sortedItems.filter(item => getStatus(item).label === 'Adequate').length}
             </p>
           </div>
           <div>
             <p className="text-gray-600">Low Stock</p>
             <p className="text-lg font-bold text-yellow-600">
-              {sortedItems.filter(item => {
-                const status = getStatus(item);
-                return status.label === 'Low Stock';
-              }).length}
+              {sortedItems.filter(item => getStatus(item).label === 'Low Stock').length}
             </p>
           </div>
           <div>
             <p className="text-gray-600">Critical</p>
             <p className="text-lg font-bold text-red-600">
-              {sortedItems.filter(item => {
-                const status = getStatus(item);
-                return status.label === 'Critical' || status.label === 'Out of Stock';
-              }).length}
+              {sortedItems.filter(item => ['Critical', 'Out of Stock'].includes(getStatus(item).label)).length}
             </p>
           </div>
           <div>
             <p className="text-gray-600">Total Value</p>
             <p className="text-lg font-bold text-gray-900">
-              {sortedItems.reduce((sum, item) => sum + (parseFloat(item.current_stock) || 0), 0).toFixed(2)} units
+              {sortedItems.reduce((sum, item) => sum + (parseFloat(item?.current_stock) || 0), 0).toFixed(2)} units
             </p>
           </div>
         </div>
