@@ -3,7 +3,7 @@ import { apiService } from '../services/APIservices';
 import InventoryTable from '../components/ui/inventorytable';
 import InventoryModal from '../components/modals/inventorymodal';
 import InventoryCharts from '../components/charts/inventorycharts';
-import { Search, AlertCircle, RefreshCw, Filter } from 'lucide-react';
+import { Search, AlertCircle, RefreshCw, Filter, Trash2, X, CheckCircle, Minus } from 'lucide-react';
 
 /**
  * INVENTORY PAGE
@@ -14,7 +14,9 @@ import { Search, AlertCircle, RefreshCw, Filter } from 'lucide-react';
  * - Add, edit, and delete inventory items
  * - Analytics charts for consumption trends
  * - Search and filter functionality
- * - Record item usage
+ * - Record item usage via modal input (no browser prompt)
+ * - Delete confirmation modal (no browser confirm)
+ * - Top-right toast notifications for success messages
  * - Error handling and loading states
  * - Responsive design
  */
@@ -35,7 +37,14 @@ const InventoryPage = () => {
     order: 'asc'
   });
 
-  // Auto-dismiss success message after 3 seconds
+  // Delete confirmation modal state
+  const [deleteModal, setDeleteModal] = useState({ open: false, itemId: null, itemName: '' });
+
+  // Usage input modal state
+  const [usageModal, setUsageModal] = useState({ open: false, itemId: null, itemName: '', quantity: '' });
+  const [usageError, setUsageError] = useState('');
+
+  // Auto-dismiss success toast after 3 seconds
   useEffect(() => {
     if (successMessage) {
       const timer = setTimeout(() => setSuccessMessage(null), 3000);
@@ -169,33 +178,57 @@ const InventoryPage = () => {
   };
 
   /**
-   * Handle deleting an inventory item
+   * Open delete confirmation modal instead of using browser confirm
    */
-  const handleDelete = async (itemId) => {
+  const handleDelete = (itemId, itemName) => {
+    setDeleteModal({ open: true, itemId, itemName: itemName || 'this item' });
+  };
+
+  /**
+   * Confirm and execute deletion after user confirms in modal
+   */
+  const confirmDelete = async () => {
     try {
-      await apiService.deleteInventoryItem(itemId);
+      await apiService.deleteInventoryItem(deleteModal.itemId);
+      setDeleteModal({ open: false, itemId: null, itemName: '' });
       setSuccessMessage('Item deleted successfully');
       loadInventory();
     } catch (err) {
       console.error('Error deleting item:', err);
+      setDeleteModal({ open: false, itemId: null, itemName: '' });
       setError('Failed to delete item. Please try again.');
     }
   };
 
   /**
-   * Handle recording item usage
+   * Open usage input modal instead of using browser prompt
    */
-  const handleRecordUsage = async (itemId) => {
-    const quantity = prompt('Enter quantity used:');
-    if (quantity && !isNaN(parseFloat(quantity))) {
-      try {
-        await apiService.recordItemUsage(itemId, parseFloat(quantity));
-        setSuccessMessage('Usage recorded successfully');
-        loadInventory();
-      } catch (err) {
-        console.error('Error recording usage:', err);
-        setError('Failed to record usage. Please try again.');
-      }
+  const handleRecordUsage = (itemId, itemName) => {
+    setUsageModal({ open: true, itemId, itemName: itemName || 'item', quantity: '' });
+    setUsageError('');
+  };
+
+  /**
+   * Confirm and submit usage quantity from the usage modal
+   */
+  const confirmRecordUsage = async () => {
+    const qty = parseFloat(usageModal.quantity);
+    if (!usageModal.quantity || isNaN(qty) || qty <= 0) {
+      setUsageError('Please enter a valid quantity greater than 0.');
+      return;
+    }
+
+    try {
+      await apiService.recordItemUsage(usageModal.itemId, qty);
+      setUsageModal({ open: false, itemId: null, itemName: '', quantity: '' });
+      setUsageError('');
+      setSuccessMessage('Usage recorded successfully');
+      loadInventory();
+    } catch (err) {
+      console.error('Error recording usage:', err);
+      setUsageModal({ open: false, itemId: null, itemName: '', quantity: '' });
+      setUsageError('');
+      setError('Failed to record usage. Please try again.');
     }
   };
 
@@ -236,7 +269,7 @@ const InventoryPage = () => {
     const total = items.length;
     const adequate = items.filter(item => getItemStatus(item) === 'ADEQUATE').length;
     const low = items.filter(item => getItemStatus(item) === 'LOW').length;
-    const critical = items.filter(item => 
+    const critical = items.filter(item =>
       ['CRITICAL', 'OUT_OF_STOCK'].includes(getItemStatus(item))
     ).length;
 
@@ -247,6 +280,102 @@ const InventoryPage = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
+
+      {/* ── Top-right success toast ── */}
+      {successMessage && (
+        <div className="fixed top-5 right-5 z-50 flex items-center gap-3 bg-white border border-green-200 shadow-lg rounded-xl px-4 py-3 animate-in slide-in-from-right duration-300 max-w-sm">
+          <CheckCircle size={20} className="text-green-500 flex-shrink-0" />
+          <p className="text-gray-800 font-medium text-sm flex-1">{successMessage}</p>
+          <button onClick={() => setSuccessMessage(null)} className="text-gray-400 hover:text-gray-600">
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
+      {/* ── Delete Confirmation Modal ── */}
+      {deleteModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm border border-gray-100 p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2.5 bg-red-50 rounded-lg">
+                <Trash2 size={22} className="text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Delete Item</h3>
+                <p className="text-xs text-gray-500 mt-0.5">This action cannot be undone</p>
+              </div>
+            </div>
+            <p className="text-gray-700 text-sm mb-6">
+              Are you sure you want to delete <span className="font-semibold text-gray-900">"{deleteModal.itemName}"</span>? This will permanently remove it from your inventory.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteModal({ open: false, itemId: null, itemName: '' })}
+                className="flex-1 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDelete}
+                className="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Usage Input Modal ── */}
+      {usageModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm border border-gray-100 p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2.5 bg-blue-50 rounded-lg">
+                <Minus size={22} className="text-blue-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Record Usage</h3>
+                <p className="text-xs text-gray-500 mt-0.5">{usageModal.itemName}</p>
+              </div>
+            </div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Quantity Used
+            </label>
+            <input
+              type="number"
+              min="0.01"
+              step="0.01"
+              value={usageModal.quantity}
+              onChange={(e) => {
+                setUsageModal(prev => ({ ...prev, quantity: e.target.value }));
+                setUsageError('');
+              }}
+              className="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-200 focus:border-blue-400 outline-none font-medium mb-1"
+              placeholder="Enter quantity..."
+              autoFocus
+            />
+            {usageError && (
+              <p className="text-sm text-red-600 mb-3">{usageError}</p>
+            )}
+            <div className="flex gap-3 mt-4">
+              <button
+                onClick={() => { setUsageModal({ open: false, itemId: null, itemName: '', quantity: '' }); setUsageError(''); }}
+                className="flex-1 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmRecordUsage}
+                className="flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors"
+              >
+                Record
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Page Header */}
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 py-6">
@@ -259,7 +388,7 @@ const InventoryPage = () => {
                 Track and optimize your laundry supply consumables
               </p>
             </div>
-            <button 
+            <button
               onClick={handleAdd}
               className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-6 rounded-lg transition-colors inline-flex items-center gap-2"
             >
@@ -271,7 +400,7 @@ const InventoryPage = () => {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 py-8">
-        
+
         {/* Error Alert */}
         {error && (
           <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
@@ -286,16 +415,6 @@ const InventoryPage = () => {
             >
               ✕
             </button>
-          </div>
-        )}
-
-        {/* Success Alert */}
-        {successMessage && (
-          <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg flex items-start gap-3">
-            <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-              <span className="text-white text-sm">✓</span>
-            </div>
-            <p className="text-green-900 font-semibold">{successMessage}</p>
           </div>
         )}
 
@@ -373,11 +492,11 @@ const InventoryPage = () => {
               </div>
             </div>
           ) : filteredItems.length > 0 ? (
-            <InventoryTable 
+            <InventoryTable
               items={filteredItems}
               onEdit={handleEdit}
-              onDelete={handleDelete}
-              onRecordUsage={handleRecordUsage}
+              onDelete={(itemId, itemName) => handleDelete(itemId, itemName)}
+              onRecordUsage={(itemId, itemName) => handleRecordUsage(itemId, itemName)}
               loading={false}
               sortBy={sortConfig.key}
               sortOrder={sortConfig.order}
@@ -387,8 +506,8 @@ const InventoryPage = () => {
               <Filter size={32} className="mx-auto text-gray-400 mb-3" />
               <p className="text-gray-600 font-semibold">No items found</p>
               <p className="text-gray-500 text-sm mt-1">
-                {searchTerm || filterStatus !== 'ALL' 
-                  ? 'Try adjusting your search or filter criteria' 
+                {searchTerm || filterStatus !== 'ALL'
+                  ? 'Try adjusting your search or filter criteria'
                   : 'Add your first inventory item to get started'}
               </p>
             </div>
@@ -397,7 +516,7 @@ const InventoryPage = () => {
       </div>
 
       {/* Inventory Management Modal */}
-      <InventoryModal 
+      <InventoryModal
         isOpen={isModalOpen}
         onClose={() => {
           setIsModalOpen(false);

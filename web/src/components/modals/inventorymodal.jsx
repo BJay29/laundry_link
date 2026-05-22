@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, Package, AlertCircle } from 'lucide-react'; 
+import { X, Save, Package, AlertCircle } from 'lucide-react';
 
 /**
  * INVENTORY MODAL
@@ -8,7 +8,7 @@ import { X, Save, Package, AlertCircle } from 'lucide-react';
  * Features:
  * - Form validation with error messages
  * - Real-time state synchronization with item prop
- * - Disabled item name for edit mode to prevent duplicate names
+ * - Item name is editable in both add and edit mode
  * - Shop ID validation from localStorage
  * - Loading state during submission
  * - Responsive design with Tailwind CSS
@@ -29,7 +29,7 @@ const InventoryModal = ({ isOpen, onClose, item, onSave, loading = false }) => {
 
   // Predefined categories for selection
   const categories = ['General', 'Detergent', 'Softener', 'Packaging', 'Cleaning', 'Chemical'];
-  
+
   // Predefined units for selection
   const units = ['kg', 'liters', 'pieces', 'boxes', 'bags', 'pcs'];
 
@@ -104,7 +104,7 @@ const InventoryModal = ({ isOpen, onClose, item, onSave, loading = false }) => {
    */
   const handleChange = (e) => {
     const { name, value } = e.target;
-    
+
     // Clear error for this field
     if (errors[name]) {
       setErrors(prev => ({
@@ -141,7 +141,7 @@ const InventoryModal = ({ isOpen, onClose, item, onSave, loading = false }) => {
 
     // Get shop ID from localStorage
     const shopId = localStorage.getItem('shop_id');
-    
+
     // Validate shop ID exists
     if (!shopId) {
       setErrors({
@@ -174,7 +174,7 @@ const InventoryModal = ({ isOpen, onClose, item, onSave, loading = false }) => {
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
       {/* Modal Container */}
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-md border border-gray-100">
-        
+
         {/* Modal Header */}
         <div className="flex justify-between items-start p-6 border-b border-gray-100">
           <div className="flex items-center gap-3">
@@ -190,9 +190,9 @@ const InventoryModal = ({ isOpen, onClose, item, onSave, loading = false }) => {
               </p>
             </div>
           </div>
-          <button 
-            type="button" 
-            onClick={onClose} 
+          <button
+            type="button"
+            onClick={onClose}
             className="p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 rounded-lg transition-colors"
             disabled={loading}
           >
@@ -202,7 +202,7 @@ const InventoryModal = ({ isOpen, onClose, item, onSave, loading = false }) => {
 
         {/* Modal Body */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          
+
           {/* Submit Error Alert */}
           {errors.submit && (
             <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2">
@@ -211,24 +211,23 @@ const InventoryModal = ({ isOpen, onClose, item, onSave, loading = false }) => {
             </div>
           )}
 
-          {/* Item Name Field */}
+          {/* Item Name Field — editable in both add and edit mode */}
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2">
               Item Name <span className="text-red-500">*</span>
             </label>
-            <input 
+            <input
               type="text"
               name="item_name"
               value={formData.item_name}
               onChange={handleChange}
               className={`w-full px-4 py-2.5 bg-gray-50 rounded-lg border transition-all outline-none font-medium ${
-                errors.item_name 
-                  ? 'border-red-300 focus:ring-2 focus:ring-red-200' 
+                errors.item_name
+                  ? 'border-red-300 focus:ring-2 focus:ring-red-200'
                   : 'border-gray-300 focus:ring-2 focus:ring-blue-200 focus:border-blue-400'
               }`}
               placeholder="e.g., Detergent Powder, Fabric Softener"
-              disabled={loading || isEditMode}
-              title={isEditMode ? 'Item name cannot be changed' : ''}
+              disabled={loading}
             />
             {errors.item_name && (
               <p className="text-sm text-red-600 mt-1">{errors.item_name}</p>
@@ -242,7 +241,7 @@ const InventoryModal = ({ isOpen, onClose, item, onSave, loading = false }) => {
               <label className="block text-sm font-semibold text-gray-700 mb-2">
                 Category
               </label>
-              <select 
+              <select
                 name="category"
                 value={formData.category}
                 onChange={handleChange}
@@ -260,13 +259,13 @@ const InventoryModal = ({ isOpen, onClose, item, onSave, loading = false }) => {
               <label className="block text-sm font-semibold text-gray-700 mb-2">
                 Unit <span className="text-red-500">*</span>
               </label>
-              <select 
+              <select
                 name="unit"
                 value={formData.unit}
                 onChange={handleChange}
                 className={`w-full px-4 py-2.5 bg-gray-50 rounded-lg border transition-all outline-none font-medium ${
-                  errors.unit 
-                    ? 'border-red-300 focus:ring-2 focus:ring-red-200' 
+                  errors.unit
+                    ? 'border-red-300 focus:ring-2 focus:ring-red-200'
                     : 'border-gray-300 focus:ring-2 focus:ring-blue-200 focus:border-blue-400'
                 }`}
                 disabled={loading}
@@ -288,7 +287,7 @@ const InventoryModal = ({ isOpen, onClose, item, onSave, loading = false }) => {
               <label className="block text-sm font-semibold text-gray-700 mb-2">
                 Current Stock <span className="text-red-500">*</span>
               </label>
-              <input 
+              <input
                 type="number"
                 name="current_stock"
                 value={formData.current_stock}
@@ -296,8 +295,8 @@ const InventoryModal = ({ isOpen, onClose, item, onSave, loading = false }) => {
                 step="0.01"
                 min="0"
                 className={`w-full px-4 py-2.5 bg-gray-50 rounded-lg border transition-all outline-none font-medium ${
-                  errors.current_stock 
-                    ? 'border-red-300 focus:ring-2 focus:ring-red-200' 
+                  errors.current_stock
+                    ? 'border-red-300 focus:ring-2 focus:ring-red-200'
                     : 'border-gray-300 focus:ring-2 focus:ring-blue-200 focus:border-blue-400'
                 }`}
                 placeholder="0.00"
@@ -313,7 +312,7 @@ const InventoryModal = ({ isOpen, onClose, item, onSave, loading = false }) => {
               <label className="block text-sm font-semibold text-gray-700 mb-2">
                 Reorder Point <span className="text-red-500">*</span>
               </label>
-              <input 
+              <input
                 type="number"
                 name="reorder_point"
                 value={formData.reorder_point}
@@ -321,8 +320,8 @@ const InventoryModal = ({ isOpen, onClose, item, onSave, loading = false }) => {
                 step="0.01"
                 min="0"
                 className={`w-full px-4 py-2.5 bg-gray-50 rounded-lg border transition-all outline-none font-medium ${
-                  errors.reorder_point 
-                    ? 'border-red-300 focus:ring-2 focus:ring-red-200' 
+                  errors.reorder_point
+                    ? 'border-red-300 focus:ring-2 focus:ring-red-200'
                     : 'border-gray-300 focus:ring-2 focus:ring-blue-200 focus:border-blue-400'
                 }`}
                 placeholder="0.00"
@@ -339,7 +338,7 @@ const InventoryModal = ({ isOpen, onClose, item, onSave, loading = false }) => {
             <label className="block text-sm font-semibold text-gray-700 mb-2">
               Usage Rate (daily consumption)
             </label>
-            <input 
+            <input
               type="number"
               name="usage_rate"
               value={formData.usage_rate}
@@ -347,8 +346,8 @@ const InventoryModal = ({ isOpen, onClose, item, onSave, loading = false }) => {
               step="0.01"
               min="0"
               className={`w-full px-4 py-2.5 bg-gray-50 rounded-lg border transition-all outline-none font-medium ${
-                errors.usage_rate 
-                  ? 'border-red-300 focus:ring-2 focus:ring-red-200' 
+                errors.usage_rate
+                  ? 'border-red-300 focus:ring-2 focus:ring-red-200'
                   : 'border-gray-300 focus:ring-2 focus:ring-blue-200 focus:border-blue-400'
               }`}
               placeholder="0.05"
@@ -372,7 +371,7 @@ const InventoryModal = ({ isOpen, onClose, item, onSave, loading = false }) => {
             >
               Cancel
             </button>
-            <button 
+            <button
               type="submit"
               className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-semibold rounded-lg transition-all flex items-center justify-center gap-2 disabled:cursor-not-allowed"
               disabled={loading}
