@@ -163,6 +163,11 @@ const InventoryModal = ({ isOpen, onClose, item, onSave, loading = false }) => {
       shop_id: parseInt(shopId, 10)
     };
 
+    // Debug logs: trace item_name at every step to find where it gets dropped
+    console.log('[InventoryModal] formData.item_name:', formData.item_name);
+    console.log('[InventoryModal] finalData being sent:', JSON.stringify(finalData));
+    console.log('[InventoryModal] item.id:', item ? item.id : null);
+
     // Call onSave callback with item ID (if editing) and data
     onSave(item ? item.id : null, finalData);
   };

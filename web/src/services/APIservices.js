@@ -86,6 +86,9 @@ export const updateStock = async (itemId, stockData) => {
             usage_rate: parseFloat(stockData.usage_rate),
             shop_id: stockData.shop_id
         };
+        // Debug logs: verify what is actually being sent to the backend
+        console.log('[updateStock] itemId:', itemId);
+        console.log('[updateStock] sanitizedData:', JSON.stringify(sanitizedData));
         const response = await apiClient.put(`/inventory/${itemId}`, sanitizedData);
         return response.data;
     } catch (error) {
