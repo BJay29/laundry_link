@@ -55,7 +55,6 @@ export const getInventoryCategories = async (shopId) => {
 
 export const addInventoryItem = async (itemData) => {
     try {
-        // Sanitize data to ensure types match FastAPI Pydantic schemas
         const sanitizedData = {
             ...itemData,
             current_stock: parseFloat(itemData.current_stock || 0),
@@ -75,7 +74,6 @@ export const addInventoryItem = async (itemData) => {
 
 export const updateStock = async (itemId, stockData) => {
     try {
-        // Sanitize data for updates as well
         const sanitizedData = {
             ...stockData,
             current_stock: stockData.current_stock !== undefined ? parseFloat(stockData.current_stock) : undefined,
@@ -101,9 +99,6 @@ export const deleteInventoryItem = async (itemId) => {
     }
 };
 
-/**
- * Records item usage for consumption tracking and graph analytics.
- */
 export const recordItemUsage = async (itemId, quantity) => {
     try {
         const response = await apiClient.post(`/inventory/${itemId}/use?quantity=${parseFloat(quantity)}`);
@@ -114,9 +109,6 @@ export const recordItemUsage = async (itemId, quantity) => {
     }
 };
 
-/**
- * Fetches consumption trend for a specific item.
- */
 export const getItemAnalytics = async (itemId, days = 7) => {
     try {
         const response = await apiClient.get(`/inventory/${itemId}/analytics?days=${days}`);
@@ -127,9 +119,6 @@ export const getItemAnalytics = async (itemId, days = 7) => {
     }
 };
 
-/**
- * Fetches dashboard statistics and alerts for inventory health checks.
- */
 export const getInventoryDashboardStats = async (shopId) => {
     try {
         const targetId = shopId || localStorage.getItem('shop_id');
@@ -137,6 +126,19 @@ export const getInventoryDashboardStats = async (shopId) => {
         return response.data;
     } catch (error) {
         console.error("Fetch Inventory Dashboard Stats Error:", error.response?.data?.detail || error.message);
+        throw error;
+    }
+};
+
+/**
+ * Fetches AI model accuracy metrics.
+ */
+export const getAiAccuracyMetrics = async () => {
+    try {
+        const response = await apiClient.get('/analytics/ai-accuracy-metrics');
+        return response.data;
+    } catch (error) {
+        console.error("Fetch AI Accuracy Metrics Error:", error.response?.data?.detail || error.message);
         throw error;
     }
 };
@@ -366,6 +368,9 @@ export const apiService = {
             throw error;
         }
     },
+
+    // Added the missing function to the apiService object
+    getAiAccuracyMetrics,
 
     // --- OPTIMIZATION SETTINGS METHODS ---
 

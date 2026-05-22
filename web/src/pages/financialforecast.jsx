@@ -75,6 +75,7 @@ const FinancialForecast = () => {
       setLoading(true);
       setError(null);
 
+      // Using Promise.allSettled to ensure individual failures don't block the entire dashboard
       const [forecastRes, summaryRes, accuracyRes] = await Promise.allSettled([
         apiService.getForecastData(),
         apiService.getDashboardStats(),
@@ -264,7 +265,7 @@ const FinancialForecast = () => {
               <div className="space-y-4">
                 <div className="flex justify-between items-end">
                   <span className="text-xs font-extrabold text-slate-500 uppercase tracking-wide">Confidence Index</span>
-                  <span className="text-xl font-black text-indigo-600">{accuracyMetrics.demand_forecasting_model?.accuracy_percentage}%</span>
+                  <span className="text-xl font-black text-indigo-600">{accuracyMetrics.demand_forecasting_model?.accuracy_percentage || 0}%</span>
                 </div>
                 <div className="w-full bg-slate-200/70 h-2.5 rounded-full overflow-hidden">
                   <div className="bg-indigo-600 h-full rounded-full transition-all duration-500 shadow-[0_0_8px_rgba(79,70,229,0.4)]" style={{ width: `${accuracyMetrics.demand_forecasting_model?.accuracy_percentage || 0}%` }} />
@@ -292,7 +293,7 @@ const FinancialForecast = () => {
               <div className="space-y-4">
                 <div className="flex justify-between items-end">
                   <span className="text-xs font-extrabold text-slate-500 uppercase tracking-wide">Accuracy Calibration</span>
-                  <span className="text-xl font-black text-cyan-600">{accuracyMetrics.utility_telemetry_model?.accuracy_percentage}%</span>
+                  <span className="text-xl font-black text-cyan-600">{accuracyMetrics.utility_telemetry_model?.accuracy_percentage || 0}%</span>
                 </div>
                 <div className="w-full bg-slate-200/70 h-2.5 rounded-full overflow-hidden">
                   <div className="bg-cyan-500 h-full rounded-full transition-all duration-500 shadow-[0_0_8px_rgba(6,182,212,0.4)]" style={{ width: `${accuracyMetrics.utility_telemetry_model?.accuracy_percentage || 0}%` }} />
