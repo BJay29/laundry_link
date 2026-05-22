@@ -13,9 +13,9 @@ const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingSettings, setIsLoadingSettings] = useState(false);
   const [machineData, setMachineData] = useState([]);
+  const [inventoryItems, setInventoryItems] = useState([]); // Added state for inventory
   
   // Dynamic Pricing State (Fetched from Backend)
-  // Default values are now aligned with the latest DB schema keys from the controller
   const [dbRates, setDbRates] = useState({
     regular_wash_price: 65,
     titan_wash_price: 100,
@@ -33,6 +33,7 @@ const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
     selectedWasher: null,
     selectedDryer: null,
     addDetergent: false,
+    inventory_item_id: null, // Added for inventory selection
     addDelivery: false,
     isRush: false,
     totalPrice: 0
@@ -45,8 +46,7 @@ const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
   };
 
   /**
-   * SYNC: Fetch machine availability and pricing settings from Backend when modal opens.
-   * Ensures the UI is using the most recent rates saved in Optimization Settings.
+   * SYNC: Fetch machine availability, pricing settings, and inventory items from Backend.
    */
   useEffect(() => {
     if (isOpen) {
@@ -55,15 +55,16 @@ const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
           setIsLoadingSettings(true);
           const shopId = apiService.getShopId();
           
-          // Parallel fetch for machines and pricing settings to reduce loading time
-          const [machines, settings] = await Promise.all([
+          // Parallel fetch for machines, pricing, and inventory
+          const [machines, settings, inventory] = await Promise.all([
             apiService.getMachines(),
-            apiService.getBookingPricing(shopId)
+            apiService.getBookingPricing(shopId),
+            apiService.getInventory() // Fetch inventory list
           ]);
 
           setMachineData(machines || []);
+          setInventoryItems(inventory || []);
           
-          // Sync with Network Response: Mapping backend keys to state
           if (settings) {
             setDbRates({
               regular_wash_price: Number(settings["Regular Wash"] || 65),
@@ -84,17 +85,14 @@ const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
   }, [isOpen]);
 
   /**
-   * LOGIC: Auto-calculate pricing and load count based on service rates from database.
-   * Updated to use strict mapping between serviceType and dbRates keys.
+   * LOGIC: Auto-calculate pricing and load count.
    */
   useEffect(() => {
-    // Skip auto-calc if in manual mode or while data is still being fetched
     if (bookingMode === 'manual' || isLoadingSettings) return;
 
     let base = 0;
     let loads = 1;
 
-    // Calculation logic synced with the provided network response keys
     if (formData.serviceType === 'Full Service') {
       const limit = formData.itemType === 'Clothes' ? CAPACITY.CLOTHES_MAX : CAPACITY.LINENS_MAX;
       loads = Math.ceil(Number(formData.weight) / limit) || 1;
@@ -113,31 +111,40 @@ const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
       loads = 1; 
     }
 
-    // Apply Add-on costs (Detergent is multiplied by total loads)
-    if (formData.addDetergent) base += (dbRates.detergent_cost_per_load * loads); 
-    if (formData.addDelivery) base += 70; // Fixed delivery fee
-    if (formData.isRush) base *= 1.4; // 40% Rush premium
+    // Apply Detergent cost only if an item is selected
+    if (formData.addDetergent && formData.inventory_item_id) {
+        base += (dbRates.detergent_cost_per_load * loads);
+    }
+    if (formData.addDelivery) base += 70;
+    if (formData.isRush) base *= 1.4;
 
     setFormData(prev => ({ 
       ...prev, 
       totalPrice: Math.round(base), 
       calculatedLoads: loads 
     }));
-  }, [bookingMode, formData.serviceType, formData.itemType, formData.weight, formData.addDetergent, formData.addDelivery, formData.isRush, dbRates, isLoadingSettings]);
+  }, [bookingMode, formData.serviceType, formData.itemType, formData.weight, formData.addDetergent, formData.inventory_item_id, formData.addDelivery, formData.isRush, dbRates, isLoadingSettings]);
 
   if (!isOpen) return null;
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setFormData(prev => ({ 
-      ...prev, 
-      [name]: type === 'checkbox' ? checked : (type === 'number' ? (value === '' ? 0 : parseFloat(value)) : value)
-    }));
+    
+    // Logic for setting inventory_item_id
+    if (name === 'inventory_item_id') {
+        setFormData(prev => ({
+            ...prev,
+            inventory_item_id: value === "none" ? null : value,
+            addDetergent: value !== "none"
+        }));
+    } else {
+        setFormData(prev => ({ 
+          ...prev, 
+          [name]: type === 'checkbox' ? checked : (type === 'number' ? (value === '' ? 0 : parseFloat(value)) : value)
+        }));
+    }
   };
 
-  /**
-   * Selection Logic: Assigns a specific Washer or Dryer to the booking.
-   */
   const selectMachine = (id, currentStatus) => {
     if (id === undefined || id === null) {
         alert("System Sync: This machine slot is not initialized in the database.");
@@ -159,10 +166,6 @@ const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
     }));
   };
 
-  /**
-   * Submission: Sends the structured booking payload to the FastAPI backend.
-   * Sanitizes all numeric fields to match PostgreSQL decimal/integer types.
-   */
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -174,7 +177,6 @@ const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
     setIsSubmitting(true);
 
     try {
-      // Ensure values are sanitized and handled safely
       const payload = {
         customer_name: String(formData.customerName || '').trim(),
         service_type: String(formData.serviceType),
@@ -184,6 +186,8 @@ const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
         total_price: parseFloat(formData.totalPrice || 0),
         washer_id: formData.selectedWasher ? parseInt(formData.selectedWasher) : null,
         dryer_id: formData.selectedDryer ? parseInt(formData.selectedDryer) : null,
+        inventory_item_id: formData.inventory_item_id ? parseInt(formData.inventory_item_id) : null,
+        inventory_quantity_used: formData.inventory_item_id ? parseFloat(formData.calculatedLoads * 0.5) : 0, // Assuming 0.5 per load
         is_rush: Boolean(formData.isRush),
         booking_mode: String(bookingMode),
         add_detergent: Boolean(formData.addDetergent),
@@ -199,7 +203,6 @@ const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
       if (onSubmit) onSubmit(response);
       onClose();
       
-      // Reset form state
       setFormData({
         customerName: '',
         serviceType: 'Full Service',
@@ -209,6 +212,7 @@ const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
         selectedWasher: null,
         selectedDryer: null,
         addDetergent: false,
+        inventory_item_id: null,
         addDelivery: false,
         isRush: false,
         totalPrice: 0
@@ -288,18 +292,10 @@ const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
           </div>
 
           <div className="bg-slate-100/80 p-1.5 rounded-[24px] flex items-center">
-            <button 
-              type="button"
-              onClick={() => setBookingMode('smart')}
-              className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-[18px] text-[11px] font-black transition-all ${bookingMode === 'smart' ? 'text-sky-600 bg-white shadow-sm' : 'text-slate-400 hover:text-slate-500'}`}
-            >
+            <button type="button" onClick={() => setBookingMode('smart')} className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-[18px] text-[11px] font-black transition-all ${bookingMode === 'smart' ? 'text-sky-600 bg-white shadow-sm' : 'text-slate-400 hover:text-slate-500'}`}>
               <Calculator size={14} /> SMART CALC
             </button>
-            <button 
-              type="button"
-              onClick={() => setBookingMode('manual')}
-              className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-[18px] text-[11px] font-black transition-all ${bookingMode === 'manual' ? 'text-orange-600 bg-white shadow-sm' : 'text-slate-400 hover:text-slate-500'}`}
-            >
+            <button type="button" onClick={() => setBookingMode('manual')} className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-[18px] text-[11px] font-black transition-all ${bookingMode === 'manual' ? 'text-orange-600 bg-white shadow-sm' : 'text-slate-400 hover:text-slate-500'}`}>
               <Edit3 size={14} /> MANUAL OVERRIDE
             </button>
           </div>
@@ -319,21 +315,14 @@ const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
               <label className="text-[11px] font-black text-slate-400 uppercase ml-2 flex items-center gap-2 tracking-widest">
                 <User size={14} className="text-sky-500" /> Customer Name
               </label>
-              <input 
-                name="customerName" required value={formData.customerName} onChange={handleChange}
-                className="w-full bg-slate-50/50 border-2 border-slate-100 rounded-[24px] px-6 py-4 font-bold text-slate-800 focus:ring-4 ring-sky-50 focus:border-sky-200 outline-none transition-all placeholder:text-slate-300" 
-                placeholder="Juan Dela Cruz" 
-              />
+              <input name="customerName" required value={formData.customerName} onChange={handleChange} className="w-full bg-slate-50/50 border-2 border-slate-100 rounded-[24px] px-6 py-4 font-bold text-slate-800 focus:ring-4 ring-sky-50 focus:border-sky-200 outline-none transition-all placeholder:text-slate-300" placeholder="Juan Dela Cruz" />
             </div>
 
             <div className="space-y-3">
               <label className="text-[11px] font-black text-slate-400 uppercase ml-2 flex items-center gap-2 tracking-widest">
                 <Weight size={14} className="text-sky-500" /> Weight (kg)
               </label>
-              <input 
-                name="weight" type="number" step="0.1" required value={formData.weight} onChange={handleChange}
-                className={`w-full border-2 rounded-[24px] px-6 py-4 font-bold outline-none transition-all ${bookingMode === 'manual' ? 'bg-orange-50/30 border-orange-100 text-orange-600 focus:border-orange-200' : 'bg-slate-50/50 border-slate-100 text-slate-800 focus:border-sky-200'}`} 
-              />
+              <input name="weight" type="number" step="0.1" required value={formData.weight} onChange={handleChange} className={`w-full border-2 rounded-[24px] px-6 py-4 font-bold outline-none transition-all ${bookingMode === 'manual' ? 'bg-orange-50/30 border-orange-100 text-orange-600 focus:border-orange-200' : 'bg-slate-50/50 border-slate-100 text-slate-800 focus:border-sky-200'}`} />
             </div>
 
             <div className="space-y-3">
@@ -341,14 +330,9 @@ const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
                 <Hash size={14} className="text-sky-500" /> {bookingMode === 'manual' ? 'Manual Loads' : 'Est. Loads'}
               </label>
               {bookingMode === 'manual' ? (
-                <input 
-                  name="calculatedLoads" type="number" value={formData.calculatedLoads} onChange={handleChange}
-                  className="w-full bg-orange-50/30 border-2 border-orange-100 rounded-[24px] px-6 py-4 font-black text-orange-600 focus:border-orange-200 outline-none"
-                />
+                <input name="calculatedLoads" type="number" value={formData.calculatedLoads} onChange={handleChange} className="w-full bg-orange-50/30 border-2 border-orange-100 rounded-[24px] px-6 py-4 font-black text-orange-600 focus:border-orange-200 outline-none" />
               ) : (
-                <div className="w-full bg-slate-100 border-2 border-slate-100 rounded-[24px] px-6 py-4 font-black text-slate-400">
-                  {formData.calculatedLoads} {formData.calculatedLoads > 1 ? 'Loads' : 'Load'}
-                </div>
+                <div className="w-full bg-slate-100 border-2 border-slate-100 rounded-[24px] px-6 py-4 font-black text-slate-400">{formData.calculatedLoads} {formData.calculatedLoads > 1 ? 'Loads' : 'Load'}</div>
               )}
             </div>
           </div>
@@ -359,11 +343,7 @@ const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
                 <Settings2 size={14} className="text-sky-500" /> Service Type
               </label>
               {bookingMode === 'manual' ? (
-                <input 
-                   name="serviceType" value={formData.serviceType} onChange={handleChange}
-                   placeholder="Enter Service"
-                   className="w-full bg-orange-50/30 border-2 border-orange-100 rounded-[24px] px-6 py-4 font-bold text-orange-600 focus:border-orange-200 outline-none"
-                />
+                <input name="serviceType" value={formData.serviceType} onChange={handleChange} placeholder="Enter Service" className="w-full bg-orange-50/30 border-2 border-orange-100 rounded-[24px] px-6 py-4 font-bold text-orange-600 focus:border-orange-200 outline-none" />
               ) : (
                 <select name="serviceType" value={formData.serviceType} onChange={handleChange} className="w-full bg-slate-50 border-2 border-slate-100 rounded-[24px] px-6 py-4 font-bold text-slate-800 outline-none cursor-pointer focus:border-sky-200">
                   <option value="Full Service">Full Service</option>
@@ -379,11 +359,7 @@ const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
                 <Tag size={14} className="text-sky-500" /> Category
               </label>
               {bookingMode === 'manual' ? (
-                <input 
-                  name="itemType" value={formData.itemType} onChange={handleChange}
-                  placeholder="Enter Category"
-                  className="w-full bg-orange-50/30 border-2 border-orange-100 rounded-[24px] px-6 py-4 font-bold text-orange-600 focus:border-orange-200 outline-none"
-                />
+                <input name="itemType" value={formData.itemType} onChange={handleChange} placeholder="Enter Category" className="w-full bg-orange-50/30 border-2 border-orange-100 rounded-[24px] px-6 py-4 font-bold text-orange-600 focus:border-orange-200 outline-none" />
               ) : (
                 <select name="itemType" value={formData.itemType} onChange={handleChange} className="w-full bg-slate-50 border-2 border-slate-100 rounded-[24px] px-6 py-4 font-bold text-slate-800 outline-none cursor-pointer focus:border-sky-200">
                   <option value="Clothes">Regular Clothes</option>
@@ -393,35 +369,31 @@ const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
             </div>
           </div>
 
-          {/* ADD-ONS SECTION */}
-          <div className="grid grid-cols-3 gap-4">
-            <button
-              type="button"
-              onClick={() => handleChange({ target: { name: 'addDetergent', type: 'checkbox', checked: !formData.addDetergent } })}
-              className={`p-4 rounded-[24px] border-2 flex flex-col items-center gap-2 transition-all ${formData.addDetergent ? 'bg-sky-500 border-sky-600 text-white shadow-md' : 'bg-white border-slate-100 text-slate-400'}`}
-            >
-              <Droplets size={20} />
-              <span className="text-[10px] font-black uppercase">Detergent</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleChange({ target: { name: 'addDelivery', type: 'checkbox', checked: !formData.addDelivery } })}
-              className={`p-4 rounded-[24px] border-2 flex flex-col items-center gap-2 transition-all ${formData.addDelivery ? 'bg-sky-500 border-sky-600 text-white shadow-md' : 'bg-white border-slate-100 text-slate-400'}`}
-            >
+          {/* ADD-ONS & DETERGENT SELECTOR */}
+          <div className="space-y-3">
+             <label className="text-[11px] font-black text-slate-400 uppercase ml-2 flex items-center gap-2 tracking-widest">
+                <Droplets size={14} className="text-sky-500" /> Detergent Selection
+             </label>
+             <select name="inventory_item_id" value={formData.inventory_item_id || "none"} onChange={handleChange} className="w-full bg-slate-50 border-2 border-slate-100 rounded-[24px] px-6 py-4 font-bold text-slate-800 outline-none cursor-pointer focus:border-sky-200">
+                <option value="none">None (Customer's own detergent)</option>
+                {inventoryItems.map(item => (
+                    <option key={item.id} value={item.id}>{item.item_name} ({item.category})</option>
+                ))}
+             </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <button type="button" onClick={() => handleChange({ target: { name: 'addDelivery', type: 'checkbox', checked: !formData.addDelivery } })} className={`p-4 rounded-[24px] border-2 flex flex-col items-center gap-2 transition-all ${formData.addDelivery ? 'bg-sky-500 border-sky-600 text-white shadow-md' : 'bg-white border-slate-100 text-slate-400'}`}>
               <Truck size={20} />
               <span className="text-[10px] font-black uppercase">Delivery</span>
             </button>
-            <button
-              type="button"
-              onClick={() => handleChange({ target: { name: 'isRush', type: 'checkbox', checked: !formData.isRush } })}
-              className={`p-4 rounded-[24px] border-2 flex flex-col items-center gap-2 transition-all ${formData.isRush ? 'bg-rose-500 border-rose-600 text-white shadow-md' : 'bg-white border-slate-100 text-slate-400'}`}
-            >
+            <button type="button" onClick={() => handleChange({ target: { name: 'isRush', type: 'checkbox', checked: !formData.isRush } })} className={`p-4 rounded-[24px] border-2 flex flex-col items-center gap-2 transition-all ${formData.isRush ? 'bg-rose-500 border-rose-600 text-white shadow-md' : 'bg-white border-slate-100 text-slate-400'}`}>
               <CheckCircle2 size={20} />
               <span className="text-[10px] font-black uppercase">Rush</span>
             </button>
           </div>
 
-          {/* MACHINE GRID ASSIGNMENT */}
+          {/* MACHINE GRID */}
           <div className="space-y-6 p-8 bg-slate-50/50 rounded-[40px] border-2 border-slate-100">
             <div className="flex justify-between items-center px-2">
                 <label className="text-[11px] font-black text-slate-500 uppercase flex items-center gap-2 tracking-[0.2em]">
@@ -449,7 +421,6 @@ const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
             </div>
           </div>
 
-          {/* PRICING FOOTER SECTION */}
           <div className={`rounded-[32px] p-8 flex justify-between items-center shadow-2xl transition-all duration-500 ${bookingMode === 'manual' ? 'bg-orange-600 shadow-orange-100' : 'bg-slate-900 shadow-slate-200'}`}>
             <div className="flex flex-col">
               <span className="font-bold text-white/40 text-[10px] uppercase tracking-[0.4em]">Total Payable</span>
@@ -461,13 +432,7 @@ const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
               {bookingMode === 'manual' ? (
                 <div className="flex items-center gap-2">
                    <span className="text-3xl font-black text-white/30">₱</span>
-                   <input 
-                    name="totalPrice" 
-                    type="number" 
-                    value={formData.totalPrice} 
-                    onChange={handleChange} 
-                    className="bg-transparent text-4xl font-black text-white w-28 outline-none border-b-4 border-white/20 focus:border-white transition-all" 
-                   />
+                   <input name="totalPrice" type="number" value={formData.totalPrice} onChange={handleChange} className="bg-transparent text-4xl font-black text-white w-28 outline-none border-b-4 border-white/20 focus:border-white transition-all" />
                 </div>
               ) : (
                 <span className="text-4xl font-black text-white tracking-tighter">
@@ -477,11 +442,7 @@ const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
             </div>
           </div>
 
-          <button 
-            type="submit" 
-            disabled={isSubmitting}
-            className={`w-full text-white py-6 rounded-[32px] font-black text-2xl shadow-xl transition-all flex items-center justify-center gap-4 active:scale-95 ${isSubmitting ? 'opacity-70 cursor-wait' : ''} ${bookingMode === 'manual' ? 'bg-orange-500 hover:bg-orange-400 shadow-orange-200' : 'bg-sky-600 hover:bg-sky-500 shadow-sky-200'}`}
-          >
+          <button type="submit" disabled={isSubmitting} className={`w-full text-white py-6 rounded-[32px] font-black text-2xl shadow-xl transition-all flex items-center justify-center gap-4 active:scale-95 ${isSubmitting ? 'opacity-70 cursor-wait' : ''} ${bookingMode === 'manual' ? 'bg-orange-500 hover:bg-orange-400 shadow-orange-200' : 'bg-sky-600 hover:bg-sky-500 shadow-sky-200'}`}>
             {isSubmitting ? 'Processing...' : <><CheckCircle2 size={28} /> Finalize Booking</>}
           </button>
         </form>

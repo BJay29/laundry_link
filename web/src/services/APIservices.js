@@ -296,7 +296,7 @@ export const apiService = {
         }
     },
 
-    // --- INVENTORY METHODS ---
+    // --- INVENTORY METHODS (Mapped to apiService object) ---
 
     getInventory,
     getInventoryCategories,
@@ -369,7 +369,6 @@ export const apiService = {
         }
     },
 
-    // Added the missing function to the apiService object
     getAiAccuracyMetrics,
 
     // --- OPTIMIZATION SETTINGS METHODS ---
