@@ -8,8 +8,7 @@ import {
   TrendingUp, 
   CheckCircle, 
   DollarSign,
-  History,
-  Cpu // Added for AI metrics
+  History
 } from 'lucide-react';
 import apiService from '../services/APIservices';
 
@@ -32,7 +31,6 @@ const Dashboard = () => {
   const [forecast, setForecast] = useState([]);
   const [machines, setMachines] = useState([]);
   const [insightData, setInsightData] = useState(null);
-  const [aiMetrics, setAiMetrics] = useState(null); // Added for AI accuracy tracking
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -42,19 +40,18 @@ const Dashboard = () => {
 
   /**
    * DATA SYNCHRONIZATION ENGINE
-   * Fetches dashboard statistics, telemetry streams, and AI metrics concurrently.
+   * Fetches dashboard statistics, telemetry streams, and structural updates concurrently.
    */
   const loadDashboardData = useCallback(async (isRefresh = false) => {
     try {
       if (isRefresh) setRefreshing(true);
       else setLoading(true);
 
-      const [statsResult, machinesResult, forecastResult, insightResult, aiResult] = await Promise.allSettled([
+      const [statsResult, machinesResult, forecastResult, insightResult] = await Promise.allSettled([
         apiService.getDashboardStats(),
         apiService.getMachines(),
         apiService.getForecastData(),
         apiService.getOperationalInsights(),
-        apiService.getModelMetrics(), // Fetching new AI metrics
       ]);
 
       // 1. Process KPIs
@@ -64,6 +61,7 @@ const Dashboard = () => {
           ...rawData,
           display_revenue: rawData.today_revenue || 0,
           display_trend: rawData.income_growth || 0,
+          // Ensure average is calculated or provided safely
           avg_per_service: rawData.avg_per_service || 0,
         });
       }
@@ -90,11 +88,6 @@ const Dashboard = () => {
           setIsInsightApplied(false);
         }
       }
-
-      // 5. Process AI Metrics
-      if (aiResult.status === 'fulfilled') {
-        setAiMetrics(aiResult.value);
-      }
       
       setLastUpdated(new Date());
     } catch (err) {
@@ -105,7 +98,7 @@ const Dashboard = () => {
     }
   }, []);
 
-  // System Heartbeat
+  // System Heartbeat - Triggers an automated system polling interval check every 60 seconds
   useEffect(() => {
     loadDashboardData();
     const heartbeat = setInterval(() => loadDashboardData(true), 60000);
@@ -121,7 +114,7 @@ const Dashboard = () => {
     setIsInsightApplied(true);
   };
 
-  // --- INITIAL LOAD ---
+  // --- INITIAL LOAD TRANSLATION LOOKUPS ---
   if (loading && !stats && machines.length === 0) {
     return (
       <div className="flex h-screen items-center justify-center bg-slate-50">
@@ -192,23 +185,10 @@ const Dashboard = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard title="Today Revenue" value={stats?.today_revenue || 0} trend={`${stats?.income_growth || 0}%`} type="revenue" />
         <StatCard title="Active Machines" value={stats?.active_machines || "0"} trend="In Use" type="utilization" />
+        {/* Pass the value clearly as a number to trigger the formatting engine */}
         <StatCard title="Avg. Per Service" value={Number(stats?.avg_per_service || 0)} trend="Stable" type="revenue" icon={<DollarSign />} />
         <StatCard title="Expected Bookings" value={stats?.predicted_bookings_today || "0"} trend="Forecast" type="bookings" />
       </div>
-
-      {/* AI MODEL METRICS BAR (NEW SECTION) */}
-      {aiMetrics && (
-        <div className="bg-slate-900 text-white p-6 rounded-[28px] flex items-center justify-between">
-            <div className="flex items-center gap-4">
-                <Cpu className="text-emerald-400" size={32} />
-                <div>
-                    <h4 className="font-black uppercase tracking-widest text-[10px] text-slate-400">Demand Forecasting Accuracy</h4>
-                    <p className="text-2xl font-black italic">{aiMetrics.demand_forecasting_model}%</p>
-                </div>
-            </div>
-            <p className="text-xs text-slate-400 font-bold italic">AI Calibration active: {new Date().toLocaleDateString()}</p>
-        </div>
-      )}
 
       {/* ANALYTICS ROW */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -220,6 +200,10 @@ const Dashboard = () => {
                 <span className="text-[10px] font-black uppercase tracking-widest">AI Prediction Engine</span>
               </div>
               <h2 className="text-3xl font-black text-slate-900 tracking-tight">Income & Booking Forecast</h2>
+            </div>
+            <div className="text-right">
+                <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Last Sync</span>
+                <p className="text-xs font-bold text-slate-500">{lastUpdated.toLocaleTimeString()}</p>
             </div>
           </div>
 
@@ -254,6 +238,19 @@ const Dashboard = () => {
 
       {/* HARDWARE TELEMETRY */}
       <div className="bg-white p-10 rounded-[56px] border border-slate-100 shadow-sm">
+        <div className="flex justify-between items-center mb-10">
+          <div>
+            <div className="flex items-center gap-2 text-emerald-500 mb-1">
+              <CheckCircle size={16} />
+              <span className="text-[10px] font-black uppercase tracking-widest">Live status and profitability tracking</span>
+            </div>
+            <h2 className="text-3xl font-black text-slate-900 tracking-tight">Real-Time Machine Monitoring</h2>
+          </div>
+          <button onClick={() => loadDashboardData(true)} className="p-4 hover:bg-slate-50 rounded-2xl transition-all">
+            <RefreshCw size={20} className={refreshing ? 'animate-spin' : 'text-slate-300'} />
+          </button>
+        </div>
+
         <MachineGrid
           machines={machines}
           loading={loading && machines.length === 0}

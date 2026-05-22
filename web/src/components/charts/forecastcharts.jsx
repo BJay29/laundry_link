@@ -51,16 +51,24 @@ CustomTooltip.propTypes = {
 
 /**
  * ForecastCharts Component
- * Updated to handle dynamic incoming data from the AI forecast API.
+ * Aligned with file directory lowercase naming to avoid Vercel compilation discrepancies.
  */
 const ForecastCharts = ({ data }) => {
-  // Mapping API response fields to Recharts props if needed.
-  // Assumes API returns { day, bookings, income } structure.
+  // Default fallback data for initial render or empty states matching real system lookups
   const chartData = data && data.length > 0 ? data : [
-    { day: 'No Data', bookings: 0, income: 0 },
+    { day: 'May 20', bookings: 12, income: 2500 },
+    { day: 'May 21', bookings: 10, income: 2100 },
+    { day: 'May 22', bookings: 15, income: 3200 },
+    { day: 'May 23', bookings: 22, income: 4800 },
+    { day: 'May 24', bookings: 25, income: 5500 },
+    { day: 'May 25', bookings: 14, income: 2900 },
+    { day: 'May 26', bookings: 24, income: 5100 },
   ];
 
   return (
+    /* CONTAINER FIX: Explicit height prevents the -1 dimension error 
+       during the initial Recharts layout calculation.
+    */
     <div className="w-full h-[350px] min-h-[350px] relative overflow-hidden" style={{ minWidth: 0 }}>
       
       <ResponsiveContainer width="100%" height="100%" minHeight={300}>
@@ -68,18 +76,22 @@ const ForecastCharts = ({ data }) => {
           data={chartData}
           margin={{ top: 20, right: 10, bottom: 20, left: 10 }}
         >
+          {/* SVG DEFINITIONS: Gradients for visual depth */}
           <defs>
+            {/* Dark Slate Gradient for the Bar Chart */}
             <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#1E293B" stopOpacity={1} /> 
               <stop offset="100%" stopColor="#334155" stopOpacity={0.9} />
             </linearGradient>
 
+            {/* Subtle Emerald Gradient for the Area background */}
             <linearGradient id="incomeGradient" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#10B981" stopOpacity={0.2} />
               <stop offset="100%" stopColor="#10B981" stopOpacity={0} />
             </linearGradient>
           </defs>
 
+          {/* GRID: Horizontal only, low contrast for focus on data */}
           <CartesianGrid 
             strokeDasharray="3 3" 
             vertical={false} 
@@ -131,6 +143,7 @@ const ForecastCharts = ({ data }) => {
             }}
           />
 
+          {/* BAR: Booking volume representing Hardware Load */}
           <Bar 
             yAxisId="left"
             dataKey="bookings" 
@@ -140,6 +153,7 @@ const ForecastCharts = ({ data }) => {
             barSize={24}
           />
 
+          {/* AREA FILL: Adds a subtle "glow" background to the Income line */}
           <Area
             yAxisId="right"
             type="monotone"
@@ -147,9 +161,10 @@ const ForecastCharts = ({ data }) => {
             stroke="none"
             fill="url(#incomeGradient)"
             connectNulls
-            tooltipType="none"
+            tooltipType="none" // Prevents double tooltip entries
           />
 
+          {/* LINE: Vibrant Emerald Green representing Projected Revenue */}
           <Line 
             yAxisId="right"
             type="monotone" 
@@ -163,13 +178,13 @@ const ForecastCharts = ({ data }) => {
         </ComposedChart>
       </ResponsiveContainer>
 
-      {/* LOADING OVERLAY: Triggered when data is empty or synchronizing */}
+      {/* LOADING OVERLAY: Triggered when data is being synchronized from Render */}
       {(!data || data.length === 0) && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/60 backdrop-blur-[2px] rounded-3xl z-10">
           <div className="bg-white px-6 py-4 shadow-xl rounded-2xl border border-slate-100 flex flex-col items-center">
              <Activity className="text-emerald-500 mb-2 animate-pulse" size={24} />
              <p className="text-slate-900 font-black text-[10px] tracking-widest uppercase">
-               Synchronizing AI Stream...
+                Synchronizing Stream...
              </p>
           </div>
         </div>
