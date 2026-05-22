@@ -1,18 +1,18 @@
 import axios from 'axios';
-
+ 
 /**
  * Base URL for the FastAPI backend.
  * Hosted on Render for production access.
  */
 const BASE_URL = 'https://laundrylink-backend-8p1l.onrender.com';
-
+ 
 const apiClient = axios.create({
     baseURL: BASE_URL,
     headers: {
         'Content-Type': 'application/json',
     },
 });
-
+ 
 /**
  * Request Interceptor:
  * Automatically attaches the JWT Bearer token to every outgoing request
@@ -25,9 +25,9 @@ apiClient.interceptors.request.use((config) => {
     }
     return config;
 });
-
+ 
 // --- INDIVIDUAL EXPORTS FOR NAMED IMPORTS ---
-
+ 
 export const getInventory = async (shopId) => {
     try {
         const targetId = shopId || localStorage.getItem('shop_id');
@@ -38,7 +38,7 @@ export const getInventory = async (shopId) => {
         throw error;
     }
 };
-
+ 
 /**
  * Fetches inventory grouped by category for booking dropdowns.
  */
@@ -52,7 +52,7 @@ export const getInventoryCategories = async (shopId) => {
         throw error;
     }
 };
-
+ 
 export const addInventoryItem = async (itemData) => {
     try {
         const sanitizedData = {
@@ -71,11 +71,13 @@ export const addInventoryItem = async (itemData) => {
         throw error;
     }
 };
-
+ 
 export const updateStock = async (itemId, stockData) => {
     try {
         const sanitizedData = {
             ...stockData,
+            // Include item_name so edits to the name are sent to the backend
+            item_name: stockData.item_name || undefined,
             current_stock: stockData.current_stock !== undefined ? parseFloat(stockData.current_stock) : undefined,
             reorder_point: stockData.reorder_point !== undefined ? parseFloat(stockData.reorder_point) : undefined,
             usage_rate: stockData.usage_rate !== undefined ? parseFloat(stockData.usage_rate) : undefined,
@@ -88,7 +90,7 @@ export const updateStock = async (itemId, stockData) => {
         throw error;
     }
 };
-
+ 
 export const deleteInventoryItem = async (itemId) => {
     try {
         const response = await apiClient.delete(`/inventory/${itemId}`);
@@ -98,7 +100,7 @@ export const deleteInventoryItem = async (itemId) => {
         throw error;
     }
 };
-
+ 
 export const recordItemUsage = async (itemId, quantity) => {
     try {
         const response = await apiClient.post(`/inventory/${itemId}/use?quantity=${parseFloat(quantity)}`);
@@ -108,7 +110,7 @@ export const recordItemUsage = async (itemId, quantity) => {
         throw error;
     }
 };
-
+ 
 export const getItemAnalytics = async (itemId, days = 7) => {
     try {
         const response = await apiClient.get(`/inventory/${itemId}/analytics?days=${days}`);
@@ -118,7 +120,7 @@ export const getItemAnalytics = async (itemId, days = 7) => {
         throw error;
     }
 };
-
+ 
 export const getInventoryDashboardStats = async (shopId) => {
     try {
         const targetId = shopId || localStorage.getItem('shop_id');
@@ -129,7 +131,7 @@ export const getInventoryDashboardStats = async (shopId) => {
         throw error;
     }
 };
-
+ 
 /**
  * Fetches AI model accuracy metrics.
  */
@@ -142,9 +144,9 @@ export const getAiAccuracyMetrics = async () => {
         throw error;
     }
 };
-
+ 
 // --- API SERVICE OBJECT ---
-
+ 
 export const apiService = {
     
     // --- AUTHENTICATION METHODS ---
@@ -153,13 +155,13 @@ export const apiService = {
         try {
             const response = await apiClient.post('/auth/login', { email, password });
             const { user, access_token } = response.data;
-
+ 
             localStorage.setItem('token', access_token);
             localStorage.setItem('user_email', user.email);
             localStorage.setItem('shop_id', user.shop_id);
             localStorage.setItem('shop_name', user.shop_name);
             localStorage.setItem('shop_address', user.address);
-
+ 
             return response.data;
         } catch (error) {
             const errorMessage = error.response?.data?.detail || error.message;
@@ -167,12 +169,12 @@ export const apiService = {
             throw error;
         }
     },
-
+ 
     logout: () => {
         localStorage.clear();
         window.location.href = '/login';
     },
-
+ 
     // --- BOOKING & TRANSACTION METHODS ---
     
     createBooking: async (bookingData) => {
@@ -194,7 +196,7 @@ export const apiService = {
                     ? new Date(bookingData.booking_timestamp).toISOString() 
                     : new Date().toISOString()
             };
-
+ 
             const response = await apiClient.post('/bookings/', payload);
             return response.data;
         } catch (error) {
@@ -202,7 +204,7 @@ export const apiService = {
             throw error;
         }
     },
-
+ 
     getActiveBookings: async () => {
         try {
             const response = await apiClient.get('/bookings/active');
@@ -212,7 +214,7 @@ export const apiService = {
             throw error;
         }
     },
-
+ 
     updateBookingStatus: async (bookingId, newStatus) => {
         try {
             const response = await apiClient.patch(`/bookings/${bookingId}/status`, { 
@@ -224,9 +226,9 @@ export const apiService = {
             throw error;
         }
     },
-
+ 
     // --- MACHINE HUB & TELEMETRY METHODS ---
-
+ 
     getMachines: async () => {
         try {
             const shopId = localStorage.getItem('shop_id');
@@ -239,7 +241,7 @@ export const apiService = {
             throw error;
         }
     },
-
+ 
     deleteMachine: async (machineId) => {
         try {
             const response = await apiClient.delete(`/machines/${machineId}`);
@@ -249,7 +251,7 @@ export const apiService = {
             throw error;
         }
     },
-
+ 
     getMachineMetrics: async (machineId) => {
         try {
             const response = await apiClient.get(`/machines/${machineId}/metrics`);
@@ -259,7 +261,7 @@ export const apiService = {
             throw error;
         }
     },
-
+ 
     addMachine: async (machineData) => {
         try {
             const shopId = localStorage.getItem('shop_id');
@@ -275,7 +277,7 @@ export const apiService = {
             throw error;
         }
     },
-
+ 
     toggleMaintenance: async (machineId) => {
         try {
             const response = await apiClient.patch(`/machines/${machineId}/maintenance`);
@@ -285,7 +287,7 @@ export const apiService = {
             throw error;
         }
     },
-
+ 
     initializeDefaultMachines: async () => {
         try {
             const response = await apiClient.post('/machines/initialize');
@@ -295,9 +297,9 @@ export const apiService = {
             throw error;
         }
     },
-
+ 
     // --- INVENTORY METHODS (Mapped to apiService object) ---
-
+ 
     getInventory,
     getInventoryCategories,
     addInventoryItem,
@@ -306,9 +308,9 @@ export const apiService = {
     recordItemUsage,
     getItemAnalytics,
     getInventoryDashboardStats,
-
+ 
     // --- ANALYTICS & INSIGHTS ---
-
+ 
     getDashboardStats: async () => {
         try {
             const response = await apiClient.get('/analytics/dashboard-summary');
@@ -318,7 +320,7 @@ export const apiService = {
             throw error;
         }
     },
-
+ 
     getForecastData: async () => {
         try {
             const response = await apiClient.get('/analytics/forecast-graph');
@@ -328,7 +330,7 @@ export const apiService = {
             throw error;
         }
     },
-
+ 
     getServiceDistribution: async () => {
         try {
             const response = await apiClient.get('/analytics/service-distribution');
@@ -338,7 +340,7 @@ export const apiService = {
             throw error;
         }
     },
-
+ 
     getOperationalInsights: async () => {
         try {
             const response = await apiClient.get('/analytics/operational-insights');
@@ -348,7 +350,7 @@ export const apiService = {
             throw error;
         }
     },
-
+ 
     getModelMetrics: async () => {
         try {
             const response = await apiClient.get('/analytics/model-metrics');
@@ -358,7 +360,7 @@ export const apiService = {
             throw error;
         }
     },
-
+ 
     getWeeklyHistory: async () => {
         try {
             const response = await apiClient.get('/analytics/weekly-history');
@@ -368,11 +370,11 @@ export const apiService = {
             throw error;
         }
     },
-
+ 
     getAiAccuracyMetrics,
-
+ 
     // --- OPTIMIZATION SETTINGS METHODS ---
-
+ 
     getSettings: async (shopId) => {
         try {
             const targetId = shopId || localStorage.getItem('shop_id');
@@ -383,7 +385,7 @@ export const apiService = {
             throw error;
         }
     },
-
+ 
     updateSettings: async (shopId, settingsData) => {
         try {
             const targetId = shopId || localStorage.getItem('shop_id');
@@ -397,7 +399,7 @@ export const apiService = {
                 water_rate: settingsData.water_rate !== undefined ? parseFloat(settingsData.water_rate) : undefined,
                 detergent_cost_per_load: settingsData.detergent_cost_per_load !== undefined ? parseFloat(settingsData.detergent_cost_per_load) : undefined
             };
-
+ 
             const response = await apiClient.put(`/settings/${targetId}`, sanitizedPayload);
             return response.data;
         } catch (error) {
@@ -405,7 +407,7 @@ export const apiService = {
             throw error;
         }
     },
-
+ 
     getSystemDefaults: async () => {
         try {
             const response = await apiClient.get('/settings/defaults');
@@ -415,7 +417,7 @@ export const apiService = {
             throw error;
         }
     },
-
+ 
     resetToDefaults: async (shopId) => {
         try {
             const targetId = shopId || localStorage.getItem('shop_id');
@@ -426,7 +428,7 @@ export const apiService = {
             throw error;
         }
     },
-
+ 
     getBookingPricing: async (shopId) => {
         try {
             const targetId = shopId || localStorage.getItem('shop_id');
@@ -437,7 +439,7 @@ export const apiService = {
             throw error;
         }
     },
-
+ 
     // --- UTILS ---
     getShopId: () => localStorage.getItem('shop_id'),
     getAuthHeader: () => {
@@ -445,5 +447,5 @@ export const apiService = {
         return token ? { Authorization: `Bearer ${token}` } : {};
     }
 };
-
+ 
 export default apiService;
