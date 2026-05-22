@@ -83,8 +83,6 @@ export const updateStock = async (itemId, stockData) => {
             usage_rate: parseFloat(stockData.usage_rate),
             shop_id: stockData.shop_id
         };
-        console.log('[updateStock] itemId:', itemId);
-        console.log('[updateStock] sanitizedData:', JSON.stringify(sanitizedData));
         const response = await apiClient.put(`/inventory/${itemId}`, sanitizedData);
         return response.data;
     } catch (error) {
@@ -135,10 +133,11 @@ export const getInventoryDashboardStats = async (shopId) => {
 };
 
 /**
- * Fetches AI model accuracy metrics.
+ * Fetches AI model accuracy metrics from the analytics controller.
  */
 export const getAiAccuracyMetrics = async () => {
     try {
+        // This maps to the AnalyticsController.get_ai_prediction_metrics endpoint
         const response = await apiClient.get('/analytics/ai-accuracy-metrics');
         return response.data;
     } catch (error) {
@@ -362,16 +361,6 @@ export const apiService = {
             return response.data;
         } catch (error) {
             console.error("Operational Insights Fetch Error:", error.response?.data?.detail || error.message);
-            throw error;
-        }
-    },
-
-    getModelMetrics: async () => {
-        try {
-            const response = await apiClient.get('/analytics/model-metrics');
-            return response.data;
-        } catch (error) {
-            console.error("AI Model Metrics Fetch Error:", error.response?.data?.detail || error.message);
             throw error;
         }
     },

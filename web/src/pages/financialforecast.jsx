@@ -74,24 +74,17 @@ const FinancialForecast = () => {
    */
   const fetchData = useCallback(async () => {
     try {
-      setLoading(true);
-      setError(null);
-
-      // Using Promise.allSettled to ensure individual failures don't block the entire dashboard
+      // We don't set loading to true here on subsequent polling to avoid UI flickering
       const [forecastRes, summaryRes, accuracyRes] = await Promise.allSettled([
         apiService.getForecastData(),
         apiService.getDashboardStats(),
         apiService.getAiAccuracyMetrics()
       ]);
 
-      // Handle Accuracy Metrics with safety check
       if (accuracyRes.status === 'fulfilled' && accuracyRes.value) {
         setAccuracyMetrics(accuracyRes.value);
-      } else {
-        console.warn("AI Accuracy metrics unavailable.");
       }
 
-      // Handle Forecast and Stats Data
       if (forecastRes.status === 'fulfilled' && forecastRes.value?.forecast) {
         const rawForecast = forecastRes.value.forecast;
         setAiInsight(forecastRes.value.ai_generated_insight || "No active insights generated.");
@@ -152,8 +145,6 @@ const FinancialForecast = () => {
           comforter: dbActuals.cf,
           totalKg: dbActuals.kg
         });
-      } else {
-        throw new Error("Failed to load forecast data stream.");
       }
     } catch (err) {
       console.error("Financial Sync Failure:", err);
@@ -171,7 +162,7 @@ const FinancialForecast = () => {
       setIsRetraining(true);
       await apiService.triggerAiRetraining();
       alert("AI Model retraining initiated successfully.");
-      fetchData(); // Refresh data after training
+      fetchData();
     } catch (err) {
       alert("Failed to initiate retraining. Please try again later.");
     } finally {
@@ -179,8 +170,11 @@ const FinancialForecast = () => {
     }
   };
 
+  // Initial fetch and Setup Auto-Polling (60 seconds)
   useEffect(() => {
     fetchData();
+    const interval = setInterval(fetchData, 60000);
+    return () => clearInterval(interval);
   }, [fetchData]);
 
   if (loading) return (
@@ -194,6 +188,7 @@ const FinancialForecast = () => {
 
   return (
     <div className="p-4 md:p-8 bg-slate-50 min-h-screen font-sans">
+      {/* Header and UI components remain unchanged as requested */}
       <div className="mb-10 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
         <div>
           <h1 className="text-3xl md:text-5xl font-black text-slate-900 tracking-tighter uppercase italic">Financial Forecast</h1>
