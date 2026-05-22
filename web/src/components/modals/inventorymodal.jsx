@@ -60,7 +60,9 @@ const InventoryModal = ({ isOpen, onClose, item, onSave, loading = false }) => {
       });
       setErrors({});
     }
-  }, [item, isOpen]);
+  // item?.id is included so the effect reliably re-fires when switching between different items,
+  // even if the parent passes a new object with the same reference identity
+  }, [item, item?.id, isOpen]);
 
   /**
    * Validate form data before submission.

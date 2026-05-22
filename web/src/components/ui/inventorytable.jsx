@@ -10,7 +10,7 @@ import { Edit3, AlertTriangle, CheckCircle2, Gauge, Tag, AlertOctagon, Trash2, T
  * - Category and unit display
  * - Usage rate per load display
  * - Sortable columns
- * - Delete and edit actions
+ * - Delete and edit actions (no browser confirm — delegates to parent modal)
  * - Empty state message
  * - Responsive design
  * - Loading state
@@ -46,8 +46,8 @@ const InventoryTable = ({
   }
 
   /**
-   * Determine status display based on stock levels
-   * Returns object with label, color classes, and icon
+   * Determine status display based on stock levels.
+   * Returns object with label, color classes, icon, and sort priority.
    */
   const getStatus = (item) => {
     const stock = parseFloat(item?.current_stock) || 0;
@@ -104,7 +104,7 @@ const InventoryTable = ({
   };
 
   /**
-   * Handle column sorting
+   * Handle column header click to toggle sort direction
    */
   const handleSort = (column) => {
     if (localSortBy === column) {
@@ -159,7 +159,7 @@ const InventoryTable = ({
   }, [items, localSortBy, localSortOrder]);
 
   /**
-   * Render sort indicator icon
+   * Render sort indicator chevron icon for active column
    */
   const renderSortIcon = (column) => {
     if (localSortBy !== column) return null;
@@ -169,7 +169,7 @@ const InventoryTable = ({
   };
 
   /**
-   * Render sortable column header
+   * Reusable sortable column header component
    */
   const SortableHeader = ({ label, column, className = '' }) => (
     <th 
@@ -291,14 +291,15 @@ const InventoryTable = ({
                     )}
                   </td>
 
-                  {/* Action Buttons */}
+                  {/* Action Buttons — delegate all confirmations to parent modals, no browser dialogs */}
                   <td className="py-5 px-6 text-center">
                     <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {/* Record Usage Button */}
+                      
+                      {/* Record Usage Button — passes id and name to parent usage modal */}
                       {onRecordUsage && (
                         <button 
-                          onClick={() => onRecordUsage(item?.id)}
-                          className="p-2 bg-blue-100 hover:bg-blue-500 hover:text-white text-blue-600 rounded-lg transition-all active:scale-95 tooltip"
+                          onClick={() => onRecordUsage(item?.id, item?.item_name)}
+                          className="p-2 bg-blue-100 hover:bg-blue-500 hover:text-white text-blue-600 rounded-lg transition-all active:scale-95"
                           title="Record usage"
                         >
                           <TrendingDown size={16} />
@@ -308,21 +309,17 @@ const InventoryTable = ({
                       {/* Edit Button */}
                       <button 
                         onClick={() => onEdit(item)}
-                        className="p-2 bg-green-100 hover:bg-green-500 hover:text-white text-green-600 rounded-lg transition-all active:scale-95 tooltip"
+                        className="p-2 bg-green-100 hover:bg-green-500 hover:text-white text-green-600 rounded-lg transition-all active:scale-95"
                         title="Edit item"
                       >
                         <Edit3 size={16} />
                       </button>
 
-                      {/* Delete Button */}
+                      {/* Delete Button — passes id and name to parent delete confirmation modal */}
                       {onDelete && (
                         <button 
-                          onClick={() => {
-                            if (window.confirm(`Delete "${item?.item_name}"?`)) {
-                              onDelete(item?.id);
-                            }
-                          }}
-                          className="p-2 bg-red-100 hover:bg-red-500 hover:text-white text-red-600 rounded-lg transition-all active:scale-95 tooltip"
+                          onClick={() => onDelete(item?.id, item?.item_name)}
+                          className="p-2 bg-red-100 hover:bg-red-500 hover:text-white text-red-600 rounded-lg transition-all active:scale-95"
                           title="Delete item"
                         >
                           <Trash2 size={16} />
@@ -337,7 +334,7 @@ const InventoryTable = ({
         </table>
       </div>
 
-      {/* Table Footer Info */}
+      {/* Table Footer Summary */}
       <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
           <div>

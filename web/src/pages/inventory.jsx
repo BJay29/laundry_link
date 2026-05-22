@@ -516,7 +516,10 @@ const InventoryPage = () => {
       </div>
 
       {/* Inventory Management Modal */}
+      {/* key forces a full remount whenever the selected item changes,
+          guaranteeing the form state resets correctly for each item */}
       <InventoryModal
+        key={selectedItem?.id ?? 'new'}
         isOpen={isModalOpen}
         onClose={() => {
           setIsModalOpen(false);
