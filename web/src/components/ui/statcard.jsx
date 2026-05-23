@@ -10,7 +10,8 @@ import {
   ArrowDownRight,
   Zap,
   Coins,
-  Package
+  Package,
+  Calculator // Added for Average Per Service icon
 } from 'lucide-react';
 
 /**
@@ -54,6 +55,12 @@ const StatCard = ({ title, value, trend, type, isNegative, icon }) => {
       bgColor: 'bg-violet-50',
       textColor: 'text-violet-600',
       isCurrency: false,
+    },
+    avg_per_service: { // Added configuration for the average per service card
+      icon: <Calculator size={20} strokeWidth={2.5} />,
+      bgColor: 'bg-purple-50',
+      textColor: 'text-purple-600',
+      isCurrency: true,
     }
   };
 
@@ -150,7 +157,7 @@ StatCard.propTypes = {
   title: PropTypes.string.isRequired,
   value: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
   trend: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
-  type: PropTypes.oneOf(['revenue', 'utilization', 'income', 'bookings', 'inventory']),
+  type: PropTypes.oneOf(['revenue', 'utilization', 'income', 'bookings', 'inventory', 'avg_per_service']), // Added avg_per_service
   isNegative: PropTypes.bool,
   icon: PropTypes.element
 };

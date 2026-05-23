@@ -61,7 +61,7 @@ const Dashboard = () => {
           ...rawData,
           display_revenue: rawData.today_revenue || 0,
           display_trend: rawData.income_growth || 0,
-          // Ensure average is calculated or provided safely
+          // Ensure avg_per_service is captured from the backend response
           avg_per_service: rawData.avg_per_service || 0,
         });
       }
@@ -185,8 +185,8 @@ const Dashboard = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard title="Today Revenue" value={stats?.today_revenue || 0} trend={`${stats?.income_growth || 0}%`} type="revenue" />
         <StatCard title="Active Machines" value={stats?.active_machines || "0"} trend="In Use" type="utilization" />
-        {/* Pass the value clearly as a number to trigger the formatting engine */}
-        <StatCard title="Avg. Per Service" value={Number(stats?.avg_per_service || 0)} trend="Stable" type="revenue" icon={<DollarSign />} />
+        {/* Updated: Using avg_per_service from stats object */}
+        <StatCard title="Avg. Per Service" value={Number(stats?.avg_per_service || 0)} trend="Stable" type="avg_per_service" />
         <StatCard title="Expected Bookings" value={stats?.predicted_bookings_today || "0"} trend="Forecast" type="bookings" />
       </div>
 
