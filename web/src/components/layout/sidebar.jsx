@@ -8,20 +8,22 @@ import {
   LogOut,
   AlertCircle,
   X,
-  Package 
+  Package,
+  UserCog
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 /**
  * SIDEBAR COMPONENT
  * Features synchronized navigation, custom branding, and a secure logout confirmation modal.
+ * Includes both Optimization Settings (main nav) and Account Settings (below logout).
  */
 const Sidebar = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
-  // Navigation items fully synced with App.jsx routes
+  // Main navigation items synced with App.jsx routes
   const navItems = [
     { 
       name: 'Overview Dashboard', 
@@ -49,7 +51,7 @@ const Sidebar = () => {
       path: '/forecast' 
     },
     { 
-      name: 'Settings', // Added Settings navigation item here
+      name: 'Optimization Settings',
       icon: <Settings size={20} />, 
       path: '/settings' 
     },
@@ -57,7 +59,7 @@ const Sidebar = () => {
 
   /**
    * HANDLER: Secure Logout
-   * Clears session logic and redirects the user to the login portal.
+   * Clears session data and redirects the user to the login portal.
    */
   const handleFinalLogout = () => {
     // Clear local authentication data
@@ -118,8 +120,25 @@ const Sidebar = () => {
           </ul>
         </nav>
 
-        {/* Sidebar Footer: System Status and Logout Trigger */}
+        {/* Sidebar Footer: Account Settings, Logout, and System Status */}
         <div className="p-6 border-t border-slate-800/50">
+
+          {/* Account Settings link — placed above logout for easy access */}
+          <Link
+            to="/account-settings"
+            className={`flex items-center gap-4 px-5 py-4 w-full font-bold transition-all duration-200 group rounded-2xl mb-1 ${
+              location.pathname === '/account-settings'
+                ? 'bg-sky-500 text-white shadow-xl shadow-sky-500/40'
+                : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
+            }`}
+          >
+            <UserCog size={20} className={`transition-colors duration-300 ${
+              location.pathname === '/account-settings' ? 'text-white' : 'text-slate-500 group-hover:text-slate-300'
+            }`} />
+            <span className="text-sm tracking-wide">Account Settings</span>
+          </Link>
+
+          {/* Logout Button */}
           <button 
             onClick={() => setShowLogoutModal(true)}
             className="flex items-center gap-4 px-5 py-4 w-full text-slate-400 hover:text-red-400 font-bold transition-all duration-200 group rounded-2xl hover:bg-red-500/5"
@@ -129,7 +148,7 @@ const Sidebar = () => {
           </button>
           
           {/* System Health Card */}
-          <div className="mt-6 px-5 py-5 bg-[#242d40] rounded-[24px] border border-slate-700/30">
+          <div className="mt-4 px-5 py-5 bg-[#242d40] rounded-[24px] border border-slate-700/30">
             <div className="flex items-center gap-2 mb-2">
               <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.6)]"></div>
               <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest">

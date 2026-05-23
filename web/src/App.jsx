@@ -9,9 +9,10 @@ import Login from './pages/login';
 import Dashboard from './pages/dashboard';
 import ServiceTerminal from './pages/serviceterminal';
 import MachineHub from './pages/machinehub';
-import InventoryPage from './pages/inventory'; // Newly imported Inventory page
+import InventoryPage from './pages/inventory';
 import FinancialForecast from './pages/financialforecast';
-import OptimizationSettings from './pages/optimizationsettings'; 
+import OptimizationSettings from './pages/optimizationsettings';
+import Settings from './pages/settings'; // Account Settings page for profile and password management
 
 function App() {
   return (
@@ -40,6 +41,9 @@ function App() {
           
           {/* Configuration for pricing, operating costs, and profit optimization */}
           <Route path="/settings" element={<OptimizationSettings />} />
+
+          {/* Account settings for shop profile and password management */}
+          <Route path="/account-settings" element={<Settings />} />
           
         </Route>
 
@@ -47,7 +51,7 @@ function App() {
         {/* Redirect root path to login by default */}
         <Route path="/" element={<Navigate to="/login" replace />} />
         
-        {/* Wildcard route to handle 404s or undefined paths by redirecting to logins */}
+        {/* Wildcard route to handle 404s or undefined paths by redirecting to login */}
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </BrowserRouter>
