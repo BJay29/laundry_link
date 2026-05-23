@@ -452,5 +452,33 @@ export const apiService = {
         return token ? { Authorization: `Bearer ${token}` } : {};
     }
 };
+/**
+ * Updates the shop profile (name, address, email).
+ * @param {number|string} shopId - The ID of the shop to update.
+ * @param {Object} profileData - The data object containing shop details.
+ */
+export const updateShopProfile = async (shopId, profileData) => {
+    try {
+        const response = await apiClient.put(`/settings/${shopId}/profile`, profileData);
+        return response.data;
+    } catch (error) {
+        console.error("Update Shop Profile Error:", error.response?.data?.detail || error.message);
+        throw error;
+    }
+};
 
+/**
+ * Updates the user password after verifying current credentials.
+ * @param {number|string} userId - The ID of the user.
+ * @param {Object} passwordData - Object containing old_password and new_password.
+ */
+export const updatePassword = async (userId, passwordData) => {
+    try {
+        const response = await apiClient.put(`/settings/user/${userId}/password`, passwordData);
+        return response.data;
+    } catch (error) {
+        console.error("Update Password Error:", error.response?.data?.detail || error.message);
+        throw error;
+    }
+};
 export default apiService;

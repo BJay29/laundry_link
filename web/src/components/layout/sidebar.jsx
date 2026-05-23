@@ -8,7 +8,7 @@ import {
   LogOut,
   AlertCircle,
   X,
-  Package // Added Package icon for Inventory
+  Package 
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 
@@ -39,7 +39,7 @@ const Sidebar = () => {
       path: '/machines' 
     },
     { 
-      name: 'Inventory', // Added Inventory navigation item
+      name: 'Inventory', 
       icon: <Package size={20} />, 
       path: '/inventory' 
     },
@@ -49,7 +49,7 @@ const Sidebar = () => {
       path: '/forecast' 
     },
     { 
-      name: 'Optimization Settings', 
+      name: 'Settings', // Added Settings navigation item here
       icon: <Settings size={20} />, 
       path: '/settings' 
     },
@@ -60,7 +60,8 @@ const Sidebar = () => {
    * Clears session logic and redirects the user to the login portal.
    */
   const handleFinalLogout = () => {
-    // Clear local authentication data here if needed (e.g., localStorage.clear())
+    // Clear local authentication data
+    localStorage.clear();
     navigate('/login');
   };
 
@@ -163,6 +164,7 @@ const Sidebar = () => {
               Confirm Logout
             </h3>
             <p className="text-slate-500 font-medium leading-relaxed mb-8">
+              Are you sure you want to end your session?
             </p>
 
             <div className="flex flex-col gap-3">
