@@ -26,7 +26,7 @@ const Sidebar = () => {
   // Main navigation items synced with App.jsx routes
   const navItems = [
     { 
-      name: 'Overview Dashboard', 
+      name: 'Dashboard', 
       icon: <LayoutDashboard size={20} />, 
       path: '/dashboard' 
     },

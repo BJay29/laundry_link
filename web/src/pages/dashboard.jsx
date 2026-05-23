@@ -151,7 +151,7 @@ const Dashboard = () => {
                 </span>
             </div>
           </div>
-          <h1 className="text-6xl font-black text-slate-900 mt-2 tracking-tighter italic uppercase">Overview Dashboard</h1>
+          <h1 className="text-6xl font-black text-slate-900 mt-2 tracking-tighter italic uppercase">Dashboard</h1>
         </div>
 
         <div className="flex items-center gap-4 w-full lg:w-auto">
