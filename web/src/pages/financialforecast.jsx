@@ -10,7 +10,7 @@ import {
   Zap,
   Cpu,
   Sparkles,
-  RotateCcw
+  CheckCircle2 // Added for status indicator
 } from 'lucide-react';
 import ForecastCharts from '../components/charts/forecastcharts';
 import apiService from '../services/APIservices';
@@ -50,7 +50,6 @@ const FinancialForecast = () => {
   const [aiInsight, setAiInsight] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [isRetraining, setIsRetraining] = useState(false);
 
   const [stats, setStats] = useState({
     totalRevenue: 0,
@@ -74,7 +73,6 @@ const FinancialForecast = () => {
    */
   const fetchData = useCallback(async () => {
     try {
-      // We don't set loading to true here on subsequent polling to avoid UI flickering
       const [forecastRes, summaryRes, accuracyRes] = await Promise.allSettled([
         apiService.getForecastData(),
         apiService.getDashboardStats(),
@@ -154,22 +152,6 @@ const FinancialForecast = () => {
     }
   }, []);
 
-  /**
-   * Triggers manual retraining of the AI model.
-   */
-  const handleRetrain = async () => {
-    try {
-      setIsRetraining(true);
-      await apiService.triggerAiRetraining();
-      alert("AI Model retraining initiated successfully.");
-      fetchData();
-    } catch (err) {
-      alert("Failed to initiate retraining. Please try again later.");
-    } finally {
-      setIsRetraining(false);
-    }
-  };
-
   // Initial fetch and Setup Auto-Polling (60 seconds)
   useEffect(() => {
     fetchData();
@@ -188,17 +170,17 @@ const FinancialForecast = () => {
 
   return (
     <div className="p-4 md:p-8 bg-slate-50 min-h-screen font-sans">
-      {/* Header and UI components remain unchanged as requested */}
       <div className="mb-10 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
         <div>
           <h1 className="text-3xl md:text-5xl font-black text-slate-900 tracking-tighter uppercase italic">Financial Forecast</h1>
           <p className="text-slate-500 font-bold text-sm">Automated projections analyzed against cross-referenced historical data.</p>
         </div>
         <div className="flex gap-2">
-            <button onClick={handleRetrain} disabled={isRetraining} className={`flex items-center gap-2 p-4 bg-indigo-600 text-white rounded-2xl transition-all shadow-sm active:scale-95 ${isRetraining ? 'opacity-50 cursor-not-allowed' : 'hover:bg-indigo-700'}`}>
-                <RotateCcw size={20} className={isRetraining ? 'animate-spin' : ''} />
-                <span className="font-bold text-sm">Retrain AI</span>
-            </button>
+            {/* Automated System Status Indicator */}
+            <div className="flex items-center gap-2 px-4 py-4 bg-emerald-50 text-emerald-600 rounded-2xl shadow-sm border border-emerald-100">
+                <CheckCircle2 size={20} />
+                <span className="font-bold text-sm">System Automated</span>
+            </div>
             <button onClick={fetchData} className="p-4 bg-white border border-slate-200 rounded-2xl hover:bg-slate-100 transition-all shadow-sm active:scale-95">
             <RefreshCw size={20} className="text-slate-400" />
             </button>
