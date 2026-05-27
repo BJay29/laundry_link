@@ -3,16 +3,32 @@ import { apiService } from '../services/APIservices';
 import InventoryTable from '../components/ui/inventorytable';
 import InventoryModal from '../components/modals/inventorymodal';
 import InventoryCharts from '../components/charts/inventorycharts';
-import { Search, AlertCircle, RefreshCw, Filter, Trash2, X, CheckCircle, Minus } from 'lucide-react';
+import {
+  Search,
+  AlertCircle,
+  RefreshCw,
+  Filter,
+  Trash2,
+  X,
+  CheckCircle2,
+  Minus,
+  Package,
+  AlertTriangle,
+  AlertOctagon,
+  Layers,
+  Plus,
+} from 'lucide-react';
 
 /**
  * INVENTORY PAGE
  * Main dashboard for tracking supply levels and managing inventory data.
+ *
  * Features:
  * - Real-time inventory tracking
+ * - Stat cards matching the dashboard design (icon + label + large number)
  * - Stock level monitoring with visual indicators
  * - Add, edit, and delete inventory items
- * - Analytics charts for consumption trends
+ * - Analytics chart for stock levels
  * - Search and filter functionality
  * - Record item usage via modal input (no browser prompt)
  * - Delete confirmation modal (no browser confirm)
@@ -21,28 +37,25 @@ import { Search, AlertCircle, RefreshCw, Filter, Trash2, X, CheckCircle, Minus }
  * - Responsive design
  */
 const InventoryPage = () => {
-  // State Management
-  const [items, setItems] = useState([]);
-  const [filteredItems, setFilteredItems] = useState([]);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedItem, setSelectedItem] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [modalLoading, setModalLoading] = useState(false);
-  const [error, setError] = useState(null);
+  // State
+  const [items, setItems]                   = useState([]);
+  const [filteredItems, setFilteredItems]   = useState([]);
+  const [isModalOpen, setIsModalOpen]       = useState(false);
+  const [selectedItem, setSelectedItem]     = useState(null);
+  const [loading, setLoading]               = useState(true);
+  const [modalLoading, setModalLoading]     = useState(false);
+  const [error, setError]                   = useState(null);
   const [successMessage, setSuccessMessage] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('ALL');
-  const [sortConfig, setSortConfig] = useState({
-    key: 'item_name',
-    order: 'asc'
-  });
+  const [searchTerm, setSearchTerm]         = useState('');
+  const [filterStatus, setFilterStatus]     = useState('ALL');
+  const [sortConfig, setSortConfig]         = useState({ key: 'item_name', order: 'asc' });
 
   // Delete confirmation modal state
   const [deleteModal, setDeleteModal] = useState({ open: false, itemId: null, itemName: '' });
 
   // Usage input modal state
-  const [usageModal, setUsageModal] = useState({ open: false, itemId: null, itemName: '', quantity: '' });
-  const [usageError, setUsageError] = useState('');
+  const [usageModal, setUsageModal]   = useState({ open: false, itemId: null, itemName: '', quantity: '' });
+  const [usageError, setUsageError]   = useState('');
 
   // Auto-dismiss success toast after 3 seconds
   useEffect(() => {
@@ -52,61 +65,54 @@ const InventoryPage = () => {
     }
   }, [successMessage]);
 
-  /**
-   * Load inventory items from API on component mount
-   */
+  // Load inventory on mount
   useEffect(() => {
     loadInventory();
   }, []);
 
-  /**
-   * Filter and search items whenever items, searchTerm, or filterStatus changes
-   */
+  // Re-filter whenever items, search term, or status filter changes
   useEffect(() => {
     filterAndSearchItems();
   }, [items, searchTerm, filterStatus]);
 
   /**
-   * Get shop ID from localStorage with fallback
+   * Returns the shop ID from localStorage with a safe fallback.
    */
   const getShopId = () => {
-    const rawShopId = localStorage.getItem('shop_id');
-    return rawShopId ? parseInt(rawShopId, 10) : 1;
+    const raw = localStorage.getItem('shop_id');
+    return raw ? parseInt(raw, 10) : 1;
   };
 
   /**
-   * Determine item status based on stock levels
+   * Classifies an item into one of four status buckets based on stock levels.
    */
   const getItemStatus = (item) => {
-    const stock = parseFloat(item?.current_stock) || 0;
-    const reorder = parseFloat(item?.reorder_point) || 0;
+    const stock   = parseFloat(item?.current_stock) || 0;
+    const reorder = parseFloat(item?.reorder_point)  || 0;
 
-    if (stock <= 0) return 'OUT_OF_STOCK';
+    if (stock <= 0)             return 'OUT_OF_STOCK';
     if (stock <= reorder * 0.5) return 'CRITICAL';
-    if (stock <= reorder) return 'LOW';
+    if (stock <= reorder)       return 'LOW';
     return 'ADEQUATE';
   };
 
   /**
-   * Filter items based on search term and status filter
+   * Applies search text and status filter to the full items list, then sorts.
    */
   const filterAndSearchItems = () => {
     let filtered = [...items];
 
-    // Apply search filter
     if (searchTerm) {
       filtered = filtered.filter(item =>
         (item?.item_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (item?.category || '').toLowerCase().includes(searchTerm.toLowerCase())
+        (item?.category  || '').toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
-    // Apply status filter
     if (filterStatus !== 'ALL') {
       filtered = filtered.filter(item => getItemStatus(item) === filterStatus);
     }
 
-    // Apply sorting
     filtered.sort((a, b) => {
       let aValue, bValue;
 
@@ -128,30 +134,24 @@ const InventoryPage = () => {
           bValue = b?.item_name || '';
       }
 
-      if (sortConfig.order === 'asc') {
-        return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
-      } else {
-        return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
-      }
+      return sortConfig.order === 'asc'
+        ? aValue < bValue ? -1 : aValue > bValue ? 1 : 0
+        : aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
     });
 
     setFilteredItems(filtered);
   };
 
   /**
-   * Load inventory items from API
+   * Fetches all inventory items for the current shop from the API.
    */
   const loadInventory = async () => {
     try {
       setLoading(true);
       setError(null);
-
-      const shopId = getShopId();
+      const shopId   = getShopId();
       const inventory = await apiService.getInventory(shopId);
-
-      // Ensure inventory is an array
-      const itemsArray = Array.isArray(inventory) ? inventory : [];
-      setItems(itemsArray);
+      setItems(Array.isArray(inventory) ? inventory : []);
     } catch (err) {
       console.error('Error loading inventory:', err);
       setError('Failed to load inventory. Please try again.');
@@ -161,31 +161,25 @@ const InventoryPage = () => {
     }
   };
 
-  /**
-   * Handle opening modal for editing an existing item
-   */
+  // Open modal pre-filled with an existing item for editing
   const handleEdit = (item) => {
     setSelectedItem(item);
     setIsModalOpen(true);
   };
 
-  /**
-   * Handle opening modal for adding a new item
-   */
+  // Open modal with a blank form for adding a new item
   const handleAdd = () => {
     setSelectedItem(null);
     setIsModalOpen(true);
   };
 
-  /**
-   * Open delete confirmation modal instead of using browser confirm
-   */
+  // Opens the delete confirmation modal (no browser confirm dialog)
   const handleDelete = (itemId, itemName) => {
     setDeleteModal({ open: true, itemId, itemName: itemName || 'this item' });
   };
 
   /**
-   * Confirm and execute deletion after user confirms in modal
+   * Executes deletion after the user confirms in the delete modal.
    */
   const confirmDelete = async () => {
     try {
@@ -200,16 +194,14 @@ const InventoryPage = () => {
     }
   };
 
-  /**
-   * Open usage input modal instead of using browser prompt
-   */
+  // Opens the usage input modal (no browser prompt)
   const handleRecordUsage = (itemId, itemName) => {
     setUsageModal({ open: true, itemId, itemName: itemName || 'item', quantity: '' });
     setUsageError('');
   };
 
   /**
-   * Confirm and submit usage quantity from the usage modal
+   * Submits the usage quantity entered in the usage modal.
    */
   const confirmRecordUsage = async () => {
     const qty = parseFloat(usageModal.quantity);
@@ -233,7 +225,7 @@ const InventoryPage = () => {
   };
 
   /**
-   * Handle saving (adding or updating) an inventory item
+   * Saves a new or updated inventory item via the API.
    */
   const handleSave = async (itemId, data) => {
     try {
@@ -241,11 +233,9 @@ const InventoryPage = () => {
       const shopId = getShopId();
 
       if (itemId) {
-        // Update existing item
         await apiService.updateStock(itemId, data);
         setSuccessMessage('Inventory item updated successfully');
       } else {
-        // Add new item
         await apiService.addInventoryItem({ ...data, shop_id: shopId });
         setSuccessMessage('New item added to inventory');
       }
@@ -255,24 +245,21 @@ const InventoryPage = () => {
       loadInventory();
     } catch (err) {
       console.error('Error saving inventory item:', err);
-      const errorMessage = err.response?.data?.detail || 'Failed to save item. Please check your connection and try again.';
-      setError(errorMessage);
+      const msg = err.response?.data?.detail || 'Failed to save item. Please check your connection.';
+      setError(msg);
     } finally {
       setModalLoading(false);
     }
   };
 
   /**
-   * Calculate inventory statistics
+   * Derives summary stats from the full items list.
    */
   const getStats = () => {
-    const total = items.length;
-    const adequate = items.filter(item => getItemStatus(item) === 'ADEQUATE').length;
-    const low = items.filter(item => getItemStatus(item) === 'LOW').length;
-    const critical = items.filter(item =>
-      ['CRITICAL', 'OUT_OF_STOCK'].includes(getItemStatus(item))
-    ).length;
-
+    const total    = items.length;
+    const adequate = items.filter(i => getItemStatus(i) === 'ADEQUATE').length;
+    const low      = items.filter(i => getItemStatus(i) === 'LOW').length;
+    const critical = items.filter(i => ['CRITICAL', 'OUT_OF_STOCK'].includes(getItemStatus(i))).length;
     return { total, adequate, low, critical };
   };
 
@@ -283,41 +270,43 @@ const InventoryPage = () => {
 
       {/* ── Top-right success toast ── */}
       {successMessage && (
-        <div className="fixed top-5 right-5 z-50 flex items-center gap-3 bg-white border border-green-200 shadow-lg rounded-xl px-4 py-3 animate-in slide-in-from-right duration-300 max-w-sm">
-          <CheckCircle size={20} className="text-green-500 flex-shrink-0" />
+        <div className="fixed top-5 right-5 z-50 flex items-center gap-3 bg-white border border-emerald-100 shadow-xl rounded-2xl px-4 py-3 max-w-sm">
+          <CheckCircle2 size={18} className="text-emerald-500 flex-shrink-0" />
           <p className="text-gray-800 font-medium text-sm flex-1">{successMessage}</p>
-          <button onClick={() => setSuccessMessage(null)} className="text-gray-400 hover:text-gray-600">
-            <X size={16} />
+          <button onClick={() => setSuccessMessage(null)} className="text-gray-300 hover:text-gray-500">
+            <X size={15} />
           </button>
         </div>
       )}
 
       {/* ── Delete Confirmation Modal ── */}
       {deleteModal.open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm border border-gray-100 p-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm border border-gray-100 p-6">
             <div className="flex items-center gap-3 mb-4">
-              <div className="p-2.5 bg-red-50 rounded-lg">
-                <Trash2 size={22} className="text-red-600" />
+              <div className="p-2.5 bg-red-50 rounded-xl">
+                <Trash2 size={20} className="text-red-500" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-gray-900">Delete Item</h3>
-                <p className="text-xs text-gray-500 mt-0.5">This action cannot be undone</p>
+                <h3 className="text-base font-bold text-gray-900">Delete Item</h3>
+                <p className="text-xs text-gray-400 mt-0.5">This action cannot be undone</p>
               </div>
             </div>
-            <p className="text-gray-700 text-sm mb-6">
-              Are you sure you want to delete <span className="font-semibold text-gray-900">"{deleteModal.itemName}"</span>? This will permanently remove it from your inventory.
+            <p className="text-gray-600 text-sm mb-6">
+              Are you sure you want to delete{' '}
+              <span className="font-semibold text-gray-900">"{deleteModal.itemName}"</span>?
+              This will permanently remove it from your inventory.
             </p>
             <div className="flex gap-3">
               <button
                 onClick={() => setDeleteModal({ open: false, itemId: null, itemName: '' })}
-                className="flex-1 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold rounded-lg transition-colors"
+                className="flex-1 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-xl transition-colors text-sm"
               >
                 Cancel
               </button>
               <button
                 onClick={confirmDelete}
-                className="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg transition-colors"
+                className="flex-1 px-4 py-2.5 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-xl transition-colors text-sm"
               >
                 Delete
               </button>
@@ -328,18 +317,18 @@ const InventoryPage = () => {
 
       {/* ── Usage Input Modal ── */}
       {usageModal.open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm border border-gray-100 p-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm border border-gray-100 p-6">
             <div className="flex items-center gap-3 mb-4">
-              <div className="p-2.5 bg-blue-50 rounded-lg">
-                <Minus size={22} className="text-blue-600" />
+              <div className="p-2.5 bg-blue-50 rounded-xl">
+                <Minus size={20} className="text-blue-500" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-gray-900">Record Usage</h3>
-                <p className="text-xs text-gray-500 mt-0.5">{usageModal.itemName}</p>
+                <h3 className="text-base font-bold text-gray-900">Record Usage</h3>
+                <p className="text-xs text-gray-400 mt-0.5">{usageModal.itemName}</p>
               </div>
             </div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
               Quantity Used
             </label>
             <input
@@ -351,23 +340,23 @@ const InventoryPage = () => {
                 setUsageModal(prev => ({ ...prev, quantity: e.target.value }));
                 setUsageError('');
               }}
-              className="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-200 focus:border-blue-400 outline-none font-medium mb-1"
-              placeholder="Enter quantity..."
+              className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none text-sm font-medium"
+              placeholder="Enter quantity…"
               autoFocus
             />
             {usageError && (
-              <p className="text-sm text-red-600 mb-3">{usageError}</p>
+              <p className="text-xs text-red-500 mt-2">{usageError}</p>
             )}
-            <div className="flex gap-3 mt-4">
+            <div className="flex gap-3 mt-5">
               <button
                 onClick={() => { setUsageModal({ open: false, itemId: null, itemName: '', quantity: '' }); setUsageError(''); }}
-                className="flex-1 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold rounded-lg transition-colors"
+                className="flex-1 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-xl transition-colors text-sm"
               >
                 Cancel
               </button>
               <button
                 onClick={confirmRecordUsage}
-                className="flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors"
+                className="flex-1 px-4 py-2.5 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-xl transition-colors text-sm"
               >
                 Record
               </button>
@@ -376,120 +365,147 @@ const InventoryPage = () => {
         </div>
       )}
 
-      {/* Page Header */}
-      <div className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 py-6">
+      {/* ── Page Header ── */}
+      <div className="bg-white border-b border-gray-100">
+        <div className="max-w-7xl mx-auto px-6 py-6">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
-              <h1 className="text-3xl md:text-4xl font-bold text-gray-900">
-                Inventory Management
-              </h1>
-              <p className="text-gray-600 mt-1">
+              <p className="text-xs font-semibold uppercase tracking-widest text-emerald-500 mb-1">
+                Supply Management
+              </p>
+              <h1 className="text-3xl font-bold text-gray-900">Inventory</h1>
+              <p className="text-gray-400 text-sm mt-1">
                 Track and optimize your laundry supply consumables
               </p>
             </div>
             <button
               onClick={handleAdd}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-6 rounded-lg transition-colors inline-flex items-center gap-2"
+              className="bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-2.5 px-5 rounded-xl transition-colors inline-flex items-center gap-2 text-sm shadow-sm shadow-emerald-200"
             >
-              <span>+</span> Add New Item
+              <Plus size={16} />
+              Add New Item
             </button>
           </div>
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 py-8">
+      {/* ── Main Content ── */}
+      <div className="max-w-7xl mx-auto px-6 py-8">
 
         {/* Error Alert */}
         {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
-            <AlertCircle size={20} className="text-red-600 flex-shrink-0 mt-0.5" />
+          <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-2xl flex items-start gap-3">
+            <AlertCircle size={18} className="text-red-500 flex-shrink-0 mt-0.5" />
             <div className="flex-1">
-              <p className="text-red-900 font-semibold">Error</p>
-              <p className="text-red-700 text-sm mt-1">{error}</p>
+              <p className="text-red-800 font-semibold text-sm">Error</p>
+              <p className="text-red-600 text-xs mt-0.5">{error}</p>
             </div>
-            <button
-              onClick={() => setError(null)}
-              className="text-red-500 hover:text-red-700 flex-shrink-0"
-            >
-              ✕
+            <button onClick={() => setError(null)} className="text-red-400 hover:text-red-600">
+              <X size={15} />
             </button>
           </div>
         )}
 
-        {/* Statistics Cards */}
+        {/* ── Stat Cards — matches dashboard card design ── */}
         {!loading && items.length > 0 && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-            <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
-              <p className="text-gray-600 text-sm font-medium">Total Items</p>
-              <p className="text-3xl font-bold text-gray-900 mt-1">{stats.total}</p>
+
+            {/* Total Items */}
+            <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex justify-between items-start">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-2">Total Items</p>
+                <p className="text-3xl font-bold text-gray-900">{stats.total}</p>
+              </div>
+              <div className="p-2.5 bg-slate-100 rounded-xl">
+                <Layers size={20} className="text-slate-500" />
+              </div>
             </div>
-            <div className="bg-white p-4 rounded-lg border border-green-200 shadow-sm">
-              <p className="text-gray-600 text-sm font-medium">✅ Adequate</p>
-              <p className="text-3xl font-bold text-green-600 mt-1">{stats.adequate}</p>
+
+            {/* Adequate */}
+            <div className="bg-white p-5 rounded-2xl border border-emerald-100 shadow-sm flex justify-between items-start">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-2">Adequate</p>
+                <p className="text-3xl font-bold text-emerald-600">{stats.adequate}</p>
+              </div>
+              <div className="p-2.5 bg-emerald-50 rounded-xl">
+                <CheckCircle2 size={20} className="text-emerald-500" />
+              </div>
             </div>
-            <div className="bg-white p-4 rounded-lg border border-yellow-200 shadow-sm">
-              <p className="text-gray-600 text-sm font-medium">⚠️ Low Stock</p>
-              <p className="text-3xl font-bold text-yellow-600 mt-1">{stats.low}</p>
+
+            {/* Low Stock */}
+            <div className="bg-white p-5 rounded-2xl border border-amber-100 shadow-sm flex justify-between items-start">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-2">Low Stock</p>
+                <p className="text-3xl font-bold text-amber-500">{stats.low}</p>
+              </div>
+              <div className="p-2.5 bg-amber-50 rounded-xl">
+                <AlertTriangle size={20} className="text-amber-500" />
+              </div>
             </div>
-            <div className="bg-white p-4 rounded-lg border border-red-200 shadow-sm">
-              <p className="text-gray-600 text-sm font-medium">🔴 Critical</p>
-              <p className="text-3xl font-bold text-red-600 mt-1">{stats.critical}</p>
+
+            {/* Critical */}
+            <div className="bg-white p-5 rounded-2xl border border-red-100 shadow-sm flex justify-between items-start">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-2">Critical</p>
+                <p className="text-3xl font-bold text-red-500">{stats.critical}</p>
+              </div>
+              <div className="p-2.5 bg-red-50 rounded-xl">
+                <AlertOctagon size={20} className="text-red-500" />
+              </div>
             </div>
+
           </div>
         )}
 
-        {/* Inventory Stock Analysis Chart */}
+        {/* ── Inventory Stock Chart ── */}
         <InventoryCharts items={items} loading={loading} />
 
-        {/* Search and Filter Section */}
-        <div className="mt-8 bg-white rounded-lg border border-gray-200 shadow-sm p-4">
-          <div className="flex flex-col md:flex-row gap-4">
-            {/* Search Input */}
+        {/* ── Search & Filter Bar ── */}
+        <div className="mt-8 bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+          <div className="flex flex-col md:flex-row gap-3">
+
+            {/* Search */}
             <div className="flex-1 relative">
-              <Search size={18} className="absolute left-3 top-3 text-gray-400" />
+              <Search size={16} className="absolute left-3.5 top-3 text-gray-300" />
               <input
                 type="text"
-                placeholder="Search items by name or category..."
+                placeholder="Search by name or category…"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-100 focus:border-emerald-400 outline-none text-sm bg-gray-50"
               />
             </div>
 
-            {/* Filter Dropdown */}
+            {/* Status Filter */}
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+              className="px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-100 focus:border-emerald-400 outline-none text-sm bg-gray-50 font-medium text-gray-600"
             >
               <option value="ALL">All Status</option>
-              <option value="ADEQUATE">✅ Adequate</option>
-              <option value="LOW">⚠️ Low Stock</option>
-              <option value="CRITICAL">🔴 Critical</option>
+              <option value="ADEQUATE">Adequate</option>
+              <option value="LOW">Low Stock</option>
+              <option value="CRITICAL">Critical</option>
               <option value="OUT_OF_STOCK">Out of Stock</option>
             </select>
 
-            {/* Refresh Button */}
+            {/* Refresh */}
             <button
               onClick={loadInventory}
-              className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-lg transition-colors inline-flex items-center gap-2"
+              className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 font-semibold rounded-xl transition-colors inline-flex items-center gap-2 text-sm"
             >
-              <RefreshCw size={18} />
+              <RefreshCw size={15} />
               Refresh
             </button>
           </div>
         </div>
 
-        {/* Inventory Data Table */}
-        <div className="mt-8">
+        {/* ── Inventory Table ── */}
+        <div className="mt-6">
           {loading ? (
-            <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-8 text-center">
-              <div className="inline-block">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-2"></div>
-                <p className="text-gray-600">Loading inventory...</p>
-              </div>
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 text-center">
+              <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-emerald-500 mx-auto mb-3"></div>
+              <p className="text-gray-400 text-sm">Loading inventory…</p>
             </div>
           ) : filteredItems.length > 0 ? (
             <InventoryTable
@@ -502,10 +518,12 @@ const InventoryPage = () => {
               sortOrder={sortConfig.order}
             />
           ) : (
-            <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-12 text-center">
-              <Filter size={32} className="mx-auto text-gray-400 mb-3" />
-              <p className="text-gray-600 font-semibold">No items found</p>
-              <p className="text-gray-500 text-sm mt-1">
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center">
+              <div className="p-3 bg-gray-50 rounded-2xl inline-block mb-3">
+                <Filter size={24} className="text-gray-300" />
+              </div>
+              <p className="text-gray-500 font-semibold">No items found</p>
+              <p className="text-gray-400 text-sm mt-1">
                 {searchTerm || filterStatus !== 'ALL'
                   ? 'Try adjusting your search or filter criteria'
                   : 'Add your first inventory item to get started'}
@@ -515,9 +533,9 @@ const InventoryPage = () => {
         </div>
       </div>
 
-      {/* Inventory Management Modal */}
-      {/* key forces a full remount whenever the selected item changes,
-          guaranteeing the form state resets correctly for each item */}
+      {/* ── Inventory Management Modal ──
+          key forces a full remount when the selected item changes,
+          guaranteeing the form resets correctly for each item */}
       <InventoryModal
         key={selectedItem?.id ?? 'new'}
         isOpen={isModalOpen}
