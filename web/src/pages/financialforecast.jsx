@@ -219,9 +219,9 @@ const FinancialForecast = () => {
           <div>
             <div className="flex items-center gap-2 mb-1">
                <Zap size={18} className="text-sky-500 fill-sky-500" />
-               <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight uppercase">Performance Prediction</h2>
+               <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight uppercase">Income & Booking Forecast</h2>
             </div>
-            <p className="text-slate-400 text-sm font-bold italic">7-day outlook based on current machine utilization and booking trends.</p>
+            <p className="text-slate-400 text-sm font-bold italic">Next 7-days prediction with service breakdown</p>
           </div>
         </div>
 
