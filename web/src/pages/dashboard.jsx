@@ -24,6 +24,8 @@ import HistoryModal from '../components/modals/historymodal';
  * DASHBOARD COMPONENT
  * The central intelligence hub for LaundryLink.
  * Visualizes running operational tasks, data telemetry streams, and hardware metrics.
+ * UPDATED: ForecastCharts chart container no longer uses a fixed height —
+ * the redesigned component renders two stacked charts and expands naturally.
  */
 const Dashboard = () => {
   // State Management
@@ -61,7 +63,6 @@ const Dashboard = () => {
           ...rawData,
           display_revenue: rawData.today_revenue || 0,
           display_trend: rawData.income_growth || 0,
-          // Ensure avg_per_service is captured from the backend response
           avg_per_service: rawData.avg_per_service || 0,
         });
       }
@@ -98,7 +99,7 @@ const Dashboard = () => {
     }
   }, []);
 
-  // System Heartbeat - Triggers an automated system polling interval check every 60 seconds
+  // System Heartbeat — automated polling every 60 seconds
   useEffect(() => {
     loadDashboardData();
     const heartbeat = setInterval(() => loadDashboardData(true), 60000);
@@ -114,7 +115,7 @@ const Dashboard = () => {
     setIsInsightApplied(true);
   };
 
-  // --- INITIAL LOAD TRANSLATION LOOKUPS ---
+  // Initial load screen while data has not yet arrived
   if (loading && !stats && machines.length === 0) {
     return (
       <div className="flex h-screen items-center justify-center bg-slate-50">
@@ -145,10 +146,10 @@ const Dashboard = () => {
               {localStorage.getItem('shop_name') || 'Main Command'}
             </h2>
             <div className="flex items-center gap-1.5 ml-2">
-                <div className={`w-2 h-2 rounded-full ${refreshing ? 'bg-sky-400 animate-ping' : 'bg-emerald-500'}`} />
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                  {refreshing ? 'Syncing...' : 'Live'}
-                </span>
+              <div className={`w-2 h-2 rounded-full ${refreshing ? 'bg-sky-400 animate-ping' : 'bg-emerald-500'}`} />
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                {refreshing ? 'Syncing...' : 'Live'}
+              </span>
             </div>
           </div>
           <h1 className="text-6xl font-black text-slate-900 mt-2 tracking-tighter italic uppercase">Dashboard</h1>
@@ -183,17 +184,22 @@ const Dashboard = () => {
 
       {/* KPI GRID */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard title="Today Revenue" value={stats?.today_revenue || 0} trend={`${stats?.income_growth || 0}%`} type="revenue" />
-        <StatCard title="Active Machines" value={stats?.active_machines || "0"} trend="In Use" type="utilization" />
-        {/* Updated: Using avg_per_service from stats object */}
-        <StatCard title="Avg. Per Service" value={Number(stats?.avg_per_service || 0)} trend="Stable" type="avg_per_service" />
+        <StatCard title="Today Revenue"    value={stats?.today_revenue || 0}             trend={`${stats?.income_growth || 0}%`} type="revenue" />
+        <StatCard title="Active Machines"  value={stats?.active_machines || "0"}         trend="In Use"   type="utilization" />
+        <StatCard title="Avg. Per Service" value={Number(stats?.avg_per_service || 0)}   trend="Stable"   type="avg_per_service" />
         <StatCard title="Expected Bookings" value={stats?.predicted_bookings_today || "0"} trend="Forecast" type="bookings" />
       </div>
 
       {/* ANALYTICS ROW */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+
+        {/* 
+          FORECAST CHARTS PANEL
+          Fixed height wrapper removed — ForecastCharts now renders two stacked
+          charts (bar + area/line) and needs to grow vertically to fit both.
+        */}
         <div className="lg:col-span-2 bg-white p-10 rounded-[56px] border border-slate-100 shadow-sm flex flex-col min-w-0">
-          <div className="flex justify-between items-start mb-10">
+          <div className="flex justify-between items-start mb-8">
             <div>
               <div className="flex items-center gap-2 text-sky-500 mb-1">
                 <TrendingUp size={16} />
@@ -202,23 +208,28 @@ const Dashboard = () => {
               <h2 className="text-3xl font-black text-slate-900 tracking-tight">Income & Booking Forecast</h2>
             </div>
             <div className="text-right">
-                <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Last Sync</span>
-                <p className="text-xs font-bold text-slate-500">{lastUpdated.toLocaleTimeString()}</p>
+              <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Last Sync</span>
+              <p className="text-xs font-bold text-slate-500">{lastUpdated.toLocaleTimeString()}</p>
             </div>
           </div>
 
-          <div className="h-[350px] w-full mb-10 relative" style={{ minHeight: '350px', minWidth: '0' }}>
+          {/* 
+            Chart area: no fixed height set here — the two stacked charts inside
+            ForecastCharts each have their own 220px height, so this grows naturally.
+          */}
+          <div className="w-full mb-8 relative" style={{ minWidth: '0' }}>
             {forecast.length > 0 ? (
               <ForecastCharts data={forecast} />
             ) : (
-              <div className="h-full w-full flex flex-col items-center justify-center bg-slate-50/50 rounded-[40px] border-2 border-dashed border-slate-200">
+              <div className="flex flex-col items-center justify-center py-24 bg-slate-50/50 rounded-[40px] border-2 border-dashed border-slate-200">
                 <RefreshCw className="text-slate-200 mb-4 animate-spin" size={48} />
                 <p className="text-slate-400 font-black text-[10px] uppercase tracking-widest">Aggregating Data...</p>
               </div>
             )}
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 border-t border-slate-50 pt-10 mt-auto">
+          {/* Service breakdown row */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 border-t border-slate-50 pt-8 mt-auto">
             <BreakdownItem label="Full Service" value={stats?.full_service || 0} />
             <BreakdownItem label="Titan Wash"   value={stats?.titan_wash || 0} />
             <BreakdownItem label="Regular Wash" value={stats?.regular_wash || 0} />
@@ -227,6 +238,7 @@ const Dashboard = () => {
           </div>
         </div>
 
+        {/* OPTIMIZATION INSIGHT PANEL */}
         <div className="lg:col-span-1">
           <OptimizationTip
             data={insightData}
@@ -242,11 +254,16 @@ const Dashboard = () => {
           <div>
             <div className="flex items-center gap-2 text-emerald-500 mb-1">
               <CheckCircle size={16} />
-              <span className="text-[10px] font-black uppercase tracking-widest">Live status and profitability tracking</span>
+              <span className="text-[10px] font-black uppercase tracking-widest">
+                Live status and profitability tracking
+              </span>
             </div>
             <h2 className="text-3xl font-black text-slate-900 tracking-tight">Real-Time Machine Monitoring</h2>
           </div>
-          <button onClick={() => loadDashboardData(true)} className="p-4 hover:bg-slate-50 rounded-2xl transition-all">
+          <button
+            onClick={() => loadDashboardData(true)}
+            className="p-4 hover:bg-slate-50 rounded-2xl transition-all"
+          >
             <RefreshCw size={20} className={refreshing ? 'animate-spin' : 'text-slate-300'} />
           </button>
         </div>
@@ -258,12 +275,22 @@ const Dashboard = () => {
         />
       </div>
 
-      <BookingModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSubmit={handleBookingSuccess} />
-      <HistoryModal isOpen={isHistoryOpen} onClose={() => setIsHistoryOpen(false)} />
+      <BookingModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSubmit={handleBookingSuccess}
+      />
+      <HistoryModal
+        isOpen={isHistoryOpen}
+        onClose={() => setIsHistoryOpen(false)}
+      />
     </div>
   );
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// SUB-COMPONENT: Breakdown row item
+// ─────────────────────────────────────────────────────────────────────────────
 const BreakdownItem = ({ label, value }) => (
   <div className="flex flex-col items-center justify-center p-4 rounded-[28px] hover:bg-slate-50 transition-all border border-transparent">
     <p className="text-2xl font-black text-slate-900 tracking-tighter">{value}</p>
