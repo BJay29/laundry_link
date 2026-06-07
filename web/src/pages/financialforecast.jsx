@@ -83,15 +83,14 @@ const FinancialForecast = () => {
       // Map flat JSON from model_metrics.json to the structure the UI expects
       if (accuracyRes.status === 'fulfilled' && accuracyRes.value) {
         const rawMetrics = accuracyRes.value;
+        // Adjusted to read flat keys returned from the backend
         setAccuracyMetrics({
           demand_forecasting_model: {
-            accuracy_percentage: rawMetrics.accuracy_percentage || 0,
-            mean_absolute_error: rawMetrics.mean_absolute_error || 0,
+            accuracy_percentage: rawMetrics.demand_forecasting_model || 0,
             evaluation_method: "Linear Regression"
           },
           utility_telemetry_model: {
-            accuracy_percentage: rawMetrics.accuracy_percentage || 0,
-            mean_absolute_error: rawMetrics.mean_absolute_error || 0
+            accuracy_percentage: rawMetrics.utility_telemetry_model || 0
           }
         });
       }
@@ -111,7 +110,7 @@ const FinancialForecast = () => {
         
         let lastWeekIncome = 0;
         let lastWeekBookings = 0;
-        let dbActuals = { fs: 0, tw: 0, rw: 0, cf: 0, kg: 0, acc: 0 };
+        let dbActuals = { fs: 0, tw: 0, rw: 0, cf: 0, kg: 0 };
 
         if (summaryRes.status === 'fulfilled' && summaryRes.value) {
           const data = summaryRes.value;
@@ -123,8 +122,7 @@ const FinancialForecast = () => {
             tw: data.titan_wash || 0,
             rw: data.regular_wash || 0,
             cf: data.comforter || 0,
-            kg: data.total_kg || 0,
-            acc: data.accuracy_rate || 0
+            kg: data.total_kg || 0
           };
         }
 
@@ -145,7 +143,7 @@ const FinancialForecast = () => {
           totalRevenue: totalProjectedRev,
           totalBookings: totalProjectedBook,
           avgDaily: Math.round(totalProjectedRev / 7),
-          accuracy: dbActuals.acc,
+          accuracy: 0, // Placeholder
           revenueTrend: revTrend.percent,
           trendStatus: revTrend.status,
           bookingTrend: bookTrend.percent,
@@ -252,10 +250,8 @@ const FinancialForecast = () => {
         />
       </div>
 
-      {/* MAIN CHART SECTION — Two stacked charts rendered by ForecastCharts */}
+      {/* MAIN CHART SECTION */}
       <div className="bg-white p-6 md:p-10 rounded-[40px] md:rounded-[56px] border border-slate-100 shadow-sm relative overflow-hidden flex flex-col mb-8">
-        
-        {/* Section header */}
         <div className="mb-8 flex flex-col md:flex-row justify-between items-start gap-4">
           <div>
             <div className="flex items-center gap-2 mb-1">
@@ -270,11 +266,6 @@ const FinancialForecast = () => {
           </div>
         </div>
 
-        {/* 
-          CHART CONTAINER:
-          Removed fixed height — ForecastCharts now renders two stacked charts 
-          so the container expands naturally to fit both.
-        */}
         <div className="w-full relative">
           {forecastData.length > 0 ? (
             <ForecastCharts data={forecastData} />
@@ -288,7 +279,6 @@ const FinancialForecast = () => {
           )}
         </div>
 
-        {/* Service breakdown footer */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-6 mt-10 pt-10 border-t border-slate-50">
           <BreakdownItem label="Full Service"  value={stats.fullService} />
           <BreakdownItem label="Titan Wash"    value={stats.titanWash} />
@@ -316,7 +306,6 @@ const FinancialForecast = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {/* Demand Forecasting accuracy card */}
             <div className="border border-slate-100 p-6 md:p-8 rounded-[32px] bg-slate-50/50">
               <div className="flex justify-between items-start border-b border-slate-100 pb-4 mb-4">
                 <div>
@@ -331,19 +320,18 @@ const FinancialForecast = () => {
                 <div className="flex justify-between items-end">
                   <span className="text-xs font-extrabold text-slate-500 uppercase tracking-wide">Confidence Index</span>
                   <span className="text-xl font-black text-indigo-600">
-                    {accuracyMetrics.demand_forecasting_model?.accuracy_percentage || 0}%
+                    {accuracyMetrics.demand_forecasting_model.accuracy_percentage}%
                   </span>
                 </div>
                 <div className="w-full bg-slate-200/70 h-2.5 rounded-full overflow-hidden">
                   <div
                     className="bg-indigo-600 h-full rounded-full transition-all duration-500 shadow-[0_0_8px_rgba(79,70,229,0.4)]"
-                    style={{ width: `${accuracyMetrics.demand_forecasting_model?.accuracy_percentage || 0}%` }}
+                    style={{ width: `${accuracyMetrics.demand_forecasting_model.accuracy_percentage}%` }}
                   />
                 </div>
               </div>
             </div>
 
-            {/* Utility telemetry accuracy card */}
             <div className="border border-slate-100 p-6 md:p-8 rounded-[32px] bg-slate-50/50">
               <div className="flex justify-between items-start border-b border-slate-100 pb-4 mb-4">
                 <div>
@@ -358,13 +346,13 @@ const FinancialForecast = () => {
                 <div className="flex justify-between items-end">
                   <span className="text-xs font-extrabold text-slate-500 uppercase tracking-wide">Accuracy Calibration</span>
                   <span className="text-xl font-black text-cyan-600">
-                    {accuracyMetrics.utility_telemetry_model?.accuracy_percentage || 0}%
+                    {accuracyMetrics.utility_telemetry_model.accuracy_percentage}%
                   </span>
                 </div>
                 <div className="w-full bg-slate-200/70 h-2.5 rounded-full overflow-hidden">
                   <div
                     className="bg-cyan-500 h-full rounded-full transition-all duration-500 shadow-[0_0_8px_rgba(6,182,212,0.4)]"
-                    style={{ width: `${accuracyMetrics.utility_telemetry_model?.accuracy_percentage || 0}%` }}
+                    style={{ width: `${accuracyMetrics.utility_telemetry_model.accuracy_percentage}%` }}
                   />
                 </div>
               </div>
@@ -375,10 +363,6 @@ const FinancialForecast = () => {
     </div>
   );
 };
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SUB-COMPONENTS
-// ─────────────────────────────────────────────────────────────────────────────
 
 const ForecastStatCard = ({ label, value, trend, status, icon, bgColor }) => {
   const getTrendStyles = () => {
