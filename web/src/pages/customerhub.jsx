@@ -11,6 +11,7 @@ import {
   ChevronUp,
   ChevronDown,
   AlertCircle,
+  CalendarDays,
 } from 'lucide-react';
 import {
   PieChart,
@@ -28,31 +29,31 @@ import apiService from '../services/APIservices';
 // ─────────────────────────────────────────────────────────────────────────────
 const SEGMENT_CONFIG = {
   VIP: {
-    icon:       <Crown size={14} />,
-    badge:      'bg-amber-100 text-amber-700 border-amber-200',
-    row:        'bg-amber-50/40',
-    dot:        'bg-amber-400',
-    chart:      '#F59E0B',
-    stat:       'bg-amber-50 border-amber-100 text-amber-700',
-    statIcon:   'text-amber-500',
+    icon:     <Crown size={14} />,
+    badge:    'bg-amber-100 text-amber-700 border-amber-200',
+    row:      'bg-amber-50/40',
+    dot:      'bg-amber-400',
+    chart:    '#F59E0B',
+    stat:     'bg-amber-50 border-amber-100 text-amber-700',
+    statIcon: 'text-amber-500',
   },
   Regular: {
-    icon:       <Star size={14} />,
-    badge:      'bg-sky-100 text-sky-700 border-sky-200',
-    row:        '',
-    dot:        'bg-sky-400',
-    chart:      '#38BDF8',
-    stat:       'bg-sky-50 border-sky-100 text-sky-700',
-    statIcon:   'text-sky-500',
+    icon:     <Star size={14} />,
+    badge:    'bg-sky-100 text-sky-700 border-sky-200',
+    row:      '',
+    dot:      'bg-sky-400',
+    chart:    '#38BDF8',
+    stat:     'bg-sky-50 border-sky-100 text-sky-700',
+    statIcon: 'text-sky-500',
   },
   Occasional: {
-    icon:       <Clock size={14} />,
-    badge:      'bg-slate-100 text-slate-600 border-slate-200',
-    row:        '',
-    dot:        'bg-slate-300',
-    chart:      '#CBD5E1',
-    stat:       'bg-slate-50 border-slate-100 text-slate-600',
-    statIcon:   'text-slate-400',
+    icon:     <Clock size={14} />,
+    badge:    'bg-slate-100 text-slate-600 border-slate-200',
+    row:      '',
+    dot:      'bg-slate-300',
+    chart:    '#CBD5E1',
+    stat:     'bg-slate-50 border-slate-100 text-slate-600',
+    statIcon: 'text-slate-400',
   },
 };
 
@@ -98,29 +99,71 @@ const SegmentStatCard = ({ label, count, total, config }) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// DATA WINDOW BADGE — shows the active 18-day range
+// ─────────────────────────────────────────────────────────────────────────────
+const DataWindowBadge = ({ windowStart, windowDays }) => {
+  if (!windowStart) return null;
+
+  // Format "May 20" style
+  const startLabel = new Date(windowStart + 'T00:00:00').toLocaleDateString('en-PH', {
+    month: 'short',
+    day:   'numeric',
+  });
+  const todayLabel = new Date().toLocaleDateString('en-PH', {
+    month: 'short',
+    day:   'numeric',
+  });
+
+  return (
+    <div className="flex items-center gap-2 px-4 py-2.5 bg-indigo-50 border border-indigo-100 rounded-2xl text-indigo-600">
+      <CalendarDays size={14} className="shrink-0" />
+      <span className="text-[10px] font-black uppercase tracking-widest">
+        {windowDays}-Day Window: {startLabel} – {todayLabel}
+      </span>
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // MAIN CUSTOMER HUB PAGE
 // ─────────────────────────────────────────────────────────────────────────────
 const CustomerHub = () => {
-  const [customers, setCustomers]   = useState([]);
-  const [loading, setLoading]       = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError]           = useState(null);
-  const [search, setSearch]         = useState('');
-  const [filterSeg, setFilterSeg]   = useState('All');
-  const [sortKey, setSortKey]       = useState('total_spent');
-  const [sortDir, setSortDir]       = useState('desc');
+  const [customers, setCustomers]     = useState([]);
+  const [windowStart, setWindowStart] = useState(null);
+  const [windowDays, setWindowDays]   = useState(18);
+  const [loading, setLoading]         = useState(true);
+  const [refreshing, setRefreshing]   = useState(false);
+  const [error, setError]             = useState(null);
+  const [search, setSearch]           = useState('');
+  const [filterSeg, setFilterSeg]     = useState('All');
+  const [sortKey, setSortKey]         = useState('total_spent');
+  const [sortDir, setSortDir]         = useState('desc');
 
   // ── Data Fetch ──────────────────────────────────────────────────────────
-  // FIX: apiService.getCustomerSegments() now works because getCustomerSegments
-  // is included in the apiService object inside APIservices.js.
+  // PHASE 3: The API now returns an envelope:
+  //   { window_days, window_start, customers: [...] }
+  // We unpack it here and store window metadata separately for the badge.
   const loadSegments = useCallback(async (isRefresh = false) => {
     try {
       if (isRefresh) setRefreshing(true);
       else setLoading(true);
       setError(null);
 
-      const data = await apiService.getCustomerSegments();
-      setCustomers(data || []);
+      const response = await apiService.getCustomerSegments();
+
+      // Support both the new envelope shape { customers, window_start, window_days }
+      // and the legacy flat array shape for backwards compatibility during deploys.
+      if (Array.isArray(response)) {
+        // Legacy flat array (pre-Phase 3 backend)
+        setCustomers(response || []);
+        setWindowStart(null);
+        setWindowDays(18);
+      } else {
+        // Phase 3 envelope
+        setCustomers(response.customers || []);
+        setWindowStart(response.window_start || null);
+        setWindowDays(response.window_days  || 18);
+      }
     } catch (err) {
       const msg = err.response?.data?.detail || err.message;
       setError(msg || 'Failed to load customer segments.');
@@ -198,7 +241,10 @@ const CustomerHub = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Phase 3: 18-day window badge */}
+          <DataWindowBadge windowStart={windowStart} windowDays={windowDays} />
+
           <div className="flex items-center gap-2 px-4 py-3.5 bg-white border border-slate-200 rounded-2xl shadow-sm text-slate-500 font-bold text-sm">
             <Users size={16} className="text-sky-500" />
             <span>{customers.length} Customers</span>
@@ -306,8 +352,8 @@ const CustomerHub = () => {
                     iconType="circle"
                     iconSize={8}
                     wrapperStyle={{
-                      fontSize: '10px',
-                      fontWeight: '900',
+                      fontSize:      '10px',
+                      fontWeight:    '900',
                       textTransform: 'uppercase',
                       letterSpacing: '0.08em',
                     }}
@@ -363,11 +409,11 @@ const CustomerHub = () => {
             <thead>
               <tr className="border-b border-slate-50 bg-slate-50/50">
                 {[
-                  { label: 'Customer',       key: null },
-                  { label: 'Segment',        key: null },
-                  { label: 'Visits',         key: 'visit_frequency' },
-                  { label: 'Total Spent',    key: 'total_spent' },
-                  { label: 'Avg / Visit',    key: 'avg_per_visit' },
+                  { label: 'Customer',    key: null },
+                  { label: 'Segment',     key: null },
+                  { label: 'Visits',      key: 'visit_frequency' },
+                  { label: 'Total Spent', key: 'total_spent' },
+                  { label: 'Avg / Visit', key: 'avg_per_visit' },
                 ].map(({ label, key }) => (
                   <th
                     key={label}
@@ -394,7 +440,7 @@ const CustomerHub = () => {
                       </p>
                       <p className="text-slate-300 text-xs font-bold">
                         {customers.length === 0
-                          ? 'Add bookings to generate customer segments.'
+                          ? `No real bookings in the last ${windowDays} days.`
                           : 'Try adjusting your search or filter.'}
                       </p>
                     </div>
@@ -475,12 +521,18 @@ const CustomerHub = () => {
           </table>
         </div>
 
-        {/* Table footer showing result count */}
+        {/* Table footer */}
         {filtered.length > 0 && (
-          <div className="px-8 py-4 border-t border-slate-50 bg-slate-50/30">
+          <div className="px-8 py-4 border-t border-slate-50 bg-slate-50/30 flex items-center justify-between">
             <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">
               Showing {filtered.length} of {customers.length} customers
             </p>
+            {/* Phase 3: subtle window reminder at table footer */}
+            {windowStart && (
+              <p className="text-[10px] font-bold text-slate-300">
+                Data window: last {windowDays} days
+              </p>
+            )}
           </div>
         )}
       </div>
