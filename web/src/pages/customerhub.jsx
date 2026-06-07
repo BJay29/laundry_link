@@ -62,7 +62,6 @@ const SEGMENT_CONFIG = {
 const PieTooltip = ({ active, payload }) => {
   if (active && payload && payload.length) {
     const { name, value } = payload[0];
-    const cfg = SEGMENT_CONFIG[name] || {};
     return (
       <div className="bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-2xl border border-slate-700 text-xs font-bold">
         <p className="text-slate-400 uppercase tracking-widest text-[9px] mb-1">{name}</p>
@@ -112,6 +111,8 @@ const CustomerHub = () => {
   const [sortDir, setSortDir]       = useState('desc');
 
   // ── Data Fetch ──────────────────────────────────────────────────────────
+  // FIX: apiService.getCustomerSegments() now works because getCustomerSegments
+  // is included in the apiService object inside APIservices.js.
   const loadSegments = useCallback(async (isRefresh = false) => {
     try {
       if (isRefresh) setRefreshing(true);

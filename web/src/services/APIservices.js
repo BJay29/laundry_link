@@ -159,6 +159,21 @@ export const triggerAiRetraining = async () => {
 };
 
 /**
+ * Fetches K-Means customer segments from the analytics endpoint.
+ * Returns a list of customers each annotated with a behavioral segment
+ * (Occasional | Regular | VIP) based on visit frequency and total spending.
+ */
+export const getCustomerSegments = async () => {
+    try {
+        const response = await apiClient.get('/analytics/customer-segments');
+        return response.data;
+    } catch (error) {
+        console.error("Fetch Customer Segments Error:", error.response?.data?.detail || error.message);
+        throw error;
+    }
+};
+
+/**
  * Updates the shop profile (name, address, email).
  * @param {number|string} shopId - The ID of the shop to update.
  * @param {Object} profileData - The data object containing shop details.
@@ -428,6 +443,15 @@ export const apiService = {
 
     getAiAccuracyMetrics,
     triggerAiRetraining,
+
+    // ─── CUSTOMER SEGMENTATION ───────────────────────────────────────────────
+    // FIX: getCustomerSegments was defined as a standalone export but was
+    // missing from the apiService object, causing "apiService.getCustomerSegments
+    // is not a function" at runtime. It is now included here so both import
+    // styles work:
+    //   import apiService from '...'  → apiService.getCustomerSegments()  ✓
+    //   import { getCustomerSegments } from '...'  → getCustomerSegments()  ✓
+    getCustomerSegments,
 
     // --- OPTIMIZATION SETTINGS METHODS ---
 
