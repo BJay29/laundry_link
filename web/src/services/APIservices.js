@@ -137,8 +137,8 @@ export const getInventoryDashboardStats = async (shopId) => {
  */
 export const getAiAccuracyMetrics = async () => {
     try {
-        // This maps to the AnalyticsController.get_ai_prediction_metrics endpoint
-        const response = await apiClient.get('/analytics/ai-accuracy-metrics');
+        // Updated to point to the correct endpoint: /analytics/accuracy
+        const response = await apiClient.get('/analytics/accuracy');
         return response.data;
     } catch (error) {
         console.error("Fetch AI Accuracy Metrics Error:", error.response?.data?.detail || error.message);
@@ -312,7 +312,7 @@ export const apiService = {
         }
     },
 
-    // --- INVENTORY METHODS (Mapped to apiService object) ---
+    // --- INVENTORY METHODS ---
 
     getInventory,
     getInventoryCategories,
@@ -452,6 +452,7 @@ export const apiService = {
         return token ? { Authorization: `Bearer ${token}` } : {};
     }
 };
+
 /**
  * Updates the shop profile (name, address, email).
  * @param {number|string} shopId - The ID of the shop to update.

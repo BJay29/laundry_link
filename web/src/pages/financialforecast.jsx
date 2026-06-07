@@ -10,7 +10,7 @@ import {
   Zap,
   Cpu,
   Sparkles,
-  CheckCircle2 // Added for status indicator
+  CheckCircle2 
 } from 'lucide-react';
 import ForecastCharts from '../components/charts/forecastcharts';
 import apiService from '../services/APIservices';
@@ -79,8 +79,20 @@ const FinancialForecast = () => {
         apiService.getAiAccuracyMetrics()
       ]);
 
+      // MAPPING: Ensure the flat JSON from model_metrics.json is mapped to the structure the UI expects
       if (accuracyRes.status === 'fulfilled' && accuracyRes.value) {
-        setAccuracyMetrics(accuracyRes.value);
+        const rawMetrics = accuracyRes.value;
+        setAccuracyMetrics({
+          demand_forecasting_model: {
+            accuracy_percentage: rawMetrics.accuracy_percentage || 0,
+            mean_absolute_error: rawMetrics.mean_absolute_error || 0,
+            evaluation_method: "Linear Regression"
+          },
+          utility_telemetry_model: {
+            accuracy_percentage: rawMetrics.accuracy_percentage || 0, // Using same metrics for now
+            mean_absolute_error: rawMetrics.mean_absolute_error || 0
+          }
+        });
       }
 
       if (forecastRes.status === 'fulfilled' && forecastRes.value?.forecast) {
@@ -152,7 +164,6 @@ const FinancialForecast = () => {
     }
   }, []);
 
-  // Initial fetch and Setup Auto-Polling (60 seconds)
   useEffect(() => {
     fetchData();
     const interval = setInterval(fetchData, 60000);
@@ -176,7 +187,6 @@ const FinancialForecast = () => {
           <p className="text-slate-500 font-bold text-sm">Automated projections analyzed against cross-referenced historical data.</p>
         </div>
         <div className="flex gap-2">
-            {/* Automated System Status Indicator */}
             <div className="flex items-center gap-2 px-4 py-4 bg-emerald-50 text-emerald-600 rounded-2xl shadow-sm border border-emerald-100">
                 <CheckCircle2 size={20} />
                 <span className="font-bold text-sm">System Automated</span>
@@ -206,14 +216,12 @@ const FinancialForecast = () => {
         </div>
       )}
 
-      {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <ForecastStatCard label="Projected Weekly Revenue" value={`₱${stats.totalRevenue.toLocaleString()}`} trend={stats.revenueTrend} status={stats.trendStatus} icon={<DollarSign className="text-emerald-500" />} bgColor="bg-emerald-50" />
         <ForecastStatCard label="Expected Booking Volume" value={stats.totalBookings} trend={stats.bookingTrend} status={stats.bookingStatus} icon={<Package className="text-sky-500" />} bgColor="bg-sky-50" />
         <ForecastStatCard label="Average Daily Target" value={`₱${stats.avgDaily.toLocaleString()}`} trend={stats.revenueTrend} status={stats.trendStatus} icon={<TrendingUp className="text-purple-500" />} bgColor="bg-purple-50" />
       </div>
 
-      {/* Chart Section */}
       <div className="bg-white p-6 md:p-10 rounded-[40px] md:rounded-[56px] border border-slate-100 shadow-sm relative overflow-hidden flex flex-col mb-8">
         <div className="mb-10 flex flex-col md:flex-row justify-between items-start gap-4">
           <div>
@@ -245,7 +253,6 @@ const FinancialForecast = () => {
         </div>
       </div>
 
-      {/* AI Accuracy Section */}
       {accuracyMetrics && (
         <div className="bg-white p-6 md:p-10 rounded-[40px] md:rounded-[56px] border border-slate-100 shadow-sm">
           <div className="mb-8 flex items-center gap-2.5">
@@ -274,16 +281,6 @@ const FinancialForecast = () => {
                 <div className="w-full bg-slate-200/70 h-2.5 rounded-full overflow-hidden">
                   <div className="bg-indigo-600 h-full rounded-full transition-all duration-500 shadow-[0_0_8px_rgba(79,70,229,0.4)]" style={{ width: `${accuracyMetrics.demand_forecasting_model?.accuracy_percentage || 0}%` }} />
                 </div>
-                <div className="grid grid-cols-2 gap-4 pt-4 mt-2 border-t border-slate-100">
-                  <div>
-                    <p className="text-[9px] font-black text-slate-400 uppercase">Evaluation Method</p>
-                    <p className="text-xs font-bold text-slate-700">{accuracyMetrics.demand_forecasting_model?.evaluation_method || 'N/A'}</p>
-                  </div>
-                  <div>
-                    <p className="text-[9px] font-black text-slate-400 uppercase">Mean Absolute Error</p>
-                    <p className="text-xs font-bold text-emerald-500">± {accuracyMetrics.demand_forecasting_model?.mean_absolute_error || '0'}</p>
-                  </div>
-                </div>
               </div>
             </div>
             <div className="border border-slate-100 p-6 md:p-8 rounded-[32px] bg-slate-50/50">
@@ -301,18 +298,6 @@ const FinancialForecast = () => {
                 </div>
                 <div className="w-full bg-slate-200/70 h-2.5 rounded-full overflow-hidden">
                   <div className="bg-cyan-500 h-full rounded-full transition-all duration-500 shadow-[0_0_8px_rgba(6,182,212,0.4)]" style={{ width: `${accuracyMetrics.utility_telemetry_model?.accuracy_percentage || 0}%` }} />
-                </div>
-                <div className="grid grid-cols-2 gap-4 pt-4 mt-2 border-t border-slate-100">
-                  <div>
-                    <p className="text-[9px] font-black text-slate-400 uppercase">Mean Absolute Error</p>
-                    <p className="text-xs font-bold text-slate-700">{accuracyMetrics.utility_telemetry_model?.mean_absolute_error || '0'}</p>
-                  </div>
-                  <div>
-                    <p className="text-[9px] font-black text-slate-400 uppercase">Calibration Check</p>
-                    <p className="text-xs font-black text-emerald-500 animate-pulse drop-shadow-[0_0_8px_rgba(16,185,129,0.8)]">
-                      OPTIMIZED
-                    </p>
-                  </div>
                 </div>
               </div>
             </div>
