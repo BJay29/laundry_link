@@ -137,7 +137,6 @@ export const getInventoryDashboardStats = async (shopId) => {
  */
 export const getAiAccuracyMetrics = async () => {
     try {
-        // Updated to point to the correct endpoint: /analytics/accuracy
         const response = await apiClient.get('/analytics/accuracy');
         return response.data;
     } catch (error) {
@@ -159,12 +158,42 @@ export const triggerAiRetraining = async () => {
     }
 };
 
+/**
+ * Updates the shop profile (name, address, email).
+ * @param {number|string} shopId - The ID of the shop to update.
+ * @param {Object} profileData - The data object containing shop details.
+ */
+export const updateShopProfile = async (shopId, profileData) => {
+    try {
+        const response = await apiClient.put(`/settings/${shopId}/profile`, profileData);
+        return response.data;
+    } catch (error) {
+        console.error("Update Shop Profile Error:", error.response?.data?.detail || error.message);
+        throw error;
+    }
+};
+
+/**
+ * Updates the user password after verifying current credentials.
+ * @param {number|string} userId - The ID of the user.
+ * @param {Object} passwordData - Object containing old_password and new_password.
+ */
+export const updatePassword = async (userId, passwordData) => {
+    try {
+        const response = await apiClient.put(`/settings/user/${userId}/password`, passwordData);
+        return response.data;
+    } catch (error) {
+        console.error("Update Password Error:", error.response?.data?.detail || error.message);
+        throw error;
+    }
+};
+
 // --- API SERVICE OBJECT ---
 
 export const apiService = {
-    
+
     // --- AUTHENTICATION METHODS ---
-    
+
     login: async (email, password) => {
         try {
             const response = await apiClient.post('/auth/login', { email, password });
@@ -190,7 +219,7 @@ export const apiService = {
     },
 
     // --- BOOKING & TRANSACTION METHODS ---
-    
+
     createBooking: async (bookingData) => {
         try {
             const payload = {
@@ -206,8 +235,8 @@ export const apiService = {
                 add_detergent: Boolean(bookingData.add_detergent),
                 add_delivery: Boolean(bookingData.add_delivery),
                 is_rush: Boolean(bookingData.is_rush),
-                booking_timestamp: bookingData.booking_timestamp 
-                    ? new Date(bookingData.booking_timestamp).toISOString() 
+                booking_timestamp: bookingData.booking_timestamp
+                    ? new Date(bookingData.booking_timestamp).toISOString()
                     : new Date().toISOString()
             };
 
@@ -231,12 +260,34 @@ export const apiService = {
 
     updateBookingStatus: async (bookingId, newStatus) => {
         try {
-            const response = await apiClient.patch(`/bookings/${bookingId}/status`, { 
-                status: newStatus 
+            const response = await apiClient.patch(`/bookings/${bookingId}/status`, {
+                status: newStatus
             });
             return response.data;
         } catch (error) {
             console.error("Update Booking Status Error:", error.response?.data?.detail || error.message);
+            throw error;
+        }
+    },
+
+    /**
+     * Assigns a washer and/or dryer to an existing Pending booking.
+     * Called from AssignMachineModal when the operator selects a machine.
+     * The backend will validate availability and transition the booking
+     * status from Pending to In Progress.
+     * @param {number} bookingId - The ID of the Pending booking.
+     * @param {{ washer_id: number|null, dryer_id: number|null }} assignData
+     * @returns {Promise<BookingResponse>}
+     */
+    assignMachineToBooking: async (bookingId, assignData) => {
+        try {
+            const response = await apiClient.patch(
+                `/bookings/${bookingId}/assign-machine`,
+                assignData
+            );
+            return response.data;
+        } catch (error) {
+            console.error("Assign Machine Error:", error.response?.data?.detail || error.message);
             throw error;
         }
     },
@@ -279,8 +330,8 @@ export const apiService = {
     addMachine: async (machineData) => {
         try {
             const shopId = localStorage.getItem('shop_id');
-            const payload = { 
-                ...machineData, 
+            const payload = {
+                ...machineData,
                 shop_id: parseInt(shopId),
                 machine_number: parseInt(machineData.machine_number)
             };
@@ -445,7 +496,13 @@ export const apiService = {
         }
     },
 
+    // --- PROFILE & PASSWORD METHODS ---
+
+    updateShopProfile,
+    updatePassword,
+
     // --- UTILS ---
+
     getShopId: () => localStorage.getItem('shop_id'),
     getAuthHeader: () => {
         const token = localStorage.getItem('token');
@@ -453,33 +510,4 @@ export const apiService = {
     }
 };
 
-/**
- * Updates the shop profile (name, address, email).
- * @param {number|string} shopId - The ID of the shop to update.
- * @param {Object} profileData - The data object containing shop details.
- */
-export const updateShopProfile = async (shopId, profileData) => {
-    try {
-        const response = await apiClient.put(`/settings/${shopId}/profile`, profileData);
-        return response.data;
-    } catch (error) {
-        console.error("Update Shop Profile Error:", error.response?.data?.detail || error.message);
-        throw error;
-    }
-};
-
-/**
- * Updates the user password after verifying current credentials.
- * @param {number|string} userId - The ID of the user.
- * @param {Object} passwordData - Object containing old_password and new_password.
- */
-export const updatePassword = async (userId, passwordData) => {
-    try {
-        const response = await apiClient.put(`/settings/user/${userId}/password`, passwordData);
-        return response.data;
-    } catch (error) {
-        console.error("Update Password Error:", error.response?.data?.detail || error.message);
-        throw error;
-    }
-};
 export default apiService;

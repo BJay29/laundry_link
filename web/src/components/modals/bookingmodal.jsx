@@ -1,19 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { X, User, Weight, Settings2, CheckCircle2, Hash, Calculator, Edit3, Tag, Cpu, Truck, Droplets, Loader2 } from 'lucide-react';
+import { X, User, Weight, Settings2, CheckCircle2, Hash, Calculator, Edit3, Tag, Cpu, Truck, Droplets, Loader2, AlertTriangle } from 'lucide-react';
 import apiService from '../../services/APIservices'; 
 import { optimizationLogic } from '../../utils/optimizationlogic';
 
 /**
  * BOOKING MODAL COMPONENT
  * Handles new laundry order creation with Smart Calculation and Manual Override modes.
- * Optimized for machine ID synchronization and precise pricing updates from backend.
+ * UPDATED: Machine assignment is now OPTIONAL.
+ * - If no machine is selected, booking is created with status "Pending"
+ * - If machine(s) are selected, booking is created with status "In Progress"
  */
 const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
   const [bookingMode, setBookingMode] = useState('smart');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingSettings, setIsLoadingSettings] = useState(false);
   const [machineData, setMachineData] = useState([]);
-  const [inventoryItems, setInventoryItems] = useState([]); // Added state for inventory
+  const [inventoryItems, setInventoryItems] = useState([]);
   
   // Dynamic Pricing State (Fetched from Backend)
   const [dbRates, setDbRates] = useState({
@@ -33,7 +35,7 @@ const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
     selectedWasher: null,
     selectedDryer: null,
     addDetergent: false,
-    inventory_item_id: null, // Added for inventory selection
+    inventory_item_id: null,
     addDelivery: false,
     isRush: false,
     totalPrice: 0
@@ -55,11 +57,10 @@ const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
           setIsLoadingSettings(true);
           const shopId = apiService.getShopId();
           
-          // Parallel fetch for machines, pricing, and inventory
           const [machines, settings, inventory] = await Promise.all([
             apiService.getMachines(),
             apiService.getBookingPricing(shopId),
-            apiService.getInventory() // Fetch inventory list
+            apiService.getInventory()
           ]);
 
           setMachineData(machines || []);
@@ -111,7 +112,6 @@ const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
       loads = 1; 
     }
 
-    // Apply Detergent cost only if an item is selected
     if (formData.addDetergent && formData.inventory_item_id) {
         base += (dbRates.detergent_cost_per_load * loads);
     }
@@ -127,10 +127,18 @@ const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
 
   if (!isOpen) return null;
 
+  // Check if any available machines exist in the shop
+  const hasAvailableMachines = machineData.some(m => {
+    const s = m.status?.toLowerCase();
+    return s === 'available' || s === 'idle' || s === 'ready';
+  });
+
+  // Determine if a machine has been selected
+  const hasMachineSelected = formData.selectedWasher || formData.selectedDryer;
+
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     
-    // Logic for setting inventory_item_id
     if (name === 'inventory_item_id') {
         setFormData(prev => ({
             ...prev,
@@ -169,10 +177,8 @@ const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (!formData.selectedWasher && !formData.selectedDryer) {
-        alert("Requirement: Please assign at least one machine to proceed.");
-        return;
-    }
+    // UPDATED: No longer blocking submission when no machine is selected.
+    // The backend will set status to "Pending" when no machine is assigned.
 
     setIsSubmitting(true);
 
@@ -187,7 +193,7 @@ const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
         washer_id: formData.selectedWasher ? parseInt(formData.selectedWasher) : null,
         dryer_id: formData.selectedDryer ? parseInt(formData.selectedDryer) : null,
         inventory_item_id: formData.inventory_item_id ? parseInt(formData.inventory_item_id) : null,
-        inventory_quantity_used: formData.inventory_item_id ? parseFloat(formData.calculatedLoads * 0.5) : 0, // Assuming 0.5 per load
+        inventory_quantity_used: formData.inventory_item_id ? parseFloat(formData.calculatedLoads * 0.5) : 0,
         is_rush: Boolean(formData.isRush),
         booking_mode: String(bookingMode),
         add_detergent: Boolean(formData.addDetergent),
@@ -397,10 +403,42 @@ const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
           <div className="space-y-6 p-8 bg-slate-50/50 rounded-[40px] border-2 border-slate-100">
             <div className="flex justify-between items-center px-2">
                 <label className="text-[11px] font-black text-slate-500 uppercase flex items-center gap-2 tracking-[0.2em]">
-                <Cpu size={14} className="text-sky-500" /> Machine Assignment
+                  <Cpu size={14} className="text-sky-500" /> Machine Assignment
                 </label>
-                <span className="text-[10px] font-bold text-sky-600 bg-sky-50 px-3 py-1 rounded-full uppercase tracking-tighter">Live Status</span>
+                <div className="flex items-center gap-2">
+                  {/* UPDATED: Show "Optional" badge instead of "Live Status" only */}
+                  <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-3 py-1 rounded-full uppercase tracking-tighter border border-amber-100">
+                    Optional
+                  </span>
+                  <span className="text-[10px] font-bold text-sky-600 bg-sky-50 px-3 py-1 rounded-full uppercase tracking-tighter">
+                    Live Status
+                  </span>
+                </div>
             </div>
+
+            {/* UPDATED: Show notice when no machines are available */}
+            {!hasAvailableMachines && machineData.length > 0 && (
+              <div className="flex items-center gap-3 bg-amber-50 border border-amber-100 rounded-[20px] px-5 py-3">
+                <AlertTriangle size={16} className="text-amber-500 shrink-0" />
+                <div>
+                  <p className="text-[11px] font-black text-amber-700 uppercase tracking-wide">All Machines Busy</p>
+                  <p className="text-[10px] text-amber-500 font-medium mt-0.5">
+                    Booking will be saved as <strong>Pending</strong>. Assign a machine later from the terminal.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* UPDATED: Show notice when booking without machine selection */}
+            {hasAvailableMachines && !hasMachineSelected && (
+              <div className="flex items-center gap-3 bg-slate-50 border border-slate-100 rounded-[20px] px-5 py-3">
+                <AlertTriangle size={16} className="text-slate-400 shrink-0" />
+                <p className="text-[10px] text-slate-400 font-medium">
+                  No machine selected — booking will be queued as <strong className="text-slate-500">Pending</strong>. You can assign a machine from the terminal.
+                </p>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-10">
               <div className="space-y-4">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-2">
@@ -442,8 +480,22 @@ const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
             </div>
           </div>
 
-          <button type="submit" disabled={isSubmitting} className={`w-full text-white py-6 rounded-[32px] font-black text-2xl shadow-xl transition-all flex items-center justify-center gap-4 active:scale-95 ${isSubmitting ? 'opacity-70 cursor-wait' : ''} ${bookingMode === 'manual' ? 'bg-orange-500 hover:bg-orange-400 shadow-orange-200' : 'bg-sky-600 hover:bg-sky-500 shadow-sky-200'}`}>
-            {isSubmitting ? 'Processing...' : <><CheckCircle2 size={28} /> Finalize Booking</>}
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className={`w-full text-white py-6 rounded-[32px] font-black text-2xl shadow-xl transition-all flex items-center justify-center gap-4 active:scale-95
+              ${isSubmitting ? 'opacity-70 cursor-wait' : ''}
+              ${bookingMode === 'manual' ? 'bg-orange-500 hover:bg-orange-400 shadow-orange-200' : 'bg-sky-600 hover:bg-sky-500 shadow-sky-200'}
+            `}
+          >
+            {isSubmitting ? (
+              <><Loader2 size={24} className="animate-spin" /> Processing...</>
+            ) : (
+              <>
+                <CheckCircle2 size={28} />
+                {hasMachineSelected ? 'Finalize Booking' : 'Queue as Pending'}
+              </>
+            )}
           </button>
         </form>
       </div>
