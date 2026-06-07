@@ -17,6 +17,9 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
  * SIDEBAR COMPONENT
  * Features synchronized navigation, custom branding, and a secure logout confirmation modal.
  * Includes both Optimization Settings (main nav) and Account Settings (below logout).
+ * COLOR THEME: Light mode — uses white/slate-50 base to complement the dashboard background.
+ * Sidebar is white while the dashboard content area is slate-50, keeping them visually related
+ * but distinct through a subtle border and shadow separation.
  */
 const Sidebar = () => {
   const location = useLocation();
@@ -69,10 +72,10 @@ const Sidebar = () => {
 
   return (
     <>
-      {/* Sidebar background updated to a lighter slate-900 for a less aggressive dark mode */}
-      <div className="w-72 h-screen bg-slate-900 text-slate-200 flex flex-col fixed left-0 top-0 border-r border-slate-700/50 z-50">
+      {/* Sidebar — light white background with a right border to separate from slate-50 content area */}
+      <div className="w-72 h-screen bg-white text-slate-700 flex flex-col fixed left-0 top-0 border-r border-slate-200 z-50 shadow-sm">
         
-        {/* Branding Section - Custom LaundryLink Logo Design */}
+        {/* Branding Section — Custom LaundryLink Logo Design, unchanged */}
         <div className="px-6 pt-8 pb-4">
           <div className="flex items-center gap-3">
             {/* Logo Icons inline with text */}
@@ -83,9 +86,9 @@ const Sidebar = () => {
             </div>
 
             {/* Logo Text */}
-            <h2 className="text-xl font-black italic tracking-tighter text-white">
-              <span className="text-violet-400">LAUNDRY</span>
-              <span className="text-emerald-400">LINK</span>
+            <h2 className="text-xl font-black italic tracking-tighter text-slate-900">
+              <span className="text-violet-500">LAUNDRY</span>
+              <span className="text-emerald-500">LINK</span>
             </h2>
           </div>
         </div>
@@ -102,12 +105,12 @@ const Sidebar = () => {
                     to={item.path}
                     className={`flex items-center gap-4 px-5 py-3.5 rounded-2xl font-bold transition-all duration-200 group ${
                       isActive 
-                        ? 'bg-sky-600 text-white shadow-lg shadow-sky-900/20' 
-                        : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'
+                        ? 'bg-sky-500 text-white shadow-lg shadow-sky-200' 
+                        : 'text-slate-400 hover:bg-slate-100 hover:text-slate-700'
                     }`}
                   >
                     <span className={`transition-colors duration-200 ${
-                      isActive ? 'text-white' : 'text-slate-500 group-hover:text-slate-300'
+                      isActive ? 'text-white' : 'text-slate-400 group-hover:text-slate-600'
                     }`}>
                       {item.icon}
                     </span>
@@ -122,19 +125,19 @@ const Sidebar = () => {
         </nav>
 
         {/* Sidebar Footer: Account Settings, Logout, and System Status */}
-        <div className="p-6 border-t border-slate-800/50">
+        <div className="p-6 border-t border-slate-100">
 
           {/* Account Settings link — placed above logout for easy access */}
           <Link
             to="/account-settings"
             className={`flex items-center gap-4 px-5 py-3.5 w-full font-bold transition-all duration-200 group rounded-2xl mb-1 ${
               location.pathname === '/account-settings'
-                ? 'bg-sky-600 text-white'
-                : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'
+                ? 'bg-sky-500 text-white shadow-lg shadow-sky-200'
+                : 'text-slate-400 hover:bg-slate-100 hover:text-slate-700'
             }`}
           >
             <UserCog size={20} className={`transition-colors duration-200 ${
-              location.pathname === '/account-settings' ? 'text-white' : 'text-slate-500 group-hover:text-slate-300'
+              location.pathname === '/account-settings' ? 'text-white' : 'text-slate-400 group-hover:text-slate-600'
             }`} />
             <span className="text-sm tracking-wide">Account Settings</span>
           </Link>
@@ -142,14 +145,14 @@ const Sidebar = () => {
           {/* Logout Button */}
           <button 
             onClick={() => setShowLogoutModal(true)}
-            className="flex items-center gap-4 px-5 py-3.5 w-full text-slate-400 hover:text-red-400 font-bold transition-all duration-200 group rounded-2xl hover:bg-red-900/20"
+            className="flex items-center gap-4 px-5 py-3.5 w-full text-slate-400 hover:text-red-500 font-bold transition-all duration-200 group rounded-2xl hover:bg-red-50"
           >
             <LogOut size={20} className="group-hover:-translate-x-1 transition-transform" />
             <span className="text-sm tracking-wide">Logout</span>
           </button>
           
-          {/* System Health Card — background lightened to match new theme */}
-          <div className="mt-4 px-5 py-4 bg-slate-800 rounded-[20px] border border-slate-700">
+          {/* System Health Card — light version to match the new sidebar theme */}
+          <div className="mt-4 px-5 py-4 bg-slate-50 rounded-[20px] border border-slate-200">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>
               <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest">
@@ -157,13 +160,13 @@ const Sidebar = () => {
               </span>
             </div>
             <div className="text-[11px] text-slate-400 font-bold mt-2 px-1">
-              <p>Mode: <span className="text-slate-200 font-black">Optimization Active</span></p>
+              <p>Mode: <span className="text-slate-700 font-black">Optimization Active</span></p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* LOGOUT CONFIRMATION MODAL */}
+      {/* LOGOUT CONFIRMATION MODAL — unchanged */}
       {showLogoutModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white rounded-[32px] p-8 w-full max-w-sm shadow-2xl border border-slate-100">
