@@ -12,7 +12,8 @@ import MachineHub from './pages/machinehub';
 import InventoryPage from './pages/inventory';
 import FinancialForecast from './pages/financialforecast';
 import OptimizationSettings from './pages/optimizationsettings';
-import Settings from './pages/settings'; // Account Settings page for profile and password management
+import Settings from './pages/settings';       // Account Settings page for profile and password management
+import CustomerHub from './pages/customerhub'; // Customer segmentation powered by K-Means AI engine
 
 function App() {
   return (
@@ -44,7 +45,10 @@ function App() {
 
           {/* Account settings for shop profile and password management */}
           <Route path="/account-settings" element={<Settings />} />
-          
+
+          {/* AI-powered K-Means customer behavioral segmentation hub */}
+          <Route path="/customer-hub" element={<CustomerHub />} />
+
         </Route>
 
         {/* 3. Global Fallbacks and Redirects */}

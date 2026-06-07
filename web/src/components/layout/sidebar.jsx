@@ -9,7 +9,8 @@ import {
   AlertCircle,
   X,
   Package,
-  UserCog
+  UserCog,
+  Users // Import Users icon for Customer Hub
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 
@@ -47,6 +48,11 @@ const Sidebar = () => {
       name: 'Inventory', 
       icon: <Package size={20} />, 
       path: '/inventory' 
+    },
+    { 
+      name: 'Customer Hub', // Added Customer Hub navigation
+      icon: <Users size={20} />, 
+      path: '/customer-hub' 
     },
     { 
       name: 'Financial Forecast', 
