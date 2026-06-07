@@ -69,22 +69,23 @@ const Sidebar = () => {
 
   return (
     <>
-      <div className="w-72 h-screen bg-[#1a2233] text-white flex flex-col fixed left-0 top-0 border-r border-slate-800/50 z-50">
+      {/* Sidebar background updated to a lighter slate-900 for a less aggressive dark mode */}
+      <div className="w-72 h-screen bg-slate-900 text-slate-200 flex flex-col fixed left-0 top-0 border-r border-slate-700/50 z-50">
         
         {/* Branding Section - Custom LaundryLink Logo Design */}
         <div className="px-6 pt-8 pb-4">
           <div className="flex items-center gap-3">
             {/* Logo Icons inline with text */}
             <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 bg-violet-600 rounded-full"></div>
-              <div className="w-5 h-2 bg-violet-500 rounded-full"></div>
-              <div className="w-3 h-3 border-2 border-emerald-500 rounded-full"></div>
+              <div className="w-3 h-3 bg-violet-500 rounded-full"></div>
+              <div className="w-5 h-2 bg-violet-400 rounded-full"></div>
+              <div className="w-3 h-3 border-2 border-emerald-400 rounded-full"></div>
             </div>
 
             {/* Logo Text */}
             <h2 className="text-xl font-black italic tracking-tighter text-white">
-              <span className="text-violet-500">LAUNDRY</span>
-              <span className="text-emerald-500">LINK</span>
+              <span className="text-violet-400">LAUNDRY</span>
+              <span className="text-emerald-400">LINK</span>
             </h2>
           </div>
         </div>
@@ -101,8 +102,8 @@ const Sidebar = () => {
                     to={item.path}
                     className={`flex items-center gap-4 px-5 py-3.5 rounded-2xl font-bold transition-all duration-200 group ${
                       isActive 
-                        ? 'bg-sky-500 text-white' 
-                        : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
+                        ? 'bg-sky-600 text-white shadow-lg shadow-sky-900/20' 
+                        : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'
                     }`}
                   >
                     <span className={`transition-colors duration-200 ${
@@ -128,8 +129,8 @@ const Sidebar = () => {
             to="/account-settings"
             className={`flex items-center gap-4 px-5 py-3.5 w-full font-bold transition-all duration-200 group rounded-2xl mb-1 ${
               location.pathname === '/account-settings'
-                ? 'bg-sky-500 text-white'
-                : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
+                ? 'bg-sky-600 text-white'
+                : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'
             }`}
           >
             <UserCog size={20} className={`transition-colors duration-200 ${
@@ -141,22 +142,22 @@ const Sidebar = () => {
           {/* Logout Button */}
           <button 
             onClick={() => setShowLogoutModal(true)}
-            className="flex items-center gap-4 px-5 py-3.5 w-full text-slate-400 hover:text-red-400 font-bold transition-all duration-200 group rounded-2xl hover:bg-red-500/5"
+            className="flex items-center gap-4 px-5 py-3.5 w-full text-slate-400 hover:text-red-400 font-bold transition-all duration-200 group rounded-2xl hover:bg-red-900/20"
           >
             <LogOut size={20} className="group-hover:-translate-x-1 transition-transform" />
             <span className="text-sm tracking-wide">Logout</span>
           </button>
           
-          {/* System Health Card — shows optimization status only */}
-          <div className="mt-4 px-5 py-4 bg-[#242d40] rounded-[20px] border border-slate-700/30">
+          {/* System Health Card — background lightened to match new theme */}
+          <div className="mt-4 px-5 py-4 bg-slate-800 rounded-[20px] border border-slate-700">
             <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+              <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>
               <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest">
                 System Status
               </span>
             </div>
-            <div className="text-[11px] text-slate-500 font-bold mt-2 px-1">
-              <p>Mode: <span className="text-slate-300 font-black">Optimization Active</span></p>
+            <div className="text-[11px] text-slate-400 font-bold mt-2 px-1">
+              <p>Mode: <span className="text-slate-200 font-black">Optimization Active</span></p>
             </div>
           </div>
         </div>
@@ -164,7 +165,7 @@ const Sidebar = () => {
 
       {/* LOGOUT CONFIRMATION MODAL */}
       {showLogoutModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white rounded-[32px] p-8 w-full max-w-sm shadow-2xl border border-slate-100">
             <div className="flex justify-between items-start mb-6">
               <div className="p-3 bg-red-50 text-red-500 rounded-2xl">
