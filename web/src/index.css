@@ -35,3 +35,19 @@ button, a {
   background: #cbd5e1;
   border-radius: 10px;
 }
+
+/* Fade + slide transition para sa Login/Register form switch */
+@keyframes authFadeSlide {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.auth-transition {
+  animation: authFadeSlide 0.35s ease-out;
+}

@@ -209,7 +209,7 @@ export const apiService = {
 
     // --- AUTHENTICATION METHODS ---
 
-    login: async (email, password) => {
+     login: async (email, password) => {
         try {
             const response = await apiClient.post('/auth/login', { email, password });
             const { user, access_token } = response.data;
@@ -224,6 +224,26 @@ export const apiService = {
         } catch (error) {
             const errorMessage = error.response?.data?.detail || error.message;
             console.error("Authentication Error:", errorMessage);
+            throw error;
+        }
+    },
+
+    register: async (shopName, address, email, password) => {
+        try {
+            const response = await apiClient.post('/auth/register/owner', {
+                shop_name: shopName,
+                address,
+                email,
+                password,
+            });
+            // NOTE: No machine initialization call here on purpose.
+            // New shops start with an EMPTY Machine Hub. Units must be
+            // registered manually via apiService.addMachine(), which is
+            // what populates the Machine Hub for that shop.
+            return response.data;
+        } catch (error) {
+            const errorMessage = error.response?.data?.detail || error.message;
+            console.error("Registration Error:", errorMessage);
             throw error;
         }
     },
@@ -308,12 +328,21 @@ export const apiService = {
     },
 
     // --- MACHINE HUB & TELEMETRY METHODS ---
+    // All routes below require `shop_id` as a query param to match
+    // backend/app/routers/machines.py exactly (Query(...) is required
+    // on every endpoint except POST / , where shop_id lives in the body).
 
-    getMachines: async () => {
+    /**
+     * GET /machines/?shop_id=...
+     * Fetches real-time status + overhead metrics for all units of a shop.
+     * New shops will simply return an empty array here until units
+     * are registered via addMachine().
+     */
+    getMachines: async (shopId) => {
         try {
-            const shopId = localStorage.getItem('shop_id');
+            const targetId = shopId || localStorage.getItem('shop_id');
             const response = await apiClient.get('/machines/', {
-                params: shopId ? { shop_id: parseInt(shopId) } : {}
+                params: targetId ? { shop_id: parseInt(targetId) } : {}
             });
             return response.data;
         } catch (error) {
@@ -322,29 +351,15 @@ export const apiService = {
         }
     },
 
-    deleteMachine: async (machineId) => {
-        try {
-            const response = await apiClient.delete(`/machines/${machineId}`);
-            return response.data;
-        } catch (error) {
-            console.error("Delete Machine Error:", error.response?.data?.detail || error.message);
-            throw error;
-        }
-    },
-
-    getMachineMetrics: async (machineId) => {
-        try {
-            const response = await apiClient.get(`/machines/${machineId}/metrics`);
-            return response.data;
-        } catch (error) {
-            console.error("Fetch Machine Metrics Error:", error.response?.data?.detail || error.message);
-            throw error;
-        }
-    },
-
+    /**
+     * POST /machines/
+     * Registers a single new hardware unit (Washer or Dryer) for the shop.
+     * This is the primary way the Machine Hub gets populated after
+     * registration, since new shops intentionally start empty.
+     */
     addMachine: async (machineData) => {
         try {
-            const shopId = localStorage.getItem('shop_id');
+            const shopId = machineData.shop_id || localStorage.getItem('shop_id');
             const payload = {
                 ...machineData,
                 shop_id: parseInt(shopId),
@@ -358,9 +373,64 @@ export const apiService = {
         }
     },
 
-    toggleMaintenance: async (machineId) => {
+    /**
+     * PATCH /machines/{machine_id}?shop_id=...
+     * Updates machine details like Name, Type, or Operational Status.
+     */
+    updateMachineConfig: async (machineId, updateData, shopId) => {
         try {
-            const response = await apiClient.patch(`/machines/${machineId}/maintenance`);
+            const targetId = shopId || localStorage.getItem('shop_id');
+            const response = await apiClient.patch(`/machines/${machineId}`, updateData, {
+                params: { shop_id: parseInt(targetId) }
+            });
+            return response.data;
+        } catch (error) {
+            console.error("Update Machine Config Error:", error.response?.data?.detail || error.message);
+            throw error;
+        }
+    },
+
+    /**
+     * DELETE /machines/{machine_id}?shop_id=...
+     */
+    deleteMachine: async (machineId, shopId) => {
+        try {
+            const targetId = shopId || localStorage.getItem('shop_id');
+            const response = await apiClient.delete(`/machines/${machineId}`, {
+                params: { shop_id: parseInt(targetId) }
+            });
+            return response.data;
+        } catch (error) {
+            console.error("Delete Machine Error:", error.response?.data?.detail || error.message);
+            throw error;
+        }
+    },
+
+    /**
+     * GET /machines/{machine_id}/metrics?shop_id=...
+     */
+    getMachineMetrics: async (machineId, shopId) => {
+        try {
+            const targetId = shopId || localStorage.getItem('shop_id');
+            const response = await apiClient.get(`/machines/${machineId}/metrics`, {
+                params: { shop_id: parseInt(targetId) }
+            });
+            return response.data;
+        } catch (error) {
+            console.error("Fetch Machine Metrics Error:", error.response?.data?.detail || error.message);
+            throw error;
+        }
+    },
+
+    /**
+     * PATCH /machines/{machine_id}/maintenance?shop_id=...
+     */
+    toggleMaintenance: async (machineId, shopId) => {
+        try {
+            const targetId = shopId || localStorage.getItem('shop_id');
+            const response = await apiClient.patch(`/machines/${machineId}/maintenance`, null, {
+                params: { shop_id: parseInt(targetId) }
+            });
             return response.data;
         } catch (error) {
             console.error("Toggle Maintenance Error:", error.response?.data?.detail || error.message);
@@ -368,12 +438,40 @@ export const apiService = {
         }
     },
 
-    initializeDefaultMachines: async () => {
+    /**
+     * POST /machines/initialize?shop_id=...
+     * Bootstraps a standard 6 Washer / 6 Dryer grid for the shop.
+     * NOTE: Intentionally NOT called automatically anywhere in this file
+     * (e.g. not inside `register`). Call this manually only if the shop
+     * owner explicitly opts into the default grid instead of registering
+     * units one by one.
+     */
+    initializeDefaultMachines: async (shopId) => {
         try {
-            const response = await apiClient.post('/machines/initialize');
+            const targetId = shopId || localStorage.getItem('shop_id');
+            const response = await apiClient.post('/machines/initialize', null, {
+                params: { shop_id: parseInt(targetId) }
+            });
             return response.data;
         } catch (error) {
             console.error("Initialization Error:", error.response?.data?.detail || error.message);
+            throw error;
+        }
+    },
+
+    /**
+     * POST /machines/reset-all?shop_id=...
+     * Emergency override to set all shop machines back to 'Available'.
+     */
+    resetAllMachines: async (shopId) => {
+        try {
+            const targetId = shopId || localStorage.getItem('shop_id');
+            const response = await apiClient.post('/machines/reset-all', null, {
+                params: { shop_id: parseInt(targetId) }
+            });
+            return response.data;
+        } catch (error) {
+            console.error("Reset All Machines Error:", error.response?.data?.detail || error.message);
             throw error;
         }
     },

@@ -1,37 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Zap, Droplets, FlaskConical, Trash2, RefreshCw, AlertTriangle, Waves, Wind, CheckCircle, Repeat } from 'lucide-react';
+import { Plus, Zap, Droplets, FlaskConical, Trash2, RefreshCw, AlertTriangle, Waves, Wind, CheckCircle, Repeat, Boxes } from 'lucide-react';
 import Swal from 'sweetalert2';
 import apiService from '../services/APIservices';
 import optimizationLogic from '../utils/optimizationlogic';
 import MachineModal from '../components/modals/machinemodal';
 
-/**
- * DEFAULT_MACHINES
- * Static skeleton for the UI grid (W1-W6, D1-D6).
- * Maintains visual consistency during data fetching.
- */
-const DEFAULT_MACHINES = [
-  ...Array.from({ length: 6 }, (_, i) => ({
-    _key: `W${i + 1}`,
-    machine_number: i + 1,
-    machine_type: 'Washer',
-    status: null,
-    total_cycles: 0,
-    metrics: { detergent_cost: 0, electricity_cost: 0, water_cost: 0, total_overhead: 0 }
-  })),
-  ...Array.from({ length: 6 }, (_, i) => ({
-    _key: `D${i + 1}`,
-    machine_number: i + 1,
-    machine_type: 'Dryer',
-    status: null,
-    total_cycles: 0,
-    metrics: { detergent_cost: 0, electricity_cost: 0, water_cost: 0, total_overhead: 0 }
-  })),
-];
-
 const MachineHub = () => {
-  const [dbMachines, setDbMachines] = useState([]);   
-  const [extraMachines, setExtraMachines] = useState([]); 
+  const shopId = localStorage.getItem('shop_id');
+
+  const [dbMachines, setDbMachines] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [successMsg, setSuccessMsg] = useState('');
@@ -40,64 +17,67 @@ const MachineHub = () => {
   /**
    * TELEMETRY SYNC
    * Synchronizes hardware states and resource consumption from the backend.
+   * Only machines that actually exist in the DB for this shop are shown.
+   * New shops with no registered units will simply render an empty state.
    */
   const syncMachineData = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await apiService.getMachines();
-      
+      const data = await apiService.getMachines(shopId);
+
       const list = (data || []).map(m => {
         const cycles = parseInt(m.total_cycles) || 0;
-        const liveMetrics = m.metrics || { 
-          detergent_cost: 0, 
-          electricity_cost: 0, 
-          water_cost: 0, 
-          total_overhead: 0 
+        const liveMetrics = m.metrics || {
+          detergent_cost: 0,
+          electricity_cost: 0,
+          water_cost: 0,
+          total_overhead: 0
         };
 
         return {
           ...m,
           total_cycles: cycles,
           metrics: (cycles === 0 && m.status !== 'Busy') ? {
-            detergent_cost: 0, 
-            electricity_cost: 0, 
-            water_cost: 0, 
-            total_overhead: 0 
+            detergent_cost: 0,
+            electricity_cost: 0,
+            water_cost: 0,
+            total_overhead: 0
           } : liveMetrics
         };
       });
 
-      setDbMachines(list);
-
-      const extras = list.filter(m => {
-        const isDefaultWasher = m.machine_type === 'Washer' && m.machine_number <= 6;
-        const isDefaultDryer  = m.machine_type === 'Dryer'  && m.machine_number <= 6;
-        return !isDefaultWasher && !isDefaultDryer;
+      // Sort: Washers first, then Dryers, ordered by machine_number
+      list.sort((a, b) => {
+        if (a.machine_type !== b.machine_type) {
+          return a.machine_type === 'Washer' ? -1 : 1;
+        }
+        return (a.machine_number || 0) - (b.machine_number || 0);
       });
-      setExtraMachines(extras);
+
+      setDbMachines(list);
 
       const totals = list.reduce((acc, m) => ({
         detergent:   acc.detergent   + (parseFloat(m.metrics?.detergent_cost) || 0),
         electricity: acc.electricity + (parseFloat(m.metrics?.electricity_cost) || 0),
         water:       acc.water       + (parseFloat(m.metrics?.water_cost) || 0),
       }), { detergent: 0, electricity: 0, water: 0 });
-      
+
       setCosts(totals);
     } catch (err) {
       console.error('Infrastructure Sync Error:', err);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [shopId]);
 
   useEffect(() => {
     syncMachineData();
-    const interval = setInterval(syncMachineData, 30000); 
+    const interval = setInterval(syncMachineData, 30000);
     return () => clearInterval(interval);
   }, [syncMachineData]);
 
   /**
-   * UPDATED: HARDWARE DECOMMISSIONING
+   * HARDWARE DECOMMISSIONING
    * Uses SweetAlert2 to bypass the "localhost says" browser message.
    * Performs automatic deletion after user confirmation in the styled modal.
    */
@@ -114,7 +94,6 @@ const MachineHub = () => {
       return;
     }
 
-    // Custom Styled Confirmation using SweetAlert2
     const result = await Swal.fire({
       title: 'Decommission Unit?',
       text: "Unregistering this unit will stop real-time telemetry. Continue?",
@@ -135,9 +114,8 @@ const MachineHub = () => {
     if (result.isConfirmed) {
       try {
         setLoading(true);
-        await apiService.deleteMachine(id);
-        
-        // Success Toast
+        await apiService.deleteMachine(id, shopId);
+
         Swal.fire({
           title: 'Removed!',
           text: 'Hardware removed from inventory.',
@@ -147,7 +125,6 @@ const MachineHub = () => {
         });
 
         setDbMachines(prev => prev.filter(m => m.id !== id));
-        setExtraMachines(prev => prev.filter(m => m.id !== id));
         await syncMachineData();
       } catch (error) {
         console.error("Deletion failed:", error.message);
@@ -161,7 +138,7 @@ const MachineHub = () => {
   const handleToggleMaintenance = async (id) => {
     if (!id) return;
     try {
-      await apiService.toggleMaintenance(id);
+      await apiService.toggleMaintenance(id, shopId);
       showToast("Operational status updated");
       await syncMachineData();
     } catch (err) {
@@ -176,18 +153,11 @@ const MachineHub = () => {
 
   const getMachineLabel = (m) => `${m.machine_type === 'Washer' ? 'W' : 'D'}${m.machine_number}`;
 
-  const mergedMachines = DEFAULT_MACHINES.map(slot => {
-    const live = dbMachines.find(
-      m => m.machine_type === slot.machine_type && m.machine_number === slot.machine_number
-    );
-    return live ? { ...slot, ...live, id: live.id } : slot;
-  });
-
-  const allRows = [...mergedMachines, ...extraMachines];
+  const hasMachines = dbMachines.length > 0;
 
   return (
     <div className="p-8 bg-slate-50 min-h-screen font-sans">
-      
+
       {successMsg && (
         <div className="fixed top-6 right-6 z-50 bg-slate-900 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4">
           <CheckCircle size={18} className="text-emerald-400" />
@@ -232,20 +202,30 @@ const MachineHub = () => {
 
       {/* Main Hardware Grid */}
       <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-slate-100 bg-slate-50/50">
-                {['Unit ID', 'Type', 'Status', 'Usage Logs', 'Elec (PHP)', 'Water (PHP)', 'Det (PHP)', 'Actions'].map(h => (
-                  <th key={h} className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50">
-              {allRows.map((m) => {
-                const isRegistered = !!m.id;
-                return (
-                  <tr key={m._key || m.id} className={`hover:bg-slate-50/50 transition-colors group ${!isRegistered ? 'opacity-30' : ''}`}>
+        {!loading && !hasMachines ? (
+          // EMPTY STATE — new shop, no units registered yet
+          <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
+            <div className="p-5 bg-slate-50 rounded-3xl mb-5">
+              <Boxes size={32} className="text-slate-300" />
+            </div>
+            <h3 className="text-slate-800 font-black text-lg uppercase tracking-tight mb-2">No Machines Registered Yet</h3>
+            <p className="text-slate-400 text-sm max-w-sm">
+              Your Machine Hub is empty. Use the Register Unit button above to start tracking real-time telemetry and overhead costs.
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50/50">
+                  {['Unit ID', 'Type', 'Status', 'Usage Logs', 'Elec (PHP)', 'Water (PHP)', 'Det (PHP)', 'Actions'].map(h => (
+                    <th key={h} className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {dbMachines.map((m) => (
+                  <tr key={m.id} className="hover:bg-slate-50/50 transition-colors group">
                     <td className="px-6 py-5">
                       <div className="flex items-center gap-3">
                         <div className={`p-2.5 rounded-xl ${m.machine_type === 'Washer' ? 'bg-sky-50 text-sky-500' : 'bg-orange-50 text-orange-500'}`}>
@@ -262,7 +242,7 @@ const MachineHub = () => {
                         m.status === 'Available' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
                         'bg-slate-100 text-slate-400 border-slate-200'
                       }`}>
-                        {m.status || 'Unregistered'}
+                        {m.status || 'Unknown'}
                       </span>
                     </td>
                     <td className="px-6 py-5">
@@ -278,9 +258,9 @@ const MachineHub = () => {
                       <div className="flex items-center gap-2 justify-end">
                         <button
                           onClick={() => handleToggleMaintenance(m.id)}
-                          disabled={!isRegistered || m.status === 'Busy'}
+                          disabled={m.status === 'Busy'}
                           className={`p-2 rounded-xl transition-all ${
-                            !isRegistered || m.status === 'Busy' ? 'opacity-10 cursor-not-allowed' : 
+                            m.status === 'Busy' ? 'opacity-10 cursor-not-allowed' :
                             m.status === 'Maintenance' ? 'bg-amber-100 text-amber-600' : 'bg-slate-50 text-slate-300 hover:text-amber-500 hover:bg-amber-50'
                           }`}
                         >
@@ -288,9 +268,9 @@ const MachineHub = () => {
                         </button>
                         <button
                           onClick={() => handleDeleteMachine(m.id, m.status)}
-                          disabled={!isRegistered || m.status === 'Busy'}
+                          disabled={m.status === 'Busy'}
                           className={`p-2 rounded-xl transition-all ${
-                            !isRegistered || m.status === 'Busy' ? 'opacity-10 cursor-not-allowed' : 'bg-slate-50 text-slate-300 hover:text-rose-500 hover:bg-rose-50'
+                            m.status === 'Busy' ? 'opacity-10 cursor-not-allowed' : 'bg-slate-50 text-slate-300 hover:text-rose-500 hover:bg-rose-50'
                           }`}
                         >
                           <Trash2 size={16} />
@@ -298,14 +278,19 @@ const MachineHub = () => {
                       </div>
                     </td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
-      <MachineModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onRefresh={syncMachineData} />
+      <MachineModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onRefresh={syncMachineData}
+        existingMachines={dbMachines}
+      />
     </div>
   );
 };
