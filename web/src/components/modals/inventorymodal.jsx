@@ -4,14 +4,24 @@ import { X, Save, Package, AlertCircle } from 'lucide-react';
 /**
  * INVENTORY MODAL
  * Handles creation and editing of inventory items.
- * Optimized for state synchronization and reliable form submission.
- * Features:
- * - Form validation with error messages
- * - Real-time state synchronization with item prop
- * - Item name is editable in both add and edit mode
- * - Shop ID validation from localStorage
- * - Loading state during submission
- * - Responsive design with Tailwind CSS
+ *
+ * FIXED: Previously blocked submission with a hard "Session error: Shop
+ * ID not found" error if localStorage was missing shop_id, and injected
+ * shop_id into the payload manually. Neither is needed anymore — the
+ * backend derives shop_id from the JWT (see get_current_user in
+ * inventory_routes.py), so the client no longer needs to supply or
+ * validate it. apiService.addInventoryItem() still attaches a shop_id
+ * fallback from localStorage for backward compatibility with the
+ * request schema, but the backend ignores it.
+ *
+ * Also removed leftover debug console.log statements.
+ *
+ * FIXED (usage_rate label): "Usage Rate" was previously labeled as
+ * "daily consumption" with copy implying automatic daily depletion.
+ * There is no such mechanism anywhere in the backend — usage_rate is
+ * actually consumption PER LOAD, used in booking_controller.create_booking
+ * (quantity = loads × usage_rate) to auto-suggest how much of an item
+ * a booking consumes. The label now reflects that correctly.
  */
 const InventoryModal = ({ isOpen, onClose, item, onSave, loading = false }) => {
   // Form state management
@@ -132,6 +142,13 @@ const InventoryModal = ({ isOpen, onClose, item, onSave, loading = false }) => {
   /**
    * Handle form submission.
    * Validates form data and calls onSave callback with proper payload.
+   *
+   * FIXED: No longer reads/validates shop_id from localStorage here.
+   * The parent page (InventoryPage.handleSave) and apiService already
+   * handle attaching a shop_id fallback for schema compatibility, and
+   * the backend ignores it in favor of the authenticated user's own
+   * shop_id from the JWT. This form no longer needs to know or care
+   * about shop_id at all.
    */
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -141,32 +158,16 @@ const InventoryModal = ({ isOpen, onClose, item, onSave, loading = false }) => {
       return;
     }
 
-    // Get shop ID from localStorage
-    const shopId = localStorage.getItem('shop_id');
-
-    // Validate shop ID exists
-    if (!shopId) {
-      setErrors({
-        submit: 'Session error: Shop ID not found. Please log in again.'
-      });
-      return;
-    }
-
-    // Build final payload with all required fields
+    // Build final payload — shop scoping is handled entirely by the
+    // backend via the authenticated session, not by this form.
     const finalData = {
       item_name: formData.item_name.trim(),
       category: formData.category,
       current_stock: parseFloat(formData.current_stock) || 0,
       reorder_point: parseFloat(formData.reorder_point) || 0,
       usage_rate: parseFloat(formData.usage_rate) || 0.05,
-      unit: formData.unit,
-      shop_id: parseInt(shopId, 10)
+      unit: formData.unit
     };
-
-    // Debug logs: trace item_name at every step to find where it gets dropped
-    console.log('[InventoryModal] formData.item_name:', formData.item_name);
-    console.log('[InventoryModal] finalData being sent:', JSON.stringify(finalData));
-    console.log('[InventoryModal] item.id:', item ? item.id : null);
 
     // Call onSave callback with item ID (if editing) and data
     onSave(item ? item.id : null, finalData);
@@ -343,7 +344,7 @@ const InventoryModal = ({ isOpen, onClose, item, onSave, loading = false }) => {
           {/* Usage Rate Field */}
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Usage Rate (daily consumption)
+              Usage Rate (per load)
             </label>
             <input
               type="number"
@@ -364,7 +365,8 @@ const InventoryModal = ({ isOpen, onClose, item, onSave, loading = false }) => {
               <p className="text-sm text-red-600 mt-1">{errors.usage_rate}</p>
             )}
             <p className="text-xs text-gray-500 mt-1">
-              Average amount consumed per day for automatic depletion calculation
+              Average amount consumed per laundry load. Used to auto-suggest
+              how much of this item a booking uses (loads × usage rate).
             </p>
           </div>
 

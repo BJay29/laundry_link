@@ -14,6 +14,7 @@ import FinancialForecast from './pages/financialforecast';
 import OptimizationSettings from './pages/optimizationsettings';
 import Settings from './pages/settings';       // Account Settings page for profile and password management
 import CustomerHub from './pages/customerhub'; // Customer segmentation powered by K-Means AI engine
+import ActivityLogs from './pages/activitylogs'; 
 
 function App() {
   return (
@@ -50,6 +51,8 @@ function App() {
           <Route path="/customer-hub" element={<CustomerHub />} />
 
         </Route>
+
+        <Route path="/activity-logs" element={<ActivityLogs />} />
 
         {/* 3. Global Fallbacks and Redirects */}
         {/* Redirect root path to login by default */}

@@ -28,10 +28,14 @@ apiClient.interceptors.request.use((config) => {
 
 // --- INDIVIDUAL EXPORTS FOR NAMED IMPORTS ---
 
+/**
+ * FIXED: no longer sends ?shop_id=... — inventory_routes.py now derives
+ * shop_id from the JWT via Depends(get_current_user). shopId param kept
+ * only so existing call sites don't break; it's unused.
+ */
 export const getInventory = async (shopId) => {
     try {
-        const targetId = shopId || localStorage.getItem('shop_id');
-        const response = await apiClient.get(`/inventory/?shop_id=${targetId}`);
+        const response = await apiClient.get('/inventory/');
         return response.data;
     } catch (error) {
         console.error("Fetch Inventory Error:", error.response?.data?.detail || error.message);
@@ -41,11 +45,11 @@ export const getInventory = async (shopId) => {
 
 /**
  * Fetches inventory grouped by category for booking dropdowns.
+ * FIXED: same as getInventory — shop_id comes from the JWT now.
  */
 export const getInventoryCategories = async (shopId) => {
     try {
-        const targetId = shopId || localStorage.getItem('shop_id');
-        const response = await apiClient.get(`/inventory/categories?shop_id=${targetId}`);
+        const response = await apiClient.get('/inventory/categories');
         return response.data;
     } catch (error) {
         console.error("Fetch Inventory Categories Error:", error.response?.data?.detail || error.message);
@@ -121,10 +125,14 @@ export const getItemAnalytics = async (itemId, days = 7) => {
     }
 };
 
+/**
+ * FIXED: was calling /inventory/shop/{targetId}/alerts, which no longer
+ * exists — inventory_routes.py now serves this at /inventory/alerts with
+ * no shop path param, deriving shop_id from the JWT.
+ */
 export const getInventoryDashboardStats = async (shopId) => {
     try {
-        const targetId = shopId || localStorage.getItem('shop_id');
-        const response = await apiClient.get(`/inventory/shop/${targetId}/alerts`);
+        const response = await apiClient.get('/inventory/alerts');
         return response.data;
     } catch (error) {
         console.error("Fetch Inventory Dashboard Stats Error:", error.response?.data?.detail || error.message);
@@ -175,12 +183,16 @@ export const getCustomerSegments = async () => {
 
 /**
  * Updates the shop profile (name, address, email).
- * @param {number|string} shopId - The ID of the shop to update.
+ * FIXED: was PUT /settings/{shopId}/profile — setting_routes.py now
+ * serves this at PUT /settings/profile with no path param; shop_id
+ * comes from the JWT. shopId param kept only so existing call sites
+ * don't break; it's unused.
+ * @param {number|string} shopId - unused, kept for call-site compatibility.
  * @param {Object} profileData - The data object containing shop details.
  */
 export const updateShopProfile = async (shopId, profileData) => {
     try {
-        const response = await apiClient.put(`/settings/${shopId}/profile`, profileData);
+        const response = await apiClient.put('/settings/profile', profileData);
         return response.data;
     } catch (error) {
         console.error("Update Shop Profile Error:", error.response?.data?.detail || error.message);
@@ -190,15 +202,62 @@ export const updateShopProfile = async (shopId, profileData) => {
 
 /**
  * Updates the user password after verifying current credentials.
- * @param {number|string} userId - The ID of the user.
+ * FIXED: was PUT /settings/user/{userId}/password — setting_routes.py
+ * now serves this at PUT /settings/password, always targeting the
+ * CURRENTLY LOGGED-IN user from the JWT (self-only). userId param kept
+ * only so existing call sites don't break; it's unused.
+ * @param {number|string} userId - unused, kept for call-site compatibility.
  * @param {Object} passwordData - Object containing old_password and new_password.
  */
 export const updatePassword = async (userId, passwordData) => {
     try {
-        const response = await apiClient.put(`/settings/user/${userId}/password`, passwordData);
+        const response = await apiClient.put('/settings/password', passwordData);
         return response.data;
     } catch (error) {
         console.error("Update Password Error:", error.response?.data?.detail || error.message);
+        throw error;
+    }
+};
+
+/**
+ * NEW — Creates a staff/manager account under the currently logged-in
+ * Owner's own shop. Backend endpoint POST /auth/register/staff is
+ * Owner-only (enforced via require_role("owner")); shop_id is derived
+ * server-side from the Owner's own JWT, never sent from the client.
+ * @param {Object} staffData - { full_name, email, password, role }
+ *   role must be "staff" or "manager".
+ */
+export const registerStaff = async (staffData) => {
+    try {
+        const payload = {
+            full_name: staffData.full_name,
+            email: staffData.email,
+            password: staffData.password,
+            role: staffData.role || 'staff',
+        };
+        const response = await apiClient.post('/auth/register/staff', payload);
+        return response.data;
+    } catch (error) {
+        console.error("Register Staff Error:", error.response?.data?.detail || error.message);
+        throw error;
+    }
+};
+
+/**
+ * NEW — Fetches recent Activity Log entries for the logged-in user's own
+ * shop. Backend endpoint GET /activity-logs/ is restricted to Owner and
+ * Manager roles (enforced via require_role("owner", "manager")); a
+ * Staff-role JWT will get a 403 even with a valid token.
+ * @param {number} limit - max entries to return (default 100, backend caps at 500).
+ */
+export const getActivityLogs = async (limit = 100) => {
+    try {
+        const response = await apiClient.get('/activity-logs/', {
+            params: { limit }
+        });
+        return response.data;
+    } catch (error) {
+        console.error("Fetch Activity Logs Error:", error.response?.data?.detail || error.message);
         throw error;
     }
 };
@@ -219,6 +278,12 @@ export const apiService = {
             localStorage.setItem('shop_id', user.shop_id);
             localStorage.setItem('shop_name', user.shop_name);
             localStorage.setItem('shop_address', user.address);
+            // NEW — role is needed on the frontend for conditional rendering
+            // (e.g. hiding the Staff Management tab and Activity Log nav
+            // item from Staff-role accounts). Mirrors what's already
+            // embedded in the JWT itself, just cached for quick UI checks
+            // without needing to decode the token client-side.
+            localStorage.setItem('role', user.role);
 
             return response.data;
         } catch (error) {
@@ -248,6 +313,9 @@ export const apiService = {
         }
     },
 
+    // NEW — see standalone export above for full docs.
+    registerStaff,
+
     logout: () => {
         localStorage.clear();
         window.location.href = '/login';
@@ -255,6 +323,21 @@ export const apiService = {
 
     // --- BOOKING & TRANSACTION METHODS ---
 
+    /**
+     * FIXED (MULTI-ITEM INVENTORY): booking_data.inventory_item_id /
+     * inventory_quantity_used ay pinalitan na ng booking_data.inventory_items
+     * — isang LISTAHAN ng { inventory_item_id, quantity_used } pairs, para
+     * masuportahan ang maraming consumables (hal. detergent + fabric
+     * conditioner) sa iisang booking. Tumutugma ito sa bagong
+     * BookingCreate.inventory_items sa backend schemas.py.
+     *
+     * bookingData.inventory_items dapat isang array na na mula sa Booking
+     * Modal, hal.:
+     *   [{ inventory_item_id: 9, quantity_used: 150 },
+     *    { inventory_item_id: 12, quantity_used: 90 }]
+     * Kung walang consumable na ginamit (hal. walk-in na may sariling
+     * sabon), pwedeng iwanang blangko ([]) o hindi isama sa bookingData.
+     */
     createBooking: async (bookingData) => {
         try {
             const payload = {
@@ -262,8 +345,12 @@ export const apiService = {
                 shop_id: bookingData.shop_id ? parseInt(bookingData.shop_id) : parseInt(localStorage.getItem('shop_id')),
                 washer_id: bookingData.washer_id ? parseInt(bookingData.washer_id) : null,
                 dryer_id: bookingData.dryer_id ? parseInt(bookingData.dryer_id) : null,
-                inventory_item_id: bookingData.inventory_item_id ? parseInt(bookingData.inventory_item_id) : null,
-                inventory_quantity_used: bookingData.inventory_quantity_used ? parseFloat(bookingData.inventory_quantity_used) : null,
+                inventory_items: Array.isArray(bookingData.inventory_items)
+                    ? bookingData.inventory_items.map((item) => ({
+                          inventory_item_id: parseInt(item.inventory_item_id),
+                          quantity_used: parseFloat(item.quantity_used),
+                      }))
+                    : [],
                 weight: parseFloat(bookingData.weight || 0),
                 loads: parseInt(bookingData.loads || 1),
                 total_price: parseFloat(bookingData.total_price || 0),
@@ -274,6 +361,11 @@ export const apiService = {
                     ? new Date(bookingData.booking_timestamp).toISOString()
                     : new Date().toISOString()
             };
+            // Tinanggal ang lumang inventory_item_id / inventory_quantity_used
+            // fields kung sakaling naipasa pa rin ng caller — hindi na ito
+            // kinikilala ng bagong backend schema.
+            delete payload.inventory_item_id;
+            delete payload.inventory_quantity_used;
 
             const response = await apiClient.post('/bookings/', payload);
             return response.data;
@@ -283,7 +375,11 @@ export const apiService = {
         }
     },
 
-    getActiveBookings: async () => {
+    /**
+     * FIXED: was GET /bookings/active?shop_id=... — booking_routes.py no
+     * longer accepts a shop_id query param; it derives shop_id from the JWT.
+     */
+   getActiveBookings: async (shopId) => {
         try {
             const response = await apiClient.get('/bookings/active');
             return response.data;
@@ -293,7 +389,11 @@ export const apiService = {
         }
     },
 
-    updateBookingStatus: async (bookingId, newStatus) => {
+    /**
+     * FIXED: was PATCH /bookings/{id}/status?shop_id=... — no more
+     * shop_id query param needed; derived from the JWT.
+     */
+    updateBookingStatus: async (bookingId, newStatus, shopId) => {
         try {
             const response = await apiClient.patch(`/bookings/${bookingId}/status`, {
                 status: newStatus
@@ -306,15 +406,10 @@ export const apiService = {
     },
 
     /**
-     * Assigns a washer and/or dryer to an existing Pending booking.
-     * Called from AssignMachineModal when the operator selects a machine.
-     * The backend will validate availability and transition the booking
-     * status from Pending to In Progress.
-     * @param {number} bookingId - The ID of the Pending booking.
-     * @param {{ washer_id: number|null, dryer_id: number|null }} assignData
-     * @returns {Promise<BookingResponse>}
+     * FIXED: was PATCH /bookings/{id}/assign-machine?shop_id=... — no
+     * more shop_id query param needed; derived from the JWT.
      */
-    assignMachineToBooking: async (bookingId, assignData) => {
+    assignMachineToBooking: async (bookingId, assignData, shopId) => {
         try {
             const response = await apiClient.patch(
                 `/bookings/${bookingId}/assign-machine`,
@@ -328,22 +423,20 @@ export const apiService = {
     },
 
     // --- MACHINE HUB & TELEMETRY METHODS ---
-    // All routes below require `shop_id` as a query param to match
-    // backend/app/routers/machines.py exactly (Query(...) is required
-    // on every endpoint except POST / , where shop_id lives in the body).
+    // FIXED: machine_routes.py no longer requires `shop_id` as a query
+    // param on any endpoint — shop_id is derived from the JWT via
+    // Depends(get_current_user). shopId params below are kept only so
+    // existing call sites don't break; they are unused.
 
     /**
-     * GET /machines/?shop_id=...
+     * GET /machines/
      * Fetches real-time status + overhead metrics for all units of a shop.
      * New shops will simply return an empty array here until units
      * are registered via addMachine().
      */
     getMachines: async (shopId) => {
         try {
-            const targetId = shopId || localStorage.getItem('shop_id');
-            const response = await apiClient.get('/machines/', {
-                params: targetId ? { shop_id: parseInt(targetId) } : {}
-            });
+            const response = await apiClient.get('/machines/');
             return response.data;
         } catch (error) {
             console.error("Fetch Machines Error:", error.response?.data?.detail || error.message);
@@ -374,15 +467,12 @@ export const apiService = {
     },
 
     /**
-     * PATCH /machines/{machine_id}?shop_id=...
+     * PATCH /machines/{machine_id}
      * Updates machine details like Name, Type, or Operational Status.
      */
     updateMachineConfig: async (machineId, updateData, shopId) => {
         try {
-            const targetId = shopId || localStorage.getItem('shop_id');
-            const response = await apiClient.patch(`/machines/${machineId}`, updateData, {
-                params: { shop_id: parseInt(targetId) }
-            });
+            const response = await apiClient.patch(`/machines/${machineId}`, updateData);
             return response.data;
         } catch (error) {
             console.error("Update Machine Config Error:", error.response?.data?.detail || error.message);
@@ -391,14 +481,11 @@ export const apiService = {
     },
 
     /**
-     * DELETE /machines/{machine_id}?shop_id=...
+     * DELETE /machines/{machine_id}
      */
     deleteMachine: async (machineId, shopId) => {
         try {
-            const targetId = shopId || localStorage.getItem('shop_id');
-            const response = await apiClient.delete(`/machines/${machineId}`, {
-                params: { shop_id: parseInt(targetId) }
-            });
+            const response = await apiClient.delete(`/machines/${machineId}`);
             return response.data;
         } catch (error) {
             console.error("Delete Machine Error:", error.response?.data?.detail || error.message);
@@ -407,14 +494,11 @@ export const apiService = {
     },
 
     /**
-     * GET /machines/{machine_id}/metrics?shop_id=...
+     * GET /machines/{machine_id}/metrics
      */
     getMachineMetrics: async (machineId, shopId) => {
         try {
-            const targetId = shopId || localStorage.getItem('shop_id');
-            const response = await apiClient.get(`/machines/${machineId}/metrics`, {
-                params: { shop_id: parseInt(targetId) }
-            });
+            const response = await apiClient.get(`/machines/${machineId}/metrics`);
             return response.data;
         } catch (error) {
             console.error("Fetch Machine Metrics Error:", error.response?.data?.detail || error.message);
@@ -423,14 +507,11 @@ export const apiService = {
     },
 
     /**
-     * PATCH /machines/{machine_id}/maintenance?shop_id=...
+     * PATCH /machines/{machine_id}/maintenance
      */
     toggleMaintenance: async (machineId, shopId) => {
         try {
-            const targetId = shopId || localStorage.getItem('shop_id');
-            const response = await apiClient.patch(`/machines/${machineId}/maintenance`, null, {
-                params: { shop_id: parseInt(targetId) }
-            });
+            const response = await apiClient.patch(`/machines/${machineId}/maintenance`);
             return response.data;
         } catch (error) {
             console.error("Toggle Maintenance Error:", error.response?.data?.detail || error.message);
@@ -439,7 +520,7 @@ export const apiService = {
     },
 
     /**
-     * POST /machines/initialize?shop_id=...
+     * POST /machines/initialize
      * Bootstraps a standard 6 Washer / 6 Dryer grid for the shop.
      * NOTE: Intentionally NOT called automatically anywhere in this file
      * (e.g. not inside `register`). Call this manually only if the shop
@@ -448,10 +529,7 @@ export const apiService = {
      */
     initializeDefaultMachines: async (shopId) => {
         try {
-            const targetId = shopId || localStorage.getItem('shop_id');
-            const response = await apiClient.post('/machines/initialize', null, {
-                params: { shop_id: parseInt(targetId) }
-            });
+            const response = await apiClient.post('/machines/initialize');
             return response.data;
         } catch (error) {
             console.error("Initialization Error:", error.response?.data?.detail || error.message);
@@ -460,15 +538,12 @@ export const apiService = {
     },
 
     /**
-     * POST /machines/reset-all?shop_id=...
+     * POST /machines/reset-all
      * Emergency override to set all shop machines back to 'Available'.
      */
     resetAllMachines: async (shopId) => {
         try {
-            const targetId = shopId || localStorage.getItem('shop_id');
-            const response = await apiClient.post('/machines/reset-all', null, {
-                params: { shop_id: parseInt(targetId) }
-            });
+            const response = await apiClient.post('/machines/reset-all');
             return response.data;
         } catch (error) {
             console.error("Reset All Machines Error:", error.response?.data?.detail || error.message);
@@ -552,11 +627,13 @@ export const apiService = {
     getCustomerSegments,
 
     // --- OPTIMIZATION SETTINGS METHODS ---
+    // FIXED: setting_routes.py no longer takes shop_id in the URL path —
+    // it's derived from the JWT. shopId params below are kept only so
+    // existing call sites don't break; they are unused.
 
     getSettings: async (shopId) => {
         try {
-            const targetId = shopId || localStorage.getItem('shop_id');
-            const response = await apiClient.get(`/settings/${targetId}`);
+            const response = await apiClient.get('/settings/');
             return response.data;
         } catch (error) {
             console.error("Fetch Settings Error:", error.response?.data?.detail || error.message);
@@ -566,7 +643,6 @@ export const apiService = {
 
     updateSettings: async (shopId, settingsData) => {
         try {
-            const targetId = shopId || localStorage.getItem('shop_id');
             const sanitizedPayload = {
                 ...settingsData,
                 full_service_price: settingsData.full_service_price !== undefined ? parseFloat(settingsData.full_service_price) : undefined,
@@ -578,7 +654,7 @@ export const apiService = {
                 detergent_cost_per_load: settingsData.detergent_cost_per_load !== undefined ? parseFloat(settingsData.detergent_cost_per_load) : undefined
             };
 
-            const response = await apiClient.put(`/settings/${targetId}`, sanitizedPayload);
+            const response = await apiClient.put('/settings/', sanitizedPayload);
             return response.data;
         } catch (error) {
             console.error("Update Settings Error:", error.response?.data?.detail || error.message);
@@ -598,8 +674,7 @@ export const apiService = {
 
     resetToDefaults: async (shopId) => {
         try {
-            const targetId = shopId || localStorage.getItem('shop_id');
-            const response = await apiClient.post(`/settings/${targetId}/reset`);
+            const response = await apiClient.post('/settings/reset');
             return response.data;
         } catch (error) {
             console.error("Reset Settings Error:", error.response?.data?.detail || error.message);
@@ -609,11 +684,85 @@ export const apiService = {
 
     getBookingPricing: async (shopId) => {
         try {
-            const targetId = shopId || localStorage.getItem('shop_id');
-            const response = await apiClient.get(`/settings/${targetId}/pricing`);
+            const response = await apiClient.get('/settings/pricing');
             return response.data;
         } catch (error) {
             console.error("Fetch Pricing Error:", error.response?.data?.detail || error.message);
+            throw error;
+        }
+    },
+
+    // --- SERVICE TYPE METHODS ---
+    // Shop-defined services replace the old fixed Full Service / Regular
+    // Wash / Titan Wash / Comforter pricing. Owners add their own services
+    // and prices here; these populate the Booking Modal's Service Type
+    // dropdown via getBookingPricing().
+    // FIXED: no longer takes shop_id in the URL path — derived from the JWT.
+
+    /**
+     * GET /settings/services
+     * Lists all services (active and inactive) configured for the shop.
+     * Returns an empty array for a brand-new shop.
+     */
+    getServiceTypes: async (shopId) => {
+        try {
+            const response = await apiClient.get('/settings/services');
+            return response.data;
+        } catch (error) {
+            console.error("Fetch Service Types Error:", error.response?.data?.detail || error.message);
+            throw error;
+        }
+    },
+
+    /**
+     * POST /settings/services
+     * Adds a new service (name + price + duration_minutes) to the shop's catalog.
+     */
+    addServiceType: async (serviceData, shopId) => {
+        try {
+            const payload = {
+                name: serviceData.name,
+                price: parseFloat(serviceData.price),
+                is_active: serviceData.is_active !== undefined ? Boolean(serviceData.is_active) : true,
+                duration_minutes: serviceData.duration_minutes !== undefined
+                    ? parseInt(serviceData.duration_minutes)
+                    : 45,
+            };
+            const response = await apiClient.post('/settings/services', payload);
+            return response.data;
+        } catch (error) {
+            console.error("Add Service Type Error:", error.response?.data?.detail || error.message);
+            throw error;
+        }
+    },
+
+    /**
+     * PUT /settings/services/{service_id}
+     * Edits an existing service's name, price, active status, or duration.
+     */
+    updateServiceType: async (serviceId, updateData, shopId) => {
+        try {
+            const payload = { ...updateData };
+            if (payload.price !== undefined) payload.price = parseFloat(payload.price);
+            if (payload.duration_minutes !== undefined) payload.duration_minutes = parseInt(payload.duration_minutes);
+            const response = await apiClient.put(`/settings/services/${serviceId}`, payload);
+            return response.data;
+        } catch (error) {
+            console.error("Update Service Type Error:", error.response?.data?.detail || error.message);
+            throw error;
+        }
+    },
+
+    /**
+     * DELETE /settings/services/{service_id}
+     * Permanently removes a service from the shop's catalog.
+     */
+    deleteServiceType: async (serviceId, shopId) => {
+        try {
+            const response = await apiClient.delete(`/settings/services/${serviceId}`);
+            return response.data;
+        } catch (error) {
+            console.error("Delete Service Type Error:", error.response?.data?.detail || error.message);
             throw error;
         }
     },
@@ -623,9 +772,21 @@ export const apiService = {
     updateShopProfile,
     updatePassword,
 
+    // --- ACTIVITY LOG METHODS (NEW) ---
+
+    getActivityLogs,
+
     // --- UTILS ---
 
     getShopId: () => localStorage.getItem('shop_id'),
+    /**
+     * NEW — Reads the cached role from localStorage (set during login).
+     * Used for conditional UI rendering: hiding the Staff Management tab
+     * and Activity Log nav item from Staff-role accounts. This is a UX
+     * convenience only — actual authorization is always enforced by the
+     * backend via require_role(), regardless of what the frontend shows.
+     */
+    getRole: () => localStorage.getItem('role'),
     getAuthHeader: () => {
         const token = localStorage.getItem('token');
         return token ? { Authorization: `Bearer ${token}` } : {};

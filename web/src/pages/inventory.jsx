@@ -23,6 +23,15 @@ import {
  * INVENTORY PAGE
  * Main dashboard for tracking supply levels and managing inventory data.
  *
+ * FIXED: Previously read shop_id from localStorage and passed it
+ * explicitly into apiService.getInventory(shopId) and
+ * addInventoryItem({..., shop_id: shopId}). That's no longer needed for
+ * correctness — the backend derives shop_id from the JWT on every
+ * request (see get_current_user in inventory_routes.py), so a
+ * client-supplied value was never actually authoritative and is now
+ * fully ignored server-side. Removed the getShopId() helper and its
+ * call sites entirely to avoid implying it still matters.
+ *
  * Features:
  * - Real-time inventory tracking
  * - Stat cards matching the dashboard design (icon + label + large number)
@@ -76,15 +85,12 @@ const InventoryPage = () => {
   }, [items, searchTerm, filterStatus]);
 
   /**
-   * Returns the shop ID from localStorage with a safe fallback.
-   */
-  const getShopId = () => {
-    const raw = localStorage.getItem('shop_id');
-    return raw ? parseInt(raw, 10) : 1;
-  };
-
-  /**
    * Classifies an item into one of four status buckets based on stock levels.
+   * Matches the thresholds used by classify_stock_status() on the
+   * backend (inventory_controller.py) — 50% of reorder_point is CRITICAL,
+   * at/below reorder_point but above that is LOW, above is OK — plus an
+   * explicit OUT_OF_STOCK bucket for zero/negative stock for extra
+   * visual granularity in this table specifically.
    */
   const getItemStatus = (item) => {
     const stock   = parseFloat(item?.current_stock) || 0;
@@ -144,13 +150,15 @@ const InventoryPage = () => {
 
   /**
    * Fetches all inventory items for the current shop from the API.
+   * No shop_id is passed — apiService.getInventory() calls
+   * GET /inventory/ and the backend scopes the result to the
+   * authenticated user's shop via the JWT.
    */
   const loadInventory = async () => {
     try {
       setLoading(true);
       setError(null);
-      const shopId   = getShopId();
-      const inventory = await apiService.getInventory(shopId);
+      const inventory = await apiService.getInventory();
       setItems(Array.isArray(inventory) ? inventory : []);
     } catch (err) {
       console.error('Error loading inventory:', err);
@@ -226,17 +234,19 @@ const InventoryPage = () => {
 
   /**
    * Saves a new or updated inventory item via the API.
+   * shop_id is no longer attached here — apiService.addInventoryItem()
+   * still fills a fallback for schema compatibility, but the backend
+   * ignores it and uses the authenticated user's own shop_id instead.
    */
   const handleSave = async (itemId, data) => {
     try {
       setModalLoading(true);
-      const shopId = getShopId();
 
       if (itemId) {
         await apiService.updateStock(itemId, data);
         setSuccessMessage('Inventory item updated successfully');
       } else {
-        await apiService.addInventoryItem({ ...data, shop_id: shopId });
+        await apiService.addInventoryItem(data);
         setSuccessMessage('New item added to inventory');
       }
 

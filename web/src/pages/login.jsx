@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Mail, Lock, Eye, EyeOff, Store, MapPin } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, Store, MapPin, CheckCircle2 } from 'lucide-react';
 import authService from '../services/APIservices';
 import laundryLinkLogo from '../assets/Untitled design.png';
 
@@ -22,7 +22,7 @@ const Login = () => {
             <img src={laundryLinkLogo} alt="LaundryLink" className="h-14" />
             <span className="text-2xl font-black italic">
               <span className="text-sky-500">LAUNDRY</span>
-              <span className="text-green-600">LINK</span>
+              <span className="text-green-600">LINK</span> 
             </span>
           </div>
 
@@ -162,14 +162,31 @@ function RegisterForm({ onSwitch, navigate }) {
   const [address, setAddress] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  // Only starts showing the mismatch state once the person has actually
+  // typed something in confirmPassword — avoids showing a red border
+  // the instant they focus the field before typing anything.
+  const passwordsMismatch = confirmPassword.length > 0 && password !== confirmPassword;
+  const passwordsMatch = confirmPassword.length > 0 && password === confirmPassword;
 
   const handleRegister = async (e) => {
     e.preventDefault();
-    setLoading(true);
     setErrorMessage('');
+
+    // Client-side check only — confirmPassword is never sent to the
+    // backend. It just needs to match `password` before we bother
+    // calling the API at all.
+    if (password !== confirmPassword) {
+      setErrorMessage('Passwords do not match. Please re-enter your password.');
+      return;
+    }
+
+    setLoading(true);
 
     try {
       // NOTE: verify this matches the actual method in src/services/APIservices.js
@@ -255,6 +272,55 @@ function RegisterForm({ onSwitch, navigate }) {
           >
             {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
           </button>
+        </div>
+
+        {/* CONFIRM PASSWORD FIELD (NEW) */}
+        <div>
+          <div className={`relative group`}>
+            <div className={`absolute inset-y-0 left-0 pl-6 flex items-center pointer-events-none transition-colors ${
+              passwordsMismatch
+                ? 'text-rose-400'
+                : passwordsMatch
+                  ? 'text-emerald-500'
+                  : 'text-sky-400 group-focus-within:text-sky-500'
+            }`}>
+              <Lock size={20} />
+            </div>
+            <input
+              type={showConfirmPassword ? 'text' : 'password'}
+              required
+              className={`w-full bg-slate-50 border rounded-2xl py-4.5 pl-14 pr-14 focus:outline-none focus:ring-4 transition-all text-slate-700 placeholder:text-slate-400 ${
+                passwordsMismatch
+                  ? 'border-rose-300 focus:ring-rose-400/10 focus:border-rose-400'
+                  : passwordsMatch
+                    ? 'border-emerald-300 focus:ring-emerald-400/10 focus:border-emerald-400'
+                    : 'border-slate-100 focus:ring-sky-400/10 focus:border-sky-400'
+              }`}
+              placeholder="Confirm password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+            />
+            {/* Show a checkmark instead of the eye toggle once passwords match,
+                as a quick visual confirmation without hiding the show/hide control. */}
+            {passwordsMatch ? (
+              <span className="absolute inset-y-0 right-0 pr-6 flex items-center text-emerald-500">
+                <CheckCircle2 size={20} />
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                className="absolute inset-y-0 right-0 pr-6 flex items-center text-slate-300 hover:text-sky-500 transition-colors"
+              >
+                {showConfirmPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+              </button>
+            )}
+          </div>
+          {passwordsMismatch && (
+            <p className="mt-2 ml-2 text-xs font-semibold text-rose-500">
+              Passwords do not match.
+            </p>
+          )}
         </div>
 
         <button

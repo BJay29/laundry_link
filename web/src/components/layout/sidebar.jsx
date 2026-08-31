@@ -10,9 +10,11 @@ import {
   X,
   Package,
   UserCog,
-  Users // Import Users icon for Customer Hub
+  Users, // Import Users icon for Customer Hub
+  History // NEW: icon for Activity Log
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import logo from '../../assets/Untitled design.png'; 
 
 /**
  * SIDEBAR COMPONENT
@@ -21,11 +23,22 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
  * COLOR THEME: Light mode — uses white/slate-50 base to complement the dashboard background.
  * Sidebar is white while the dashboard content area is slate-50, keeping them visually related
  * but distinct through a subtle border and shadow separation.
+ *
+ * UPDATED: Added a role-gated "Activity Log" nav item, visible only to
+ * 'owner' and 'manager' roles. The role is read from localStorage,
+ * which apiService.login() now persists on successful sign-in (see
+ * apiService.js — localStorage.setItem('role', user.role)). Staff
+ * accounts with any other role simply won't see this link at all.
  */
 const Sidebar = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+
+  // Current user's role, persisted at login time by apiService.login().
+  // Used to gate role-restricted nav items below.
+  const role = localStorage.getItem('role');
+  const canViewActivityLog = role === 'owner' || role === 'manager';
 
   // Main navigation items synced with App.jsx routes
   const navItems = [
@@ -64,6 +77,16 @@ const Sidebar = () => {
       icon: <Settings size={20} />, 
       path: '/settings' 
     },
+    // NEW: Role-gated — only owners and managers see this link. Staff
+    // accounts (or any other role) never see it in the nav at all.
+    ...(canViewActivityLog
+      ? [{
+          name: 'Activity Logs',
+          icon: <History size={20} />,
+          path: '/activity-logs'
+        }]
+      : []
+    ),
   ];
 
   /**
@@ -81,15 +104,15 @@ const Sidebar = () => {
       {/* Sidebar — light white background with a right border to separate from slate-50 content area */}
       <div className="w-72 h-screen bg-white text-slate-700 flex flex-col fixed left-0 top-0 border-r border-slate-200 z-50 shadow-sm">
         
-        {/* Branding Section — Custom LaundryLink Logo Design, unchanged */}
+        {/* Branding Section — actual logo image + wordmark */}
         <div className="px-6 pt-8 pb-4">
           <div className="flex items-center gap-3">
-            {/* Logo Icons inline with text */}
-            <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 bg-violet-500 rounded-full"></div>
-              <div className="w-5 h-2 bg-violet-400 rounded-full"></div>
-              <div className="w-3 h-3 border-2 border-emerald-400 rounded-full"></div>
-            </div>
+            {/* Logo Image */}
+            <img
+              src={logo}
+              alt="LaundryLink logo"
+              className="h-8 w-8 object-contain shrink-0"
+            />
 
             {/* Logo Text */}
             <h2 className="text-xl font-black italic tracking-tighter text-slate-900">

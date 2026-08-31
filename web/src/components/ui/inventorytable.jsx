@@ -21,11 +21,19 @@ import {
  * Features:
  * - Color-coded status indicators (Critical, Low Stock, Stable, Out of Stock)
  * - Category and unit display
- * - Usage rate per day display
+ * - Usage rate PER LOAD display
  * - Sortable columns
  * - Delete and edit actions delegated to parent modals (no browser dialogs)
  * - Empty and loading states
  * - Responsive design matching dashboard aesthetic
+ *
+ * FIXED (usage_rate semantics): usage_rate was previously displayed as
+ * "/day" and used to estimate "~Xd left" (days left), implying automatic
+ * daily depletion. There is no such mechanism in the backend — usage_rate
+ * is consumption PER LOAD (see booking_controller.create_booking, where
+ * quantity = loads × usage_rate, deducted only when an actual booking is
+ * created). The label and the remaining-estimate have been corrected to
+ * reflect "per load" and "~X loads left" respectively.
  */
 const InventoryTable = ({
   items = [],
@@ -248,7 +256,13 @@ const InventoryTable = ({
               const reorderPoint  = parseFloat(item?.reorder_point) || 0;
               const currentStock  = parseFloat(item?.current_stock) || 0;
               const usageRate     = parseFloat(item?.usage_rate) || 0.05;
-              const daysLeft      = currentStock > 0 ? Math.ceil(currentStock / usageRate) : 0;
+              // FIXED: usage_rate is consumption PER LOAD, not per day —
+              // this now estimates remaining LOADS the current stock can
+              // cover, not days. Depletion only happens when an actual
+              // booking uses this item, not automatically over time.
+              const loadsLeft     = currentStock > 0 && usageRate > 0
+                ? Math.floor(currentStock / usageRate)
+                : 0;
               const isLow         = currentStock <= reorderPoint;
 
               return (
@@ -290,7 +304,7 @@ const InventoryTable = ({
                     <div className="flex items-center justify-center gap-1.5">
                       <Gauge size={13} className="text-emerald-500" />
                       <span className="font-semibold text-gray-700 text-sm">{usageRate.toFixed(2)}</span>
-                      <span className="text-xs text-gray-400">/day</span>
+                      <span className="text-xs text-gray-400">/load</span>
                     </div>
                   </td>
 
@@ -301,8 +315,8 @@ const InventoryTable = ({
                         {status.icon}
                         {status.label}
                       </span>
-                      {daysLeft > 0 && isLow && (
-                        <p className="text-xs text-gray-400">~{daysLeft}d left</p>
+                      {loadsLeft > 0 && isLow && (
+                        <p className="text-xs text-gray-400">~{loadsLeft} loads left</p>
                       )}
                     </div>
                   </td>
