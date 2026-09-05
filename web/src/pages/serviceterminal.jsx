@@ -17,7 +17,7 @@ import apiService from '../services/APIservices';
 import BookingModal from '../components/modals/bookingmodal';
 import AssignMachineModal from '../components/modals/assignmachinemodal';
 import BookingRequestModal from '../components/modals/bookingrequestmodal';
-import { useNotifications } from '../context/NotificationContext';
+import { useNotifications } from '../context/notificationcontext';
 import { formatTime, formatCurrency } from '../utils/formatters';
 
 /**
