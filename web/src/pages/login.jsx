@@ -73,7 +73,17 @@ function LoginForm({ onSwitch, navigate }) {
         navigate('/dashboard');
       }
     } catch (error) {
-      const errorDetail = error.response?.data?.detail || error.message || 'Invalid email or password.';
+      const rawDetail = error.response?.data?.detail;
+      let errorDetail = 'Invalid email or password.';
+      
+      if (typeof rawDetail === 'string') {
+        errorDetail = rawDetail;
+      } else if (Array.isArray(rawDetail)) {
+        errorDetail = rawDetail.map(err => `${err.loc.join('.')}: ${err.msg}`).join(' | ');
+      } else if (error.message) {
+        errorDetail = error.message;
+      }
+
       setErrorMessage(errorDetail);
     } finally {
       setLoading(false);
@@ -156,7 +166,8 @@ function LoginForm({ onSwitch, navigate }) {
   );
 }
 
-function RegisterForm({ onSwitch, navigate }) {
+function RegisterForm({ onSwitch }) {
+  const [ownerName, setOwnerName] = useState(''); 
   const [shopName, setShopName] = useState('');
   const [address, setAddress] = useState('');
   const [email, setEmail] = useState('');
@@ -182,10 +193,23 @@ function RegisterForm({ onSwitch, navigate }) {
     setLoading(true);
 
     try {
+      // Pinapasa ang shopName bilang owner_name para masunod ang backend requirement
       await authService.register(shopName, address, email, password);
-      onSwitch();
+      onSwitch(); // Lilipat ito sa login kapag successful
     } catch (error) {
-      const errorDetail = error.response?.data?.detail || error.message || 'Unable to create shop account.';
+      console.error("Registration Error Object:", error);
+      const rawDetail = error.response?.data?.detail;
+      let errorDetail = 'Unable to create shop account.';
+
+      // Ligtas na kino-convert ang FastAPI 422 error array papuntang text string
+      if (typeof rawDetail === 'string') {
+        errorDetail = rawDetail;
+      } else if (Array.isArray(rawDetail)) {
+        errorDetail = rawDetail.map(err => `${err.loc.join('.')}: ${err.msg}`).join(' | ');
+      } else if (error.message) {
+        errorDetail = error.message;
+      }
+
       setErrorMessage(errorDetail);
     } finally {
       setLoading(false);
@@ -198,7 +222,7 @@ function RegisterForm({ onSwitch, navigate }) {
       <p className="text-sm text-slate-400 mb-6">It's quick and easy.</p>
 
       {errorMessage && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-100 text-red-600 text-sm font-medium rounded-lg">
+        <div className="mb-4 p-3 bg-red-50 border border-red-100 text-red-600 text-xs font-medium rounded-lg overflow-x-auto">
           {errorMessage}
         </div>
       )}
