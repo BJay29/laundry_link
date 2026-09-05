@@ -35,6 +35,15 @@ import { optimizationLogic } from '../../utils/optimizationlogic';
  *   stock entirely (blocking, since the backend would reject it anyway).
  * - On submit, selected items are sent as inventory_items: [{ inventory_item_id,
  *   quantity_used }], matching the backend's multi-item BookingCreate schema.
+ *
+ * PRICING UNIT (NEW):
+ * - servicePricing (from getBookingPricing) is a flat { name: price } map
+ *   with no unit info — that endpoint predates pricing_unit. To show
+ *   "₱65.00 / load" in the Service Type dropdown, we ALSO fetch
+ *   getServiceTypes() (which does carry pricing_unit) and build a
+ *   serviceUnits lookup { name: pricing_unit }. Falls back to "load" for
+ *   any name not found (shouldn't normally happen, but keeps the dropdown
+ *   from crashing if the two lists are ever briefly out of sync).
  */
 const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
   const [bookingMode, setBookingMode] = useState('smart');
@@ -45,6 +54,10 @@ const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
   // Dynamic Pricing State (Fetched from Backend)
   // Shape: { [serviceName]: price, detergent_fee: number, minimum_weight_kg: number }
   const [servicePricing, setServicePricing] = useState({});
+
+  // NEW — { [serviceName]: pricing_unit } lookup, built from getServiceTypes()
+  // since getBookingPricing() itself doesn't carry pricing_unit.
+  const [serviceUnits, setServiceUnits] = useState({});
 
   // Tracks whether the person has manually edited the weight field yet.
   // Prevents the auto-filled minimum from overwriting their input once
@@ -100,10 +113,10 @@ const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
   };
 
   /**
-   * SYNC: Fetch machine availability, dynamic service pricing, and
-   * inventory items from the backend. Also pre-fills the Weight field
-   * with the shop's configured minimum, unless the person has already
-   * started editing it.
+   * SYNC: Fetch machine availability, dynamic service pricing, service
+   * types (for pricing_unit), and inventory items from the backend. Also
+   * pre-fills the Weight field with the shop's configured minimum, unless
+   * the person has already started editing it.
    */
   useEffect(() => {
     if (isOpen) {
@@ -112,15 +125,24 @@ const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
           setIsLoadingSettings(true);
           const shopId = apiService.getShopId();
 
-          const [machines, pricing, inventory] = await Promise.all([
+          const [machines, pricing, inventory, serviceTypeList] = await Promise.all([
             apiService.getMachines(shopId),
             apiService.getBookingPricing(shopId),
-            apiService.getInventory(shopId)
+            apiService.getInventory(shopId),
+            apiService.getServiceTypes(shopId)
           ]);
 
           setMachineData(machines || []);
           setServicePricing(pricing || {});
           setInventoryData(inventory || []);
+
+          // NEW — build { name: pricing_unit } lookup from the full
+          // service type list, since getBookingPricing() doesn't carry it.
+          const unitsMap = {};
+          (serviceTypeList || []).forEach((s) => {
+            unitsMap[s.name] = s.pricing_unit || 'load';
+          });
+          setServiceUnits(unitsMap);
 
           const names = Object.keys(pricing || {}).filter(
             (key) => key !== 'detergent_fee' && key !== 'minimum_weight_kg'
@@ -643,7 +665,7 @@ const BookingModal = ({ isOpen, onClose, onSubmit, actualBookingTime }) => {
               <select name="serviceType" value={formData.serviceType} onChange={handleChange} className="w-full bg-slate-50 border-2 border-slate-100 rounded-[24px] px-6 py-4 font-bold text-slate-800 outline-none cursor-pointer focus:border-sky-200">
                 {serviceNames.map(name => (
                   <option key={name} value={name}>
-                    {name} — {optimizationLogic.formatCurrency(servicePricing[name])}
+                    {name} — {optimizationLogic.formatPriceWithUnit(servicePricing[name], serviceUnits[name])}
                   </option>
                 ))}
               </select>

@@ -28,11 +28,6 @@ apiClient.interceptors.request.use((config) => {
 
 // --- INDIVIDUAL EXPORTS FOR NAMED IMPORTS ---
 
-/**
- * FIXED: no longer sends ?shop_id=... — inventory_routes.py now derives
- * shop_id from the JWT via Depends(get_current_user). shopId param kept
- * only so existing call sites don't break; it's unused.
- */
 export const getInventory = async (shopId) => {
     try {
         const response = await apiClient.get('/inventory/');
@@ -43,10 +38,6 @@ export const getInventory = async (shopId) => {
     }
 };
 
-/**
- * Fetches inventory grouped by category for booking dropdowns.
- * FIXED: same as getInventory — shop_id comes from the JWT now.
- */
 export const getInventoryCategories = async (shopId) => {
     try {
         const response = await apiClient.get('/inventory/categories');
@@ -125,11 +116,6 @@ export const getItemAnalytics = async (itemId, days = 7) => {
     }
 };
 
-/**
- * FIXED: was calling /inventory/shop/{targetId}/alerts, which no longer
- * exists — inventory_routes.py now serves this at /inventory/alerts with
- * no shop path param, deriving shop_id from the JWT.
- */
 export const getInventoryDashboardStats = async (shopId) => {
     try {
         const response = await apiClient.get('/inventory/alerts');
@@ -140,9 +126,6 @@ export const getInventoryDashboardStats = async (shopId) => {
     }
 };
 
-/**
- * Fetches AI model accuracy metrics from the analytics controller.
- */
 export const getAiAccuracyMetrics = async () => {
     try {
         const response = await apiClient.get('/analytics/accuracy');
@@ -153,9 +136,6 @@ export const getAiAccuracyMetrics = async () => {
     }
 };
 
-/**
- * Triggers AI model retraining.
- */
 export const triggerAiRetraining = async () => {
     try {
         const response = await apiClient.post('/analytics/retrain-model');
@@ -166,11 +146,6 @@ export const triggerAiRetraining = async () => {
     }
 };
 
-/**
- * Fetches K-Means customer segments from the analytics endpoint.
- * Returns a list of customers each annotated with a behavioral segment
- * (Occasional | Regular | VIP) based on visit frequency and total spending.
- */
 export const getCustomerSegments = async () => {
     try {
         const response = await apiClient.get('/analytics/customer-segments');
@@ -182,14 +157,20 @@ export const getCustomerSegments = async () => {
 };
 
 /**
- * Updates the shop profile (name, address, email).
- * FIXED: was PUT /settings/{shopId}/profile — setting_routes.py now
- * serves this at PUT /settings/profile with no path param; shop_id
- * comes from the JWT. shopId param kept only so existing call sites
- * don't break; it's unused.
- * @param {number|string} shopId - unused, kept for call-site compatibility.
- * @param {Object} profileData - The data object containing shop details.
+ * Fetches the logged-in user's own shop profile, including
+ * delivery settings (has_delivery, delivery_fee). Backend endpoint
+ * GET /settings/profile.
  */
+export const getShopProfile = async () => {
+    try {
+        const response = await apiClient.get('/settings/profile');
+        return response.data;
+    } catch (error) {
+        console.error("Fetch Shop Profile Error:", error.response?.data?.detail || error.message);
+        throw error;
+    }
+};
+
 export const updateShopProfile = async (shopId, profileData) => {
     try {
         const response = await apiClient.put('/settings/profile', profileData);
@@ -200,15 +181,6 @@ export const updateShopProfile = async (shopId, profileData) => {
     }
 };
 
-/**
- * Updates the user password after verifying current credentials.
- * FIXED: was PUT /settings/user/{userId}/password — setting_routes.py
- * now serves this at PUT /settings/password, always targeting the
- * CURRENTLY LOGGED-IN user from the JWT (self-only). userId param kept
- * only so existing call sites don't break; it's unused.
- * @param {number|string} userId - unused, kept for call-site compatibility.
- * @param {Object} passwordData - Object containing old_password and new_password.
- */
 export const updatePassword = async (userId, passwordData) => {
     try {
         const response = await apiClient.put('/settings/password', passwordData);
@@ -219,14 +191,6 @@ export const updatePassword = async (userId, passwordData) => {
     }
 };
 
-/**
- * NEW — Creates a staff/manager account under the currently logged-in
- * Owner's own shop. Backend endpoint POST /auth/register/staff is
- * Owner-only (enforced via require_role("owner")); shop_id is derived
- * server-side from the Owner's own JWT, never sent from the client.
- * @param {Object} staffData - { full_name, email, password, role }
- *   role must be "staff" or "manager".
- */
 export const registerStaff = async (staffData) => {
     try {
         const payload = {
@@ -243,13 +207,6 @@ export const registerStaff = async (staffData) => {
     }
 };
 
-/**
- * NEW — Fetches recent Activity Log entries for the logged-in user's own
- * shop. Backend endpoint GET /activity-logs/ is restricted to Owner and
- * Manager roles (enforced via require_role("owner", "manager")); a
- * Staff-role JWT will get a 403 even with a valid token.
- * @param {number} limit - max entries to return (default 100, backend caps at 500).
- */
 export const getActivityLogs = async (limit = 100) => {
     try {
         const response = await apiClient.get('/activity-logs/', {
@@ -258,6 +215,190 @@ export const getActivityLogs = async (limit = 100) => {
         return response.data;
     } catch (error) {
         console.error("Fetch Activity Logs Error:", error.response?.data?.detail || error.message);
+        throw error;
+    }
+};
+
+/**
+ * GET /bookings/awaiting-approval
+ * Fetches customer-submitted bookings still awaiting Accept/Decline.
+ * Used by the Service Terminal's notification bell.
+ */
+export const getAwaitingApprovalBookings = async () => {
+    try {
+        const response = await apiClient.get('/bookings/awaiting-approval');
+        return response.data;
+    } catch (error) {
+        console.error("Fetch Awaiting Approval Error:", error.response?.data?.detail || error.message);
+        throw error;
+    }
+};
+
+/**
+ * PATCH /bookings/{id}/accept
+ * Accepts a customer-submitted booking request — moves it to "Pending".
+ */
+export const acceptBooking = async (bookingId) => {
+    try {
+        const response = await apiClient.patch(`/bookings/${bookingId}/accept`);
+        return response.data;
+    } catch (error) {
+        console.error("Accept Booking Error:", error.response?.data?.detail || error.message);
+        throw error;
+    }
+};
+
+/**
+ * PATCH /bookings/{id}/decline
+ * Declines a customer-submitted booking request — moves it to "Declined".
+ *
+ * UPDATED: now REQUIRES a `reason` string in the request body (backend's
+ * BookingDeclineRequest schema validates it's non-empty, max 300 chars).
+ * The Service Terminal's decline UI offers quick presets ("Fully
+ * booked", "Closed for the day", "Service unavailable") plus a free-text
+ * option — whichever the staff picks/types is what gets sent here.
+ */
+export const declineBooking = async (bookingId, reason) => {
+    try {
+        const response = await apiClient.patch(`/bookings/${bookingId}/decline`, { reason });
+        return response.data;
+    } catch (error) {
+        console.error("Decline Booking Error:", error.response?.data?.detail || error.message);
+        throw error;
+    }
+};
+
+// --- ADD-ON METHODS ---
+// Mirrors the Service Type methods pattern below — shop owner-defined
+// add-ons (fabric softener upgrade, rush, atbp.) shown as a checklist
+// in the mobile app's booking flow.
+
+/**
+ * GET /addons/
+ * Lists all add-ons (active and inactive) configured for the shop.
+ */
+export const getAddOns = async () => {
+    try {
+        const response = await apiClient.get('/addons/');
+        return response.data;
+    } catch (error) {
+        console.error("Fetch Add-Ons Error:", error.response?.data?.detail || error.message);
+        throw error;
+    }
+};
+
+/**
+ * POST /addons/
+ * Adds a new add-on (name + price) to the shop's catalog.
+ */
+export const addAddOn = async (addOnData) => {
+    try {
+        const payload = {
+            name: addOnData.name,
+            price: parseFloat(addOnData.price),
+            is_active: addOnData.is_active !== undefined ? Boolean(addOnData.is_active) : true,
+        };
+        const response = await apiClient.post('/addons/', payload);
+        return response.data;
+    } catch (error) {
+        console.error("Add Add-On Error:", error.response?.data?.detail || error.message);
+        throw error;
+    }
+};
+
+/**
+ * PUT /addons/{addon_id}
+ * Edits an existing add-on's name, price, or active status.
+ */
+export const updateAddOn = async (addOnId, updateData) => {
+    try {
+        const payload = { ...updateData };
+        if (payload.price !== undefined) payload.price = parseFloat(payload.price);
+        const response = await apiClient.put(`/addons/${addOnId}`, payload);
+        return response.data;
+    } catch (error) {
+        console.error("Update Add-On Error:", error.response?.data?.detail || error.message);
+        throw error;
+    }
+};
+
+/**
+ * DELETE /addons/{addon_id}
+ */
+export const deleteAddOn = async (addOnId) => {
+    try {
+        const response = await apiClient.delete(`/addons/${addOnId}`);
+        return response.data;
+    } catch (error) {
+        console.error("Delete Add-On Error:", error.response?.data?.detail || error.message);
+        throw error;
+    }
+};
+
+// --- PROMO CODE METHODS ---
+
+/**
+ * GET /promo-codes/
+ * Lists all promo codes (active and inactive) configured for the shop.
+ */
+export const getPromoCodes = async () => {
+    try {
+        const response = await apiClient.get('/promo-codes/');
+        return response.data;
+    } catch (error) {
+        console.error("Fetch Promo Codes Error:", error.response?.data?.detail || error.message);
+        throw error;
+    }
+};
+
+/**
+ * POST /promo-codes/
+ * Adds a new promo/discount code to the shop.
+ */
+export const addPromoCode = async (promoData) => {
+    try {
+        const payload = {
+            code: promoData.code,
+            discount_type: promoData.discount_type || 'percent',
+            discount_value: parseFloat(promoData.discount_value),
+            is_active: promoData.is_active !== undefined ? Boolean(promoData.is_active) : true,
+            max_uses: promoData.max_uses ? parseInt(promoData.max_uses) : null,
+            expires_at: promoData.expires_at || null,
+        };
+        const response = await apiClient.post('/promo-codes/', payload);
+        return response.data;
+    } catch (error) {
+        console.error("Add Promo Code Error:", error.response?.data?.detail || error.message);
+        throw error;
+    }
+};
+
+/**
+ * PUT /promo-codes/{promo_id}
+ * Edits an existing promo code's details.
+ */
+export const updatePromoCode = async (promoId, updateData) => {
+    try {
+        const payload = { ...updateData };
+        if (payload.discount_value !== undefined) payload.discount_value = parseFloat(payload.discount_value);
+        if (payload.max_uses !== undefined) payload.max_uses = payload.max_uses ? parseInt(payload.max_uses) : null;
+        const response = await apiClient.put(`/promo-codes/${promoId}`, payload);
+        return response.data;
+    } catch (error) {
+        console.error("Update Promo Code Error:", error.response?.data?.detail || error.message);
+        throw error;
+    }
+};
+
+/**
+ * DELETE /promo-codes/{promo_id}
+ */
+export const deletePromoCode = async (promoId) => {
+    try {
+        const response = await apiClient.delete(`/promo-codes/${promoId}`);
+        return response.data;
+    } catch (error) {
+        console.error("Delete Promo Code Error:", error.response?.data?.detail || error.message);
         throw error;
     }
 };
@@ -278,12 +419,8 @@ export const apiService = {
             localStorage.setItem('shop_id', user.shop_id);
             localStorage.setItem('shop_name', user.shop_name);
             localStorage.setItem('shop_address', user.address);
-            // NEW — role is needed on the frontend for conditional rendering
-            // (e.g. hiding the Staff Management tab and Activity Log nav
-            // item from Staff-role accounts). Mirrors what's already
-            // embedded in the JWT itself, just cached for quick UI checks
-            // without needing to decode the token client-side.
             localStorage.setItem('role', user.role);
+            localStorage.setItem('full_name', user.full_name || '');
 
             return response.data;
         } catch (error) {
@@ -301,10 +438,6 @@ export const apiService = {
                 email,
                 password,
             });
-            // NOTE: No machine initialization call here on purpose.
-            // New shops start with an EMPTY Machine Hub. Units must be
-            // registered manually via apiService.addMachine(), which is
-            // what populates the Machine Hub for that shop.
             return response.data;
         } catch (error) {
             const errorMessage = error.response?.data?.detail || error.message;
@@ -313,7 +446,6 @@ export const apiService = {
         }
     },
 
-    // NEW — see standalone export above for full docs.
     registerStaff,
 
     logout: () => {
@@ -323,21 +455,6 @@ export const apiService = {
 
     // --- BOOKING & TRANSACTION METHODS ---
 
-    /**
-     * FIXED (MULTI-ITEM INVENTORY): booking_data.inventory_item_id /
-     * inventory_quantity_used ay pinalitan na ng booking_data.inventory_items
-     * — isang LISTAHAN ng { inventory_item_id, quantity_used } pairs, para
-     * masuportahan ang maraming consumables (hal. detergent + fabric
-     * conditioner) sa iisang booking. Tumutugma ito sa bagong
-     * BookingCreate.inventory_items sa backend schemas.py.
-     *
-     * bookingData.inventory_items dapat isang array na na mula sa Booking
-     * Modal, hal.:
-     *   [{ inventory_item_id: 9, quantity_used: 150 },
-     *    { inventory_item_id: 12, quantity_used: 90 }]
-     * Kung walang consumable na ginamit (hal. walk-in na may sariling
-     * sabon), pwedeng iwanang blangko ([]) o hindi isama sa bookingData.
-     */
     createBooking: async (bookingData) => {
         try {
             const payload = {
@@ -361,9 +478,6 @@ export const apiService = {
                     ? new Date(bookingData.booking_timestamp).toISOString()
                     : new Date().toISOString()
             };
-            // Tinanggal ang lumang inventory_item_id / inventory_quantity_used
-            // fields kung sakaling naipasa pa rin ng caller — hindi na ito
-            // kinikilala ng bagong backend schema.
             delete payload.inventory_item_id;
             delete payload.inventory_quantity_used;
 
@@ -375,10 +489,6 @@ export const apiService = {
         }
     },
 
-    /**
-     * FIXED: was GET /bookings/active?shop_id=... — booking_routes.py no
-     * longer accepts a shop_id query param; it derives shop_id from the JWT.
-     */
    getActiveBookings: async (shopId) => {
         try {
             const response = await apiClient.get('/bookings/active');
@@ -389,10 +499,6 @@ export const apiService = {
         }
     },
 
-    /**
-     * FIXED: was PATCH /bookings/{id}/status?shop_id=... — no more
-     * shop_id query param needed; derived from the JWT.
-     */
     updateBookingStatus: async (bookingId, newStatus, shopId) => {
         try {
             const response = await apiClient.patch(`/bookings/${bookingId}/status`, {
@@ -405,10 +511,6 @@ export const apiService = {
         }
     },
 
-    /**
-     * FIXED: was PATCH /bookings/{id}/assign-machine?shop_id=... — no
-     * more shop_id query param needed; derived from the JWT.
-     */
     assignMachineToBooking: async (bookingId, assignData, shopId) => {
         try {
             const response = await apiClient.patch(
@@ -423,17 +525,7 @@ export const apiService = {
     },
 
     // --- MACHINE HUB & TELEMETRY METHODS ---
-    // FIXED: machine_routes.py no longer requires `shop_id` as a query
-    // param on any endpoint — shop_id is derived from the JWT via
-    // Depends(get_current_user). shopId params below are kept only so
-    // existing call sites don't break; they are unused.
 
-    /**
-     * GET /machines/
-     * Fetches real-time status + overhead metrics for all units of a shop.
-     * New shops will simply return an empty array here until units
-     * are registered via addMachine().
-     */
     getMachines: async (shopId) => {
         try {
             const response = await apiClient.get('/machines/');
@@ -444,12 +536,6 @@ export const apiService = {
         }
     },
 
-    /**
-     * POST /machines/
-     * Registers a single new hardware unit (Washer or Dryer) for the shop.
-     * This is the primary way the Machine Hub gets populated after
-     * registration, since new shops intentionally start empty.
-     */
     addMachine: async (machineData) => {
         try {
             const shopId = machineData.shop_id || localStorage.getItem('shop_id');
@@ -466,10 +552,6 @@ export const apiService = {
         }
     },
 
-    /**
-     * PATCH /machines/{machine_id}
-     * Updates machine details like Name, Type, or Operational Status.
-     */
     updateMachineConfig: async (machineId, updateData, shopId) => {
         try {
             const response = await apiClient.patch(`/machines/${machineId}`, updateData);
@@ -480,9 +562,6 @@ export const apiService = {
         }
     },
 
-    /**
-     * DELETE /machines/{machine_id}
-     */
     deleteMachine: async (machineId, shopId) => {
         try {
             const response = await apiClient.delete(`/machines/${machineId}`);
@@ -493,9 +572,6 @@ export const apiService = {
         }
     },
 
-    /**
-     * GET /machines/{machine_id}/metrics
-     */
     getMachineMetrics: async (machineId, shopId) => {
         try {
             const response = await apiClient.get(`/machines/${machineId}/metrics`);
@@ -506,9 +582,6 @@ export const apiService = {
         }
     },
 
-    /**
-     * PATCH /machines/{machine_id}/maintenance
-     */
     toggleMaintenance: async (machineId, shopId) => {
         try {
             const response = await apiClient.patch(`/machines/${machineId}/maintenance`);
@@ -519,14 +592,6 @@ export const apiService = {
         }
     },
 
-    /**
-     * POST /machines/initialize
-     * Bootstraps a standard 6 Washer / 6 Dryer grid for the shop.
-     * NOTE: Intentionally NOT called automatically anywhere in this file
-     * (e.g. not inside `register`). Call this manually only if the shop
-     * owner explicitly opts into the default grid instead of registering
-     * units one by one.
-     */
     initializeDefaultMachines: async (shopId) => {
         try {
             const response = await apiClient.post('/machines/initialize');
@@ -537,10 +602,6 @@ export const apiService = {
         }
     },
 
-    /**
-     * POST /machines/reset-all
-     * Emergency override to set all shop machines back to 'Available'.
-     */
     resetAllMachines: async (shopId) => {
         try {
             const response = await apiClient.post('/machines/reset-all');
@@ -616,20 +677,9 @@ export const apiService = {
 
     getAiAccuracyMetrics,
     triggerAiRetraining,
-
-    // ─── CUSTOMER SEGMENTATION ───────────────────────────────────────────────
-    // FIX: getCustomerSegments was defined as a standalone export but was
-    // missing from the apiService object, causing "apiService.getCustomerSegments
-    // is not a function" at runtime. It is now included here so both import
-    // styles work:
-    //   import apiService from '...'  → apiService.getCustomerSegments()  ✓
-    //   import { getCustomerSegments } from '...'  → getCustomerSegments()  ✓
     getCustomerSegments,
 
     // --- OPTIMIZATION SETTINGS METHODS ---
-    // FIXED: setting_routes.py no longer takes shop_id in the URL path —
-    // it's derived from the JWT. shopId params below are kept only so
-    // existing call sites don't break; they are unused.
 
     getSettings: async (shopId) => {
         try {
@@ -645,10 +695,6 @@ export const apiService = {
         try {
             const sanitizedPayload = {
                 ...settingsData,
-                full_service_price: settingsData.full_service_price !== undefined ? parseFloat(settingsData.full_service_price) : undefined,
-                regular_wash_price: settingsData.regular_wash_price !== undefined ? parseFloat(settingsData.regular_wash_price) : undefined,
-                titan_wash_price: settingsData.titan_wash_price !== undefined ? parseFloat(settingsData.titan_wash_price) : undefined,
-                comforter_price: settingsData.comforter_price !== undefined ? parseFloat(settingsData.comforter_price) : undefined,
                 electricity_rate: settingsData.electricity_rate !== undefined ? parseFloat(settingsData.electricity_rate) : undefined,
                 water_rate: settingsData.water_rate !== undefined ? parseFloat(settingsData.water_rate) : undefined,
                 detergent_cost_per_load: settingsData.detergent_cost_per_load !== undefined ? parseFloat(settingsData.detergent_cost_per_load) : undefined
@@ -693,17 +739,7 @@ export const apiService = {
     },
 
     // --- SERVICE TYPE METHODS ---
-    // Shop-defined services replace the old fixed Full Service / Regular
-    // Wash / Titan Wash / Comforter pricing. Owners add their own services
-    // and prices here; these populate the Booking Modal's Service Type
-    // dropdown via getBookingPricing().
-    // FIXED: no longer takes shop_id in the URL path — derived from the JWT.
 
-    /**
-     * GET /settings/services
-     * Lists all services (active and inactive) configured for the shop.
-     * Returns an empty array for a brand-new shop.
-     */
     getServiceTypes: async (shopId) => {
         try {
             const response = await apiClient.get('/settings/services');
@@ -714,10 +750,6 @@ export const apiService = {
         }
     },
 
-    /**
-     * POST /settings/services
-     * Adds a new service (name + price + duration_minutes) to the shop's catalog.
-     */
     addServiceType: async (serviceData, shopId) => {
         try {
             const payload = {
@@ -727,6 +759,7 @@ export const apiService = {
                 duration_minutes: serviceData.duration_minutes !== undefined
                     ? parseInt(serviceData.duration_minutes)
                     : 45,
+                pricing_unit: serviceData.pricing_unit || 'load',
             };
             const response = await apiClient.post('/settings/services', payload);
             return response.data;
@@ -736,10 +769,6 @@ export const apiService = {
         }
     },
 
-    /**
-     * PUT /settings/services/{service_id}
-     * Edits an existing service's name, price, active status, or duration.
-     */
     updateServiceType: async (serviceId, updateData, shopId) => {
         try {
             const payload = { ...updateData };
@@ -753,10 +782,6 @@ export const apiService = {
         }
     },
 
-    /**
-     * DELETE /settings/services/{service_id}
-     * Permanently removes a service from the shop's catalog.
-     */
     deleteServiceType: async (serviceId, shopId) => {
         try {
             const response = await apiClient.delete(`/settings/services/${serviceId}`);
@@ -767,26 +792,41 @@ export const apiService = {
         }
     },
 
+    // --- ADD-ON METHODS ---
+
+    getAddOns,
+    addAddOn,
+    updateAddOn,
+    deleteAddOn,
+
+    // --- PROMO CODE METHODS ---
+
+    getPromoCodes,
+    addPromoCode,
+    updatePromoCode,
+    deletePromoCode,
+
     // --- PROFILE & PASSWORD METHODS ---
 
+    getShopProfile,
     updateShopProfile,
     updatePassword,
 
-    // --- ACTIVITY LOG METHODS (NEW) ---
+    // --- ACTIVITY LOG METHODS ---
 
     getActivityLogs,
+
+    // --- NOTIFICATION / AWAITING-APPROVAL METHODS ---
+
+    getAwaitingApprovalBookings,
+    acceptBooking,
+    declineBooking,
 
     // --- UTILS ---
 
     getShopId: () => localStorage.getItem('shop_id'),
-    /**
-     * NEW — Reads the cached role from localStorage (set during login).
-     * Used for conditional UI rendering: hiding the Staff Management tab
-     * and Activity Log nav item from Staff-role accounts. This is a UX
-     * convenience only — actual authorization is always enforced by the
-     * backend via require_role(), regardless of what the frontend shows.
-     */
     getRole: () => localStorage.getItem('role'),
+    getFullName: () => localStorage.getItem('full_name'),
     getAuthHeader: () => {
         const token = localStorage.getItem('token');
         return token ? { Authorization: `Bearer ${token}` } : {};

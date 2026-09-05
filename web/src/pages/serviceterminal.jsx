@@ -16,6 +16,8 @@ import {
 import apiService from '../services/APIservices';
 import BookingModal from '../components/modals/bookingmodal';
 import AssignMachineModal from '../components/modals/assignmachinemodal';
+import BookingRequestModal from '../components/modals/bookingrequestmodal';
+import { useNotifications } from '../context/NotificationContext';
 import { formatTime, formatCurrency } from '../utils/formatters';
 
 /**
@@ -31,13 +33,19 @@ import { formatTime, formatCurrency } from '../utils/formatters';
  * assigned. Selecting that option while unassigned shows a blocking
  * message instead of allowing the change.
  *
- * FIXED: The status dropdown menu is now rendered through a React Portal
- * into document.body with `position: fixed`, computed from the trigger
- * button's on-screen coordinates. Previously it was `position: absolute`
- * inside the table's `overflow-x-auto` wrapper — because that wrapper
- * only set overflow-x explicitly, the browser also clipped overflow-y,
- * which silently hid the dropdown menu behind the scroll container. The
- * portal approach escapes that clipping entirely.
+ * The status dropdown menu is rendered through a React Portal into
+ * document.body with `position: fixed`, computed from the trigger
+ * button's on-screen coordinates, escaping the table's overflow clipping.
+ *
+ * MOBILE APP BOOKING REQUESTS:
+ * UPDATED — the WebSocket connection and "Awaiting Approval" list used
+ * to live directly in this component, meaning the shop only received
+ * real-time booking requests while this exact page was mounted. Both
+ * now live in NotificationContext (app/layout level, see App.jsx),
+ * which stays connected regardless of which page the user is on. This
+ * component now just CONSUMES that shared state via useNotifications()
+ * — the bell, dropdown, and modal UI are unchanged, only where the data
+ * comes from.
  */
 
 const STATUS_OPTIONS = ['Pending', 'In Progress', 'Ready', 'Claimed', 'Cancelled'];
@@ -68,6 +76,17 @@ const ServiceTerminal = () => {
   const [dropdownPosition, setDropdownPosition] = useState(null); // { top, left }
   const statusButtonRefs = useRef({});
 
+  // ── Notification / Booking Request state — now from shared context ───
+  const {
+    awaitingApproval,
+    refreshAwaitingApproval,
+    acceptBooking,
+    declineBooking,
+  } = useNotifications();
+  const [isNotifOpen, setIsNotifOpen] = useState(false);
+  const [selectedRequest, setSelectedRequest] = useState(null);
+  const notifBellRef = useRef(null);
+
   // ── Live Clock ─────────────────────────────────────────────────────────────
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -84,6 +103,18 @@ const ServiceTerminal = () => {
     window.addEventListener('resize', closeOnReposition);
     return () => window.removeEventListener('resize', closeOnReposition);
   }, [openStatusDropdownId]);
+
+  // ── Close notification dropdown on outside click ───────────────────────────
+  useEffect(() => {
+    if (!isNotifOpen) return;
+    const handleClickOutside = (e) => {
+      if (notifBellRef.current && !notifBellRef.current.contains(e.target)) {
+        setIsNotifOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isNotifOpen]);
 
   // ── Load Available Machines ────────────────────────────────────────────────
   const loadAvailableMachines = useCallback(async () => {
@@ -137,7 +168,8 @@ const ServiceTerminal = () => {
     }
   }, []);
 
-  // ── Polling ────────────────────────────────────────────────────────────────
+  // ── Polling (bookings + machines only — awaiting-approval polling now
+  //     lives inside NotificationContext) ─────────────────────────────
   useEffect(() => {
     loadBookings();
     loadAvailableMachines();
@@ -243,6 +275,31 @@ const ServiceTerminal = () => {
     loadAvailableMachines();
   };
 
+  // ── Accept / Decline Booking Request (now delegates to context) ────────
+  const handleAcceptRequest = async (bookingId) => {
+    try {
+      await acceptBooking(bookingId);
+      setSelectedRequest(null);
+      showNotification('✓ Booking accepted — now showing in the queue as Pending.');
+      loadBookings(true);
+      loadAvailableMachines();
+    } catch (err) {
+      console.error('Accept Booking Error:', err.message);
+      alert('Failed to accept booking. Please try again.');
+    }
+  };
+
+  const handleDeclineRequest = async (bookingId, reason) => {
+    try {
+      await declineBooking(bookingId, reason);
+      setSelectedRequest(null);
+      showNotification('Booking request declined.');
+    } catch (err) {
+      console.error('Decline Booking Error:', err.message);
+      alert('Failed to decline booking. Please try again.');
+    }
+  };
+
   // ── Toast ──────────────────────────────────────────────────────────────────
   const showNotification = (msg) => {
     setSuccessMessage(msg);
@@ -301,6 +358,16 @@ const ServiceTerminal = () => {
 
   const openBooking = bookings.find(b => b.id === openStatusDropdownId);
 
+  const formatRelativeTime = (isoString) => {
+    if (!isoString) return '';
+    const diffMs = Date.now() - new Date(isoString).getTime();
+    const diffMin = Math.floor(diffMs / 60000);
+    if (diffMin < 1) return 'just now';
+    if (diffMin < 60) return `${diffMin}m ago`;
+    const diffHr = Math.floor(diffMin / 60);
+    return `${diffHr}h ago`;
+  };
+
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="p-8 bg-slate-50 min-h-screen font-sans">
@@ -335,6 +402,62 @@ const ServiceTerminal = () => {
         </div>
 
         <div className="flex items-center gap-3 w-full lg:w-auto">
+
+          {/* Notification Bell — data now from useNotifications() */}
+          <div className="relative" ref={notifBellRef}>
+            <button
+              onClick={() => setIsNotifOpen(prev => !prev)}
+              className="relative flex items-center justify-center w-[52px] h-[52px] bg-white rounded-2xl border border-slate-200 shadow-sm hover:border-sky-200 transition-all"
+            >
+              <Bell size={19} className={awaitingApproval.length > 0 ? 'text-sky-500' : 'text-slate-400'} />
+              {awaitingApproval.length > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 px-1 bg-rose-500 text-white text-[10px] font-black rounded-full flex items-center justify-center border-2 border-white">
+                  {awaitingApproval.length}
+                </span>
+              )}
+            </button>
+
+            {isNotifOpen && (
+              <div className="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden z-[95]">
+                <div className="px-5 py-4 border-b border-slate-50">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    Mobile App Requests
+                  </p>
+                </div>
+
+                {awaitingApproval.length === 0 ? (
+                  <div className="px-5 py-8 text-center">
+                    <Bell size={24} className="text-slate-200 mx-auto mb-2" />
+                    <p className="text-slate-400 text-xs font-bold">No pending requests</p>
+                  </div>
+                ) : (
+                  <div className="max-h-80 overflow-y-auto divide-y divide-slate-50">
+                    {awaitingApproval.map((req) => (
+                      <button
+                        key={req.id}
+                        onClick={() => {
+                          setSelectedRequest(req);
+                          setIsNotifOpen(false);
+                        }}
+                        className="w-full text-left px-5 py-4 hover:bg-sky-50/50 transition-colors"
+                      >
+                        <p className="font-black text-sm text-slate-800">{req.customer_name}</p>
+                        <div className="flex items-center justify-between mt-0.5">
+                          <p className="text-xs text-slate-400 font-bold">
+                            {req.service_type} · ₱{Number(req.total_price || 0).toFixed(0)}
+                          </p>
+                          <p className="text-[10px] text-slate-300 font-bold">
+                            {formatRelativeTime(req.booking_timestamp || req.created_at)}
+                          </p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           <div className="flex items-center gap-3 bg-white px-5 py-4 rounded-2xl border border-slate-200 shadow-sm">
             <Clock size={18} className="text-sky-500" />
             <span className="text-sm font-black text-slate-700 tabular-nums">
@@ -344,7 +467,7 @@ const ServiceTerminal = () => {
             </span>
             <div className="h-4 w-[1px] bg-slate-200 mx-1" />
             <button
-              onClick={() => { loadBookings(true); loadAvailableMachines(); }}
+              onClick={() => { loadBookings(true); loadAvailableMachines(); refreshAwaitingApproval(); }}
               className={`text-slate-300 hover:text-sky-500 transition-all ${refreshing ? 'animate-spin text-sky-500' : ''}`}
             >
               <RefreshCw size={18} />
@@ -587,6 +710,15 @@ const ServiceTerminal = () => {
           onSuccess={handleAssignSuccess}
         />
       )}
+
+      {/* Booking Request Modal — opened by clicking a notification item */}
+      <BookingRequestModal
+        isOpen={!!selectedRequest}
+        booking={selectedRequest}
+        onClose={() => setSelectedRequest(null)}
+        onAccept={handleAcceptRequest}
+        onDecline={handleDeclineRequest}
+      />
     </div>
   );
 };

@@ -22,7 +22,7 @@ const Login = () => {
             <img src={laundryLinkLogo} alt="LaundryLink" className="h-14" />
             <span className="text-2xl font-black italic">
               <span className="text-sky-500">LAUNDRY</span>
-              <span className="text-green-600">LINK</span> 
+              <span className="text-green-600">LINK</span>
             </span>
           </div>
 
@@ -39,7 +39,7 @@ const Login = () => {
 
       {/* Right side — auth form */}
       <div className="flex-1 flex items-center justify-center px-6 py-12 bg-white">
-        <div key={mode} className="w-full max-w-[440px] auth-transition">
+        <div key={mode} className="w-full max-w-[400px] auth-transition">
           {mode === 'login' ? (
             <LoginForm onSwitch={() => setMode('register')} navigate={navigate} />
           ) : (
@@ -81,77 +81,76 @@ function LoginForm({ onSwitch, navigate }) {
   };
 
   return (
-    <div className="bg-white w-full rounded-[48px] p-10 shadow-2xl shadow-slate-200/60 border border-slate-100/50">
-      <h2 className="text-2xl font-bold text-slate-800 text-center mb-10 tracking-tight">Log in</h2>
+    <div className="bg-white w-full rounded-2xl p-8 shadow-lg border border-slate-100">
+      <h2 className="text-xl font-bold text-slate-800 mb-6">Log into LaundryLink</h2>
 
       {errorMessage && (
-        <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 text-red-700 text-sm font-semibold rounded-xl">
+        <div className="mb-4 p-3 bg-red-50 border border-red-100 text-red-600 text-sm font-medium rounded-lg">
           {errorMessage}
         </div>
       )}
 
-      <form onSubmit={handleLogin} className="space-y-6">
+      <form onSubmit={handleLogin} className="space-y-3">
         <div className="relative group">
-          <div className="absolute inset-y-0 left-0 pl-6 flex items-center pointer-events-none text-sky-400 group-focus-within:text-sky-500 transition-colors">
-            <Mail size={20} />
+          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
+            <Mail size={18} />
           </div>
           <input
             type="email"
             required
-            className="w-full bg-slate-50 border border-slate-100 rounded-2xl py-4.5 pl-14 pr-6 focus:outline-none focus:ring-4 focus:ring-sky-400/10 focus:border-sky-400 transition-all text-slate-700 placeholder:text-slate-400"
-            placeholder="Enter registered email"
+            className="w-full bg-white border border-slate-300 rounded-lg py-3 pl-11 pr-4 text-[15px] focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all text-slate-700 placeholder:text-slate-400"
+            placeholder="Email address"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
         </div>
 
         <div className="relative group">
-          <div className="absolute inset-y-0 left-0 pl-6 flex items-center pointer-events-none text-sky-400 group-focus-within:text-sky-500 transition-colors">
-            <Lock size={20} />
+          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
+            <Lock size={18} />
           </div>
           <input
             type={showPassword ? 'text' : 'password'}
             required
-            className="w-full bg-slate-50 border border-slate-100 rounded-2xl py-4.5 pl-14 pr-14 focus:outline-none focus:ring-4 focus:ring-sky-400/10 focus:border-sky-400 transition-all text-slate-700 placeholder:text-slate-400"
-            placeholder="Enter password"
+            className="w-full bg-white border border-slate-300 rounded-lg py-3 pl-11 pr-11 text-[15px] focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all text-slate-700 placeholder:text-slate-400"
+            placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
           <button
             type="button"
             onClick={() => setShowPassword(!showPassword)}
-            className="absolute inset-y-0 right-0 pr-6 flex items-center text-slate-300 hover:text-sky-500 transition-colors"
+            className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-600 transition-colors"
           >
-            {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-          </button>
-        </div>
-
-        <div className="flex justify-end px-1">
-          <button type="button" className="text-sm font-semibold text-sky-500 hover:text-sky-600 transition-colors">
-            Forgot Password?
+            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
           </button>
         </div>
 
         <button
           type="submit"
           disabled={loading}
-          className={`w-full bg-[#0ea5e9] text-white py-4.5 rounded-2xl font-semibold text-lg shadow-xl shadow-sky-100 hover:bg-sky-500 hover:shadow-sky-200 transition-all active:scale-[0.98] mt-4 ${loading ? 'opacity-70 cursor-not-allowed' : ''}`}
+          className={`w-full bg-sky-500 hover:bg-sky-600 text-white py-3 rounded-lg font-bold text-[15px] transition-all active:scale-[0.98] ${loading ? 'opacity-70 cursor-not-allowed' : ''}`}
         >
-          {loading ? 'Authenticating...' : 'Log in'}
+          {loading ? 'Logging in...' : 'Log in'}
         </button>
+
+        <div className="text-center pt-1">
+          <button type="button" className="text-sm text-sky-500 hover:underline font-medium">
+            Forgotten password?
+          </button>
+        </div>
       </form>
 
-      <div className="mt-8 text-center">
-        <p className="text-slate-500 text-sm">
-          Don't have a shop account?{' '}
-          <button
-            type="button"
-            onClick={onSwitch}
-            className="text-sky-500 font-semibold cursor-pointer hover:underline"
-          >
-            Register your shop
-          </button>
-        </p>
+      <div className="border-t border-slate-200 my-6" />
+
+      <div className="flex justify-center">
+        <button
+          type="button"
+          onClick={onSwitch}
+          className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-3 rounded-lg font-bold text-[15px] transition-all active:scale-[0.98]"
+        >
+          Create new shop account
+        </button>
       </div>
     </div>
   );
@@ -168,9 +167,6 @@ function RegisterForm({ onSwitch, navigate }) {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  // Only starts showing the mismatch state once the person has actually
-  // typed something in confirmPassword — avoids showing a red border
-  // the instant they focus the field before typing anything.
   const passwordsMismatch = confirmPassword.length > 0 && password !== confirmPassword;
   const passwordsMatch = confirmPassword.length > 0 && password === confirmPassword;
 
@@ -178,9 +174,6 @@ function RegisterForm({ onSwitch, navigate }) {
     e.preventDefault();
     setErrorMessage('');
 
-    // Client-side check only — confirmPassword is never sent to the
-    // backend. It just needs to match `password` before we bother
-    // calling the API at all.
     if (password !== confirmPassword) {
       setErrorMessage('Passwords do not match. Please re-enter your password.');
       return;
@@ -189,9 +182,8 @@ function RegisterForm({ onSwitch, navigate }) {
     setLoading(true);
 
     try {
-      // NOTE: verify this matches the actual method in src/services/APIservices.js
       await authService.register(shopName, address, email, password);
-      onSwitch(); // back to login after successful registration
+      onSwitch();
     } catch (error) {
       const errorDetail = error.response?.data?.detail || error.message || 'Unable to create shop account.';
       setErrorMessage(errorDetail);
@@ -201,24 +193,25 @@ function RegisterForm({ onSwitch, navigate }) {
   };
 
   return (
-    <div className="bg-white w-full rounded-[48px] p-10 shadow-2xl shadow-slate-200/60 border border-slate-100/50">
-      <h2 className="text-2xl font-bold text-slate-800 text-center mb-10 tracking-tight">Register Shop</h2>
+    <div className="bg-white w-full rounded-2xl p-8 shadow-lg border border-slate-100">
+      <h2 className="text-xl font-bold text-slate-800 mb-1">Register your shop</h2>
+      <p className="text-sm text-slate-400 mb-6">It's quick and easy.</p>
 
       {errorMessage && (
-        <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 text-red-700 text-sm font-semibold rounded-xl">
+        <div className="mb-4 p-3 bg-red-50 border border-red-100 text-red-600 text-sm font-medium rounded-lg">
           {errorMessage}
         </div>
       )}
 
-      <form onSubmit={handleRegister} className="space-y-6">
+      <form onSubmit={handleRegister} className="space-y-3">
         <div className="relative group">
-          <div className="absolute inset-y-0 left-0 pl-6 flex items-center pointer-events-none text-sky-400 group-focus-within:text-sky-500 transition-colors">
-            <Store size={20} />
+          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
+            <Store size={18} />
           </div>
           <input
             type="text"
             required
-            className="w-full bg-slate-50 border border-slate-100 rounded-2xl py-4.5 pl-14 pr-6 focus:outline-none focus:ring-4 focus:ring-sky-400/10 focus:border-sky-400 transition-all text-slate-700 placeholder:text-slate-400"
+            className="w-full bg-white border border-slate-300 rounded-lg py-3 pl-11 pr-4 text-[15px] focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all text-slate-700 placeholder:text-slate-400"
             placeholder="Shop name"
             value={shopName}
             onChange={(e) => setShopName(e.target.value)}
@@ -226,13 +219,13 @@ function RegisterForm({ onSwitch, navigate }) {
         </div>
 
         <div className="relative group">
-          <div className="absolute inset-y-0 left-0 pl-6 flex items-center pointer-events-none text-sky-400 group-focus-within:text-sky-500 transition-colors">
-            <MapPin size={20} />
+          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
+            <MapPin size={18} />
           </div>
           <input
             type="text"
             required
-            className="w-full bg-slate-50 border border-slate-100 rounded-2xl py-4.5 pl-14 pr-6 focus:outline-none focus:ring-4 focus:ring-sky-400/10 focus:border-sky-400 transition-all text-slate-700 placeholder:text-slate-400"
+            className="w-full bg-white border border-slate-300 rounded-lg py-3 pl-11 pr-4 text-[15px] focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all text-slate-700 placeholder:text-slate-400"
             placeholder="Shop address"
             value={address}
             onChange={(e) => setAddress(e.target.value)}
@@ -240,13 +233,13 @@ function RegisterForm({ onSwitch, navigate }) {
         </div>
 
         <div className="relative group">
-          <div className="absolute inset-y-0 left-0 pl-6 flex items-center pointer-events-none text-sky-400 group-focus-within:text-sky-500 transition-colors">
-            <Mail size={20} />
+          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
+            <Mail size={18} />
           </div>
           <input
             type="email"
             required
-            className="w-full bg-slate-50 border border-slate-100 rounded-2xl py-4.5 pl-14 pr-6 focus:outline-none focus:ring-4 focus:ring-sky-400/10 focus:border-sky-400 transition-all text-slate-700 placeholder:text-slate-400"
+            className="w-full bg-white border border-slate-300 rounded-lg py-3 pl-11 pr-4 text-[15px] focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all text-slate-700 placeholder:text-slate-400"
             placeholder="Email address"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -254,70 +247,63 @@ function RegisterForm({ onSwitch, navigate }) {
         </div>
 
         <div className="relative group">
-          <div className="absolute inset-y-0 left-0 pl-6 flex items-center pointer-events-none text-sky-400 group-focus-within:text-sky-500 transition-colors">
-            <Lock size={20} />
+          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
+            <Lock size={18} />
           </div>
           <input
             type={showPassword ? 'text' : 'password'}
             required
-            className="w-full bg-slate-50 border border-slate-100 rounded-2xl py-4.5 pl-14 pr-14 focus:outline-none focus:ring-4 focus:ring-sky-400/10 focus:border-sky-400 transition-all text-slate-700 placeholder:text-slate-400"
-            placeholder="Create password"
+            className="w-full bg-white border border-slate-300 rounded-lg py-3 pl-11 pr-11 text-[15px] focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all text-slate-700 placeholder:text-slate-400"
+            placeholder="New password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
           <button
             type="button"
             onClick={() => setShowPassword(!showPassword)}
-            className="absolute inset-y-0 right-0 pr-6 flex items-center text-slate-300 hover:text-sky-500 transition-colors"
+            className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-600 transition-colors"
           >
-            {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
           </button>
         </div>
 
-        {/* CONFIRM PASSWORD FIELD (NEW) */}
         <div>
-          <div className={`relative group`}>
-            <div className={`absolute inset-y-0 left-0 pl-6 flex items-center pointer-events-none transition-colors ${
-              passwordsMismatch
-                ? 'text-rose-400'
-                : passwordsMatch
-                  ? 'text-emerald-500'
-                  : 'text-sky-400 group-focus-within:text-sky-500'
+          <div className="relative group">
+            <div className={`absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none transition-colors ${
+              passwordsMismatch ? 'text-rose-400' : passwordsMatch ? 'text-emerald-500' : 'text-slate-400'
             }`}>
-              <Lock size={20} />
+              <Lock size={18} />
             </div>
             <input
               type={showConfirmPassword ? 'text' : 'password'}
               required
-              className={`w-full bg-slate-50 border rounded-2xl py-4.5 pl-14 pr-14 focus:outline-none focus:ring-4 transition-all text-slate-700 placeholder:text-slate-400 ${
+              className={`w-full bg-white border rounded-lg py-3 pl-11 pr-11 text-[15px] focus:outline-none focus:ring-2 transition-all text-slate-700 placeholder:text-slate-400 ${
                 passwordsMismatch
-                  ? 'border-rose-300 focus:ring-rose-400/10 focus:border-rose-400'
+                  ? 'border-rose-300 focus:ring-rose-400/20 focus:border-rose-400'
                   : passwordsMatch
-                    ? 'border-emerald-300 focus:ring-emerald-400/10 focus:border-emerald-400'
-                    : 'border-slate-100 focus:ring-sky-400/10 focus:border-sky-400'
+                    ? 'border-emerald-300 focus:ring-emerald-400/20 focus:border-emerald-400'
+                    : 'border-slate-300 focus:ring-sky-500/20 focus:border-sky-500'
               }`}
               placeholder="Confirm password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
             />
-            {/* Show a checkmark instead of the eye toggle once passwords match,
-                as a quick visual confirmation without hiding the show/hide control. */}
             {passwordsMatch ? (
-              <span className="absolute inset-y-0 right-0 pr-6 flex items-center text-emerald-500">
-                <CheckCircle2 size={20} />
+              <span className="absolute inset-y-0 right-0 pr-4 flex items-center text-emerald-500">
+                <CheckCircle2 size={18} />
               </span>
             ) : (
               <button
                 type="button"
                 onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                className="absolute inset-y-0 right-0 pr-6 flex items-center text-slate-300 hover:text-sky-500 transition-colors"
+                className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-600 transition-colors"
               >
-                {showConfirmPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             )}
           </div>
           {passwordsMismatch && (
-            <p className="mt-2 ml-2 text-xs font-semibold text-rose-500">
+            <p className="mt-1.5 ml-1 text-xs font-medium text-rose-500">
               Passwords do not match.
             </p>
           )}
@@ -326,21 +312,23 @@ function RegisterForm({ onSwitch, navigate }) {
         <button
           type="submit"
           disabled={loading}
-          className={`w-full bg-[#0ea5e9] text-white py-4.5 rounded-2xl font-semibold text-lg shadow-xl shadow-sky-100 hover:bg-sky-500 hover:shadow-sky-200 transition-all active:scale-[0.98] mt-4 ${loading ? 'opacity-70 cursor-not-allowed' : ''}`}
+          className={`w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-lg font-bold text-[15px] transition-all active:scale-[0.98] mt-2 ${loading ? 'opacity-70 cursor-not-allowed' : ''}`}
         >
-          {loading ? 'Creating Account...' : 'Create Shop Account'}
+          {loading ? 'Creating account...' : 'Sign up'}
         </button>
       </form>
 
-      <div className="mt-8 text-center">
-        <p className="text-slate-500 text-sm">
+      <div className="border-t border-slate-200 my-6" />
+
+      <div className="text-center">
+        <p className="text-sm text-slate-500">
           Already have an account?{' '}
           <button
             type="button"
             onClick={onSwitch}
-            className="text-sky-500 font-semibold cursor-pointer hover:underline"
+            className="text-sky-500 font-semibold hover:underline"
           >
-            Sign in
+            Log in
           </button>
         </p>
       </div>

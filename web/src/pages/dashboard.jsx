@@ -26,11 +26,17 @@ import HistoryModal from '../components/modals/historymodal';
  * Visualizes running operational tasks, data telemetry streams, and hardware metrics.
  * UPDATED: ForecastCharts chart container no longer uses a fixed height —
  * the redesigned component renders two stacked charts and expands naturally.
+ * UPDATED: forecast mapping now carries rain_mm through from the backend,
+ * and modelTier (shop_model / pooled_model / weather_only) is tracked
+ * separately so ForecastCharts can show the weather outlook strip and the
+ * tier badge, and can hide the bookings/income charts entirely when the
+ * backend has no basis yet to predict them (brand-new shop, weather_only).
  */
 const Dashboard = () => {
   // State Management
   const [stats, setStats] = useState(null);
   const [forecast, setForecast] = useState([]);
+  const [modelTier, setModelTier] = useState(null);
   const [machines, setMachines] = useState([]);
   const [insightData, setInsightData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -73,13 +79,19 @@ const Dashboard = () => {
       }
 
       // 3. Process AI Forecast Graph
+      // UPDATED: rain_mm now carried through per-day, and model_tier
+      // (same value on every row of a given response) is lifted into
+      // its own piece of state so ForecastCharts can badge/adapt to it.
       if (forecastResult.status === 'fulfilled' && forecastResult.value?.forecast) {
-        const mappedForecast = forecastResult.value.forecast.map(item => ({
+        const rawForecast = forecastResult.value.forecast;
+        const mappedForecast = rawForecast.map(item => ({
           day: item.label.split(',')[0], 
-          bookings: item.predicted_bookings || 0,
-          income: item.projected_income || 0
+          bookings: item.predicted_bookings ?? 0,
+          income: item.projected_income ?? 0,
+          rain_mm: item.rain_mm ?? 0,
         }));
         setForecast(mappedForecast);
+        setModelTier(rawForecast[0]?.model_tier || null);
       }
 
       // 4. Process Operational Insights (DSS)
@@ -195,8 +207,9 @@ const Dashboard = () => {
 
         {/* 
           FORECAST CHARTS PANEL
-          Fixed height wrapper removed — ForecastCharts now renders two stacked
-          charts (bar + area/line) and needs to grow vertically to fit both.
+          Fixed height wrapper removed — ForecastCharts now renders the
+          weather strip, tier badge, and two stacked charts (or the
+          insufficient-data notice) and needs to grow vertically to fit.
         */}
         <div className="lg:col-span-2 bg-white p-10 rounded-[56px] border border-slate-100 shadow-sm flex flex-col min-w-0">
           <div className="flex justify-between items-start mb-8">
@@ -214,12 +227,12 @@ const Dashboard = () => {
           </div>
 
           {/* 
-            Chart area: no fixed height set here — the two stacked charts inside
-            ForecastCharts each have their own 220px height, so this grows naturally.
+            Chart area: no fixed height set here — ForecastCharts grows
+            naturally to fit the weather strip + badge + two charts.
           */}
           <div className="w-full mb-8 relative" style={{ minWidth: '0' }}>
             {forecast.length > 0 ? (
-              <ForecastCharts data={forecast} />
+              <ForecastCharts data={forecast} modelTier={modelTier} />
             ) : (
               <div className="flex flex-col items-center justify-center py-24 bg-slate-50/50 rounded-[40px] border-2 border-dashed border-slate-200">
                 <RefreshCw className="text-slate-200 mb-4 animate-spin" size={48} />

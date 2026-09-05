@@ -1,4 +1,3 @@
-
 export const optimizationLogic = {
     /**
      * Formats numeric overhead or revenue into a Philippine Peso (PHP) string.
@@ -12,6 +11,29 @@ export const optimizationLogic = {
             currency: 'PHP',
             minimumFractionDigits: 2
         }).format(safeValue);
+    },
+
+    /**
+     * NEW — Formats a service's pricing_unit ("load", "kg", "piece") into
+     * a short display suffix (e.g. "/ load", "/ kg"). Falls back to
+     * "/ load" for missing/unrecognized values, matching the backend's
+     * default so old services created before this feature still display
+     * sensibly.
+     * @param {string} unit - Raw pricing_unit value from the API.
+     */
+    formatPricingUnit: (unit) => {
+        const known = { load: 'load', kg: 'kg', piece: 'piece' };
+        return `/ ${known[unit] || 'load'}`;
+    },
+
+    /**
+     * Convenience combo of formatCurrency + formatPricingUnit — the
+     * common case of "₱210.00 / load" shown together.
+     * @param {number} price
+     * @param {string} unit
+     */
+    formatPriceWithUnit: (price, unit) => {
+        return `${optimizationLogic.formatCurrency(price)} ${optimizationLogic.formatPricingUnit(unit)}`;
     },
 
     /**

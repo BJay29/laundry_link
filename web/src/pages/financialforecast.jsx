@@ -44,9 +44,15 @@ const Typewriter = ({ text, speed = 20 }) => {
  * Visualizes 7-day AI projections against historical database baselines.
  * Displays validated model telemetry parameters with real-time backend accurate state mappings.
  * UPDATED: Uses two separate charts (bar + area/line) rendered via the redesigned ForecastCharts.
+ * UPDATED: forecast mapping now carries rain_mm through, and modelTier
+ * (shop_model / pooled_model / weather_only) is tracked so ForecastCharts
+ * can show the weather outlook strip, the tier badge, and — for a
+ * brand-new shop with no basis to predict yet — the insufficient-data
+ * notice instead of a fabricated bookings/income chart.
  */
 const FinancialForecast = () => {
   const [forecastData, setForecastData] = useState([]);
+  const [modelTier, setModelTier] = useState(null);
   const [accuracyMetrics, setAccuracyMetrics] = useState(null);
   const [aiInsight, setAiInsight] = useState("");
   const [loading, setLoading] = useState(true);
@@ -98,12 +104,17 @@ const FinancialForecast = () => {
       if (forecastRes.status === 'fulfilled' && forecastRes.value?.forecast) {
         const rawForecast = forecastRes.value.forecast;
         setAiInsight(forecastRes.value.ai_generated_insight || "No active insights generated.");
-        
+
+        // UPDATED: carry rain_mm through per-day, and lift model_tier
+        // (same value on every row of a given response) into its own
+        // state so ForecastCharts can badge/adapt to it.
         setForecastData(rawForecast.map(item => ({
           day: item.label.split(',')[0], 
-          bookings: item.predicted_bookings || 0,
-          income: item.projected_income || 0
+          bookings: item.predicted_bookings ?? 0,
+          income: item.projected_income ?? 0,
+          rain_mm: item.rain_mm ?? 0,
         })));
+        setModelTier(rawForecast[0]?.model_tier || null);
 
         const totalProjectedRev = rawForecast.reduce((sum, item) => sum + (item.projected_income || 0), 0);
         const totalProjectedBook = rawForecast.reduce((sum, item) => sum + (item.predicted_bookings || 0), 0);
@@ -268,7 +279,7 @@ const FinancialForecast = () => {
 
         <div className="w-full relative">
           {forecastData.length > 0 ? (
-            <ForecastCharts data={forecastData} />
+            <ForecastCharts data={forecastData} modelTier={modelTier} />
           ) : (
             <div className="flex flex-col items-center justify-center py-24 border-2 border-dashed border-slate-100 rounded-[40px]">
               <RefreshCw className="text-slate-200 mb-4 animate-spin" size={40} />

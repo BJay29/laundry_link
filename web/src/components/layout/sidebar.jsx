@@ -11,7 +11,7 @@ import {
   Package,
   UserCog,
   Users, // Import Users icon for Customer Hub
-  History // NEW: icon for Activity Log
+  History // icon for Activity Log
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import logo from '../../assets/Untitled design.png'; 
@@ -24,21 +24,18 @@ import logo from '../../assets/Untitled design.png';
  * Sidebar is white while the dashboard content area is slate-50, keeping them visually related
  * but distinct through a subtle border and shadow separation.
  *
- * UPDATED: Added a role-gated "Activity Log" nav item, visible only to
- * 'owner' and 'manager' roles. The role is read from localStorage,
- * which apiService.login() now persists on successful sign-in (see
- * apiService.js — localStorage.setItem('role', user.role)). Staff
- * accounts with any other role simply won't see this link at all.
+ * UPDATED: Tinanggal na ang role gate sa "Activity Log" nav item —
+ * lahat ng roles (owner, manager, staff) ay makikita na ito ngayon.
+ * Ito ay dahil sa backend na, ang GET /activity-logs endpoint mismo ang
+ * nagfi-filter kung anong makikita ng bawat role (Staff = sariling
+ * actions lang, Owner/Manager = lahat) — hindi na kailangan pang itago
+ * ang link mismo sa frontend, dahil hindi na ito security boundary kundi
+ * UX lang. See activitylogs.jsx para sa kaukulang pagbabago doon.
  */
 const Sidebar = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
-
-  // Current user's role, persisted at login time by apiService.login().
-  // Used to gate role-restricted nav items below.
-  const role = localStorage.getItem('role');
-  const canViewActivityLog = role === 'owner' || role === 'manager';
 
   // Main navigation items synced with App.jsx routes
   const navItems = [
@@ -77,16 +74,14 @@ const Sidebar = () => {
       icon: <Settings size={20} />, 
       path: '/settings' 
     },
-    // NEW: Role-gated — only owners and managers see this link. Staff
-    // accounts (or any other role) never see it in the nav at all.
-    ...(canViewActivityLog
-      ? [{
-          name: 'Activity Logs',
-          icon: <History size={20} />,
-          path: '/activity-logs'
-        }]
-      : []
-    ),
+    // UPDATED: Nakikita na ito ng LAHAT ng roles — tinanggal na ang
+    // canViewActivityLog gate. Ang GET /activity-logs endpoint mismo
+    // ang humahawak ng role-based filtering ng laman.
+    {
+      name: 'Activity Logs',
+      icon: <History size={20} />,
+      path: '/activity-logs'
+    },
   ];
 
   /**
