@@ -3,7 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
 // Layout and Wrapper Components
 import Layout from './components/layout/layout';
-import { NotificationProvider } from './context/cotificationcontext';
+import { NotificationProvider } from './context/notificationcontext';
 
 // Page Components
 import Login from './pages/login';
