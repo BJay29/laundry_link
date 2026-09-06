@@ -11,7 +11,8 @@ import {
   Package,
   UserCog,
   Users, // Import Users icon for Customer Hub
-  History // icon for Activity Log
+  History, // icon for Activity Log
+  Receipt // icon for Record Sales
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import logo from '../../assets/Untitled design.png'; 
@@ -31,6 +32,9 @@ import logo from '../../assets/Untitled design.png';
  * actions lang, Owner/Manager = lahat) — hindi na kailangan pang itago
  * ang link mismo sa frontend, dahil hindi na ito security boundary kundi
  * UX lang. See activitylogs.jsx para sa kaukulang pagbabago doon.
+ *
+ * NEW: Idinagdag ang "Record Sales" nav item — nagpapakita ng total
+ * income (today/week/month) at listahan ng lahat ng bookings.
  */
 const Sidebar = () => {
   const location = useLocation();
@@ -65,6 +69,11 @@ const Sidebar = () => {
       path: '/customer-hub' 
     },
     { 
+      name: 'Record Sales', // NEW
+      icon: <Receipt size={20} />, 
+      path: '/record-sales' 
+    },
+    { 
       name: 'Financial Forecast', 
       icon: <BarChart3 size={20} />, 
       path: '/forecast' 
@@ -82,6 +91,8 @@ const Sidebar = () => {
       icon: <History size={20} />,
       path: '/activity-logs'
     },
+
+    
   ];
 
   /**

@@ -16,6 +16,7 @@ import OptimizationSettings from './pages/optimizationsettings';
 import Settings from './pages/settings';       // Account Settings page for profile and password management
 import CustomerHub from './pages/customerhub'; // Customer segmentation powered by K-Means AI engine
 import ActivityLogs from './pages/activitylogs';
+import RecordSales from './pages/recordsales'; // NEW — Record Sales page (income summary + bookings table)
 
 /**
  * UPDATED: Inilipat ang "/activity-logs" route PAPASOK sa
@@ -28,6 +29,9 @@ import ActivityLogs from './pages/activitylogs';
  * protected pages, awtomatiko na itong may Sidebar + (papalapit na)
  * Header + notification context mula sa Layout — hindi na kailangan
  * ng activitylogs.jsx na mag-render pa ng sarili niyang Sidebar.
+ *
+ * NEW: Idinagdag ang "/record-sales" route, kasama ang ibang protected
+ * pages sa loob ng Layout wrapper.
  */
 function App() {
   return (
@@ -65,6 +69,9 @@ function App() {
 
           {/* UPDATED — moved inside Layout, see note above */}
           <Route path="/activity-logs" element={<ActivityLogs />} />
+
+          {/* NEW — Record Sales: income summary (today/week/month) + full bookings table */}
+          <Route path="/record-sales" element={<RecordSales />} />
 
         </Route>
 

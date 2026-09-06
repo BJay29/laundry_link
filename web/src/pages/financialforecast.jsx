@@ -49,6 +49,9 @@ const Typewriter = ({ text, speed = 20 }) => {
  * can show the weather outlook strip, the tier badge, and — for a
  * brand-new shop with no basis to predict yet — the insufficient-data
  * notice instead of a fabricated bookings/income chart.
+ *
+ * REMOVED: Service breakdown row (Full Service / Titan Wash / Regular
+ * Wash / Comforter / Total Load) — no longer shown on this page.
  */
 const FinancialForecast = () => {
   const [forecastData, setForecastData] = useState([]);
@@ -67,11 +70,6 @@ const FinancialForecast = () => {
     trendStatus: 'equal', 
     bookingTrend: "0%",
     bookingStatus: 'equal',
-    fullService: 0,
-    titanWash: 0,
-    regularWash: 0,
-    comforter: 0,
-    totalKg: 0
   });
 
   /**
@@ -121,20 +119,11 @@ const FinancialForecast = () => {
         
         let lastWeekIncome = 0;
         let lastWeekBookings = 0;
-        let dbActuals = { fs: 0, tw: 0, rw: 0, cf: 0, kg: 0 };
 
         if (summaryRes.status === 'fulfilled' && summaryRes.value) {
           const data = summaryRes.value;
           lastWeekIncome = data.last_week_revenue || 0;
           lastWeekBookings = data.last_week_bookings || 0;
-
-          dbActuals = {
-            fs: data.full_service || 0,
-            tw: data.titan_wash || 0,
-            rw: data.regular_wash || 0,
-            cf: data.comforter || 0,
-            kg: data.total_kg || 0
-          };
         }
 
         const calculateTrend = (projected, historical) => {
@@ -159,11 +148,6 @@ const FinancialForecast = () => {
           trendStatus: revTrend.status,
           bookingTrend: bookTrend.percent,
           bookingStatus: bookTrend.status,
-          fullService: dbActuals.fs,
-          titanWash: dbActuals.tw,
-          regularWash: dbActuals.rw,
-          comforter: dbActuals.cf,
-          totalKg: dbActuals.kg
         });
       }
     } catch (err) {
@@ -289,14 +273,6 @@ const FinancialForecast = () => {
             </div>
           )}
         </div>
-
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-6 mt-10 pt-10 border-t border-slate-50">
-          <BreakdownItem label="Full Service"  value={stats.fullService} />
-          <BreakdownItem label="Titan Wash"    value={stats.titanWash} />
-          <BreakdownItem label="Regular Wash"  value={stats.regularWash} />
-          <BreakdownItem label="Comforter"     value={stats.comforter} />
-          <BreakdownItem label="Total Load"    value={`${stats.totalKg}kg`} />
-        </div>
       </div>
 
       {/* AI CALIBRATION PARAMETERS */}
@@ -404,12 +380,5 @@ const ForecastStatCard = ({ label, value, trend, status, icon, bgColor }) => {
     </div>
   );
 };
-
-const BreakdownItem = ({ label, value }) => (
-  <div className="flex flex-col items-center text-center">
-    <p className="text-xl md:text-2xl font-black text-slate-900 mb-0.5 tracking-tighter">{value}</p>
-    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
-  </div>
-);
 
 export default FinancialForecast;

@@ -157,6 +157,36 @@ export const getCustomerSegments = async () => {
 };
 
 /**
+ * GET /analytics/sales-summary
+ * NEW — Fetches Today / This Week / This Month total income.
+ * Backs the KPI cards on the Record Sales page.
+ */
+export const getSalesSummary = async () => {
+    try {
+        const response = await apiClient.get('/analytics/sales-summary');
+        return response.data;
+    } catch (error) {
+        console.error("Fetch Sales Summary Error:", error.response?.data?.detail || error.message);
+        throw error;
+    }
+};
+
+/**
+ * GET /bookings/all
+ * NEW — Fetches every booking for this shop, any status, most recent
+ * first. Backs the bookings table on the Record Sales page.
+ */
+export const getAllBookings = async () => {
+    try {
+        const response = await apiClient.get('/bookings/all');
+        return response.data;
+    } catch (error) {
+        console.error("Fetch All Bookings Error:", error.response?.data?.detail || error.message);
+        throw error;
+    }
+};
+
+/**
  * Fetches the logged-in user's own shop profile, including
  * delivery settings (has_delivery, delivery_fee). Backend endpoint
  * GET /settings/profile.
@@ -445,6 +475,7 @@ export const apiService = {
             throw error;
         }
     },
+    
 
     registerStaff,
 
@@ -678,6 +709,8 @@ export const apiService = {
     getAiAccuracyMetrics,
     triggerAiRetraining,
     getCustomerSegments,
+    getSalesSummary,
+    getAllBookings,
 
     // --- OPTIMIZATION SETTINGS METHODS ---
 
@@ -691,13 +724,13 @@ export const apiService = {
         }
     },
 
-    updateSettings: async (shopId, settingsData) => {
+      updateSettings: async (shopId, settingsData) => {
         try {
             const sanitizedPayload = {
                 ...settingsData,
                 electricity_rate: settingsData.electricity_rate !== undefined ? parseFloat(settingsData.electricity_rate) : undefined,
                 water_rate: settingsData.water_rate !== undefined ? parseFloat(settingsData.water_rate) : undefined,
-                detergent_cost_per_load: settingsData.detergent_cost_per_load !== undefined ? parseFloat(settingsData.detergent_cost_per_load) : undefined
+                supplies_cost_per_load: settingsData.supplies_cost_per_load !== undefined ? parseFloat(settingsData.supplies_cost_per_load) : undefined
             };
 
             const response = await apiClient.put('/settings/', sanitizedPayload);

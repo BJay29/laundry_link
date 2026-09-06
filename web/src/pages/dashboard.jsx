@@ -31,6 +31,9 @@ import HistoryModal from '../components/modals/historymodal';
  * separately so ForecastCharts can show the weather outlook strip and the
  * tier badge, and can hide the bookings/income charts entirely when the
  * backend has no basis yet to predict them (brand-new shop, weather_only).
+ *
+ * REMOVED: Service breakdown row (Full Service / Titan Wash / Regular
+ * Wash / Comforter / Total Load) — no longer shown on the dashboard.
  */
 const Dashboard = () => {
   // State Management
@@ -230,7 +233,7 @@ const Dashboard = () => {
             Chart area: no fixed height set here — ForecastCharts grows
             naturally to fit the weather strip + badge + two charts.
           */}
-          <div className="w-full mb-8 relative" style={{ minWidth: '0' }}>
+          <div className="w-full mb-2 relative" style={{ minWidth: '0' }}>
             {forecast.length > 0 ? (
               <ForecastCharts data={forecast} modelTier={modelTier} />
             ) : (
@@ -239,15 +242,6 @@ const Dashboard = () => {
                 <p className="text-slate-400 font-black text-[10px] uppercase tracking-widest">Aggregating Data...</p>
               </div>
             )}
-          </div>
-
-          {/* Service breakdown row */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 border-t border-slate-50 pt-8 mt-auto">
-            <BreakdownItem label="Full Service" value={stats?.full_service || 0} />
-            <BreakdownItem label="Titan Wash"   value={stats?.titan_wash || 0} />
-            <BreakdownItem label="Regular Wash" value={stats?.regular_wash || 0} />
-            <BreakdownItem label="Comforter"    value={stats?.comforter || 0} />
-            <BreakdownItem label="Total Load"   value={`${stats?.total_kg || 0}kg`} />
           </div>
         </div>
 
@@ -300,15 +294,5 @@ const Dashboard = () => {
     </div>
   );
 };
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SUB-COMPONENT: Breakdown row item
-// ─────────────────────────────────────────────────────────────────────────────
-const BreakdownItem = ({ label, value }) => (
-  <div className="flex flex-col items-center justify-center p-4 rounded-[28px] hover:bg-slate-50 transition-all border border-transparent">
-    <p className="text-2xl font-black text-slate-900 tracking-tighter">{value}</p>
-    <p className="text-slate-400 text-[9px] font-black uppercase mt-1 tracking-widest">{label}</p>
-  </div>
-);
 
 export default Dashboard;

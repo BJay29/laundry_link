@@ -210,19 +210,19 @@ const ConfirmDeleteModal = ({ item, itemLabel, isDeleting, onCancel, onConfirm }
   );
 };
 
+const OptimizationSettings = () => {
+
 /* ------------------------------------------------------------------ */
 /*  MAIN COMPONENT                                                      */
 /* ------------------------------------------------------------------ */
 
-const OptimizationSettings = () => {
   const [settings, setSettings] = useState({
     electricity_rate: 0,
     water_rate: 0,
-    detergent_cost_per_load: 0,
+    supplies_cost_per_load: 0,
     minimum_weight_kg: 6,
     off_peak_hours: ""
   });
-
   const [serviceTypes, setServiceTypes] = useState([]);
   const [newService, setNewService] = useState({ name: '', price: '', duration_minutes: '45', pricing_unit: 'load' });
   const [isAddingService, setIsAddingService] = useState(false);
@@ -1335,12 +1335,12 @@ const OptimizationSettings = () => {
           <p className="text-sm text-slate-400 mb-8 font-bold italic">Critical for accurate Net Profit and AI efficiency telemetry.</p>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="space-y-3">
+                      <div className="space-y-3">
               <label className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                <Droplets size={14} className="text-emerald-500" /> Detergent (Per Load)
+                <Droplets size={14} className="text-emerald-500" /> Supplies (Per Load)
               </label>
               <input
-                type="number" name="detergent_cost_per_load" value={settings.detergent_cost_per_load} onChange={handleInputChange}
+                type="number" name="supplies_cost_per_load" value={settings.supplies_cost_per_load} onChange={handleInputChange}
                 className="w-full bg-slate-50/50 border-2 border-slate-100 rounded-2xl px-6 py-4 font-black text-slate-700 focus:ring-4 ring-emerald-50 focus:border-emerald-200 outline-none transition-all"
               />
             </div>
