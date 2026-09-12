@@ -3,10 +3,23 @@ import { useNavigate } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, Store, MapPin, CheckCircle2 } from 'lucide-react';
 import authService from '../services/APIservices';
 import laundryLinkLogo from '../assets/Untitled design.png';
+import VerifyOtpModal from '../components/modals/verifyotpmodal';
 
 const Login = () => {
   const navigate = useNavigate();
   const [mode, setMode] = useState('login'); // 'login' | 'register'
+
+  // NEW — pending shop details habang naghihintay ng OTP verification.
+  // Kailangan natin itong i-store dito (sa halip na sa RegisterForm
+  // mismo) dahil kailangan pa nating gamitin ito PAGKATAPOS ng
+  // successful verify — sa POST /auth/register-shop call.
+  const [pendingSignup, setPendingSignup] = useState(null); // { email, shopName, address }
+
+  const handleSignupSuccess = ({ email, shopName, address }) => {
+    setPendingSignup({ email, shopName, address });
+  };
+
+  const closeOtpModal = () => setPendingSignup(null);
 
   return (
     <div className="min-h-screen bg-white flex flex-col md:flex-row">
@@ -43,10 +56,23 @@ const Login = () => {
           {mode === 'login' ? (
             <LoginForm onSwitch={() => setMode('register')} navigate={navigate} />
           ) : (
-            <RegisterForm onSwitch={() => setMode('login')} navigate={navigate} />
+            <RegisterForm onSwitch={() => setMode('login')} onSignupSuccess={handleSignupSuccess} />
           )}
         </div>
       </div>
+
+      {/* NEW — OTP verification modal, bukas lang kapag may pendingSignup */}
+      <VerifyOtpModal
+        isOpen={pendingSignup !== null}
+        email={pendingSignup?.email}
+        shopName={pendingSignup?.shopName}
+        address={pendingSignup?.address}
+        onClose={closeOtpModal}
+        onVerified={() => {
+          setPendingSignup(null);
+          navigate('/dashboard');
+        }}
+      />
     </div>
   );
 };
@@ -64,27 +90,20 @@ function LoginForm({ onSwitch, navigate }) {
     setErrorMessage('');
 
     try {
-      const response = await authService.login(email, password);
-      console.log('Authentication Successful:', response);
-
-      if (response.user.role === 'owner') {
-        navigate('/dashboard');
-      } else {
-        navigate('/dashboard');
-      }
+      // UPDATED — Supabase Auth SDK na ang bahala dito (papalitan sa
+      // APIservices.js — see login() docstring doon). Hindi na
+      // ibinabalik ang { user: { role } } shape ng dati; direktang
+      // pumupunta na sa dashboard pagka-successful, dahil iisa lang
+      // naman ang landing page para sa lahat ng owner/staff roles
+      // (parehong ginawa na rin dati, kaya walang nawalang behavior).
+      await authService.login(email, password);
+      navigate('/dashboard');
     } catch (error) {
-      const rawDetail = error.response?.data?.detail;
-      let errorDetail = 'Invalid email or password.';
-      
-      if (typeof rawDetail === 'string') {
-        errorDetail = rawDetail;
-      } else if (Array.isArray(rawDetail)) {
-        errorDetail = rawDetail.map(err => `${err.loc.join('.')}: ${err.msg}`).join(' | ');
-      } else if (error.message) {
-        errorDetail = error.message;
-      }
-
-      setErrorMessage(errorDetail);
+      // UPDATED — Supabase AuthError shape (error.message) sa halip
+      // na FastAPI's { response: { data: { detail } } } shape, dahil
+      // si Supabase Auth SDK na mismo ang direktang gumagawa nito
+      // ngayon, hindi na dumadaan sa sariling backend.
+      setErrorMessage(error.message || 'Invalid email or password.');
     } finally {
       setLoading(false);
     }
@@ -166,8 +185,7 @@ function LoginForm({ onSwitch, navigate }) {
   );
 }
 
-function RegisterForm({ onSwitch }) {
-  const [ownerName, setOwnerName] = useState(''); 
+function RegisterForm({ onSwitch, onSignupSuccess }) {
   const [shopName, setShopName] = useState('');
   const [address, setAddress] = useState('');
   const [email, setEmail] = useState('');
@@ -193,24 +211,31 @@ function RegisterForm({ onSwitch }) {
     setLoading(true);
 
     try {
-      // Pinapasa ang shopName bilang owner_name para masunod ang backend requirement
-      await authService.register(shopName, address, email, password);
-      onSwitch(); // Lilipat ito sa login kapag successful
+      // UPDATED — Supabase Auth SDK na ang bahala (signUp), hindi na
+      // direktang gumagawa ng account sa sariling backend. Ang
+      // shopName/address ay ipinapasa PA RIN, pero HINDI na dito
+      // ginagamit para gumawa ng Shop — nagsisilbi lang itong
+      // metadata (full_name) para sa webhook sync (see
+      // authService.signUp() docstring). Ang totoong Shop creation
+      // ay mangyayari sa POST /auth/register-shop, PAGKATAPOS ng
+      // successful OTP verify — see VerifyOtpModal.
+      await authService.signUp({
+        fullName: shopName,
+        shopName,
+        address,
+        email,
+        password,
+      });
+
+      // Buksan ang OTP modal sa halip na direktang bumalik sa Login —
+      // ipinapasa natin ang shopName/address papunta sa parent (Login
+      // component) para magamit sa POST /auth/register-shop mamaya.
+      onSignupSuccess({ email, shopName, address });
     } catch (error) {
       console.error("Registration Error Object:", error);
-      const rawDetail = error.response?.data?.detail;
-      let errorDetail = 'Unable to create shop account.';
-
-      // Ligtas na kino-convert ang FastAPI 422 error array papuntang text string
-      if (typeof rawDetail === 'string') {
-        errorDetail = rawDetail;
-      } else if (Array.isArray(rawDetail)) {
-        errorDetail = rawDetail.map(err => `${err.loc.join('.')}: ${err.msg}`).join(' | ');
-      } else if (error.message) {
-        errorDetail = error.message;
-      }
-
-      setErrorMessage(errorDetail);
+      // UPDATED — Supabase AuthError shape (error.message) sa halip
+      // na FastAPI's { response: { data: { detail } } } shape.
+      setErrorMessage(error.message || 'Unable to create shop account.');
     } finally {
       setLoading(false);
     }

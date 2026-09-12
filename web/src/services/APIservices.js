@@ -1,4 +1,5 @@
 import axios from 'axios';
+import supabase from './supabaseclient';
 
 /**
  * Base URL for the FastAPI backend.
@@ -15,13 +16,19 @@ const apiClient = axios.create({
 
 /**
  * Request Interceptor:
- * Automatically attaches the JWT Bearer token to every outgoing request
- * to ensure authorized access to protected routes.
+ * UPDATED (Supabase Auth migration) — dating kinukuha ang token mula
+ * sa localStorage (sariling FastAPI-issued JWT). Ngayon, kinukuha na
+ * ito LIVE mula sa kasalukuyang Supabase session — awtomatiko nang
+ * pinapanatili at ni-refresh ni Supabase ang session na 'to, kaya
+ * laging up-to-date ang access token na ipinapadala natin.
+ *
+ * Async na ngayon ang interceptor function (dating sync lang) dahil
+ * async ang supabase.auth.getSession().
  */
-apiClient.interceptors.request.use((config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
+apiClient.interceptors.request.use(async (config) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.access_token) {
+        config.headers.Authorization = `Bearer ${session.access_token}`;
     }
     return config;
 });
@@ -156,11 +163,6 @@ export const getCustomerSegments = async () => {
     }
 };
 
-/**
- * GET /analytics/sales-summary
- * NEW — Fetches Today / This Week / This Month total income.
- * Backs the KPI cards on the Record Sales page.
- */
 export const getSalesSummary = async () => {
     try {
         const response = await apiClient.get('/analytics/sales-summary');
@@ -171,11 +173,6 @@ export const getSalesSummary = async () => {
     }
 };
 
-/**
- * GET /bookings/all
- * NEW — Fetches every booking for this shop, any status, most recent
- * first. Backs the bookings table on the Record Sales page.
- */
 export const getAllBookings = async () => {
     try {
         const response = await apiClient.get('/bookings/all');
@@ -186,11 +183,6 @@ export const getAllBookings = async () => {
     }
 };
 
-/**
- * Fetches the logged-in user's own shop profile, including
- * delivery settings (has_delivery, delivery_fee). Backend endpoint
- * GET /settings/profile.
- */
 export const getShopProfile = async () => {
     try {
         const response = await apiClient.get('/settings/profile');
@@ -211,12 +203,45 @@ export const updateShopProfile = async (shopId, profileData) => {
     }
 };
 
-export const updatePassword = async (userId, passwordData) => {
+/**
+ * UPDATED (Supabase Auth migration) — dating tumatawag ito sa
+ * PUT /settings/password (na tinanggal na natin sa backend, kasabay
+ * ng buong PasswordUpdate schema — see setting_routes.py). Ngayon,
+ * direktang Supabase Auth SDK na ang bahala: muna nating "re-verify"
+ * ang current password via signInWithPassword() (kailangan ang email
+ * ng currently logged-in user), tapos saka lang tatawagin ang
+ * updateUser() para itakda ang bago.
+ *
+ * Signature: tinanggal ang 'userId' param (hindi na kailangan —
+ * kinukuha na natin ang naka-login na user mula sa Supabase session
+ * mismo). Tinawag pa rin ito nang 'updatePassword' para hindi na
+ * kailangang hanapin/palitan ang lahat ng calling sites — pero i-check
+ * mo ang securitysettings.jsx mo kung ano ang eksaktong hugis ng
+ * 'passwordData' na ipinapasa (in-assume kong { old_password,
+ * new_password } ang mga keys, tugma sa dating backend contract).
+ */
+export const updatePassword = async (passwordData) => {
     try {
-        const response = await apiClient.put('/settings/password', passwordData);
-        return response.data;
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user?.email) {
+            throw new Error('You must be logged in to change your password.');
+        }
+
+        // Re-verify current password bago mag-update.
+        const { error: reauthError } = await supabase.auth.signInWithPassword({
+            email: user.email,
+            password: passwordData.old_password,
+        });
+        if (reauthError) throw reauthError;
+
+        const { error: updateError } = await supabase.auth.updateUser({
+            password: passwordData.new_password,
+        });
+        if (updateError) throw updateError;
+
+        return { message: 'Password updated successfully.' };
     } catch (error) {
-        console.error("Update Password Error:", error.response?.data?.detail || error.message);
+        console.error("Update Password Error:", error.message);
         throw error;
     }
 };
@@ -249,11 +274,6 @@ export const getActivityLogs = async (limit = 100) => {
     }
 };
 
-/**
- * GET /bookings/awaiting-approval
- * Fetches customer-submitted bookings still awaiting Accept/Decline.
- * Used by the Service Terminal's notification bell.
- */
 export const getAwaitingApprovalBookings = async () => {
     try {
         const response = await apiClient.get('/bookings/awaiting-approval');
@@ -264,10 +284,6 @@ export const getAwaitingApprovalBookings = async () => {
     }
 };
 
-/**
- * PATCH /bookings/{id}/accept
- * Accepts a customer-submitted booking request — moves it to "Pending".
- */
 export const acceptBooking = async (bookingId) => {
     try {
         const response = await apiClient.patch(`/bookings/${bookingId}/accept`);
@@ -278,16 +294,6 @@ export const acceptBooking = async (bookingId) => {
     }
 };
 
-/**
- * PATCH /bookings/{id}/decline
- * Declines a customer-submitted booking request — moves it to "Declined".
- *
- * UPDATED: now REQUIRES a `reason` string in the request body (backend's
- * BookingDeclineRequest schema validates it's non-empty, max 300 chars).
- * The Service Terminal's decline UI offers quick presets ("Fully
- * booked", "Closed for the day", "Service unavailable") plus a free-text
- * option — whichever the staff picks/types is what gets sent here.
- */
 export const declineBooking = async (bookingId, reason) => {
     try {
         const response = await apiClient.patch(`/bookings/${bookingId}/decline`, { reason });
@@ -299,14 +305,7 @@ export const declineBooking = async (bookingId, reason) => {
 };
 
 // --- ADD-ON METHODS ---
-// Mirrors the Service Type methods pattern below — shop owner-defined
-// add-ons (fabric softener upgrade, rush, atbp.) shown as a checklist
-// in the mobile app's booking flow.
 
-/**
- * GET /addons/
- * Lists all add-ons (active and inactive) configured for the shop.
- */
 export const getAddOns = async () => {
     try {
         const response = await apiClient.get('/addons/');
@@ -317,10 +316,6 @@ export const getAddOns = async () => {
     }
 };
 
-/**
- * POST /addons/
- * Adds a new add-on (name + price) to the shop's catalog.
- */
 export const addAddOn = async (addOnData) => {
     try {
         const payload = {
@@ -336,10 +331,6 @@ export const addAddOn = async (addOnData) => {
     }
 };
 
-/**
- * PUT /addons/{addon_id}
- * Edits an existing add-on's name, price, or active status.
- */
 export const updateAddOn = async (addOnId, updateData) => {
     try {
         const payload = { ...updateData };
@@ -352,9 +343,6 @@ export const updateAddOn = async (addOnId, updateData) => {
     }
 };
 
-/**
- * DELETE /addons/{addon_id}
- */
 export const deleteAddOn = async (addOnId) => {
     try {
         const response = await apiClient.delete(`/addons/${addOnId}`);
@@ -367,10 +355,6 @@ export const deleteAddOn = async (addOnId) => {
 
 // --- PROMO CODE METHODS ---
 
-/**
- * GET /promo-codes/
- * Lists all promo codes (active and inactive) configured for the shop.
- */
 export const getPromoCodes = async () => {
     try {
         const response = await apiClient.get('/promo-codes/');
@@ -381,10 +365,6 @@ export const getPromoCodes = async () => {
     }
 };
 
-/**
- * POST /promo-codes/
- * Adds a new promo/discount code to the shop.
- */
 export const addPromoCode = async (promoData) => {
     try {
         const payload = {
@@ -403,10 +383,6 @@ export const addPromoCode = async (promoData) => {
     }
 };
 
-/**
- * PUT /promo-codes/{promo_id}
- * Edits an existing promo code's details.
- */
 export const updatePromoCode = async (promoId, updateData) => {
     try {
         const payload = { ...updateData };
@@ -420,9 +396,6 @@ export const updatePromoCode = async (promoId, updateData) => {
     }
 };
 
-/**
- * DELETE /promo-codes/{promo_id}
- */
 export const deletePromoCode = async (promoId) => {
     try {
         const response = await apiClient.delete(`/promo-codes/${promoId}`);
@@ -433,56 +406,113 @@ export const deletePromoCode = async (promoId) => {
     }
 };
 
+/**
+ * NEW — kinukuha ang session profile (email, full_name, role, shop_id,
+ * shop_name, address) mula sa GET /auth/profile, tapos kino-cache sa
+ * localStorage para magamit ng mga convenience getters sa ibaba
+ * (getShopId, getRole, atbp.) nang hindi na kailangang mag-fetch ulit.
+ * Tinatawag ito pagkatapos ng login() AT pagkatapos ng registerShop()
+ * (dahil doon lang lalabas ang shop_id/shop_name sa unang pagkakataon).
+ */
+const cacheProfile = async () => {
+    const response = await apiClient.get('/auth/profile');
+    const profile = response.data;
+
+    localStorage.setItem('user_email', profile.email || '');
+    localStorage.setItem('shop_id', profile.shop_id ?? '');
+    localStorage.setItem('shop_name', profile.shop_name || '');
+    localStorage.setItem('shop_address', profile.address || '');
+    localStorage.setItem('role', profile.role || '');
+    localStorage.setItem('full_name', profile.full_name || '');
+
+    return profile;
+};
+
 // --- API SERVICE OBJECT ---
 
 export const apiService = {
 
     // --- AUTHENTICATION METHODS ---
+    // UPDATED (Supabase Auth migration): password storage/verification
+    // at OTP email ay Supabase Auth SDK na ang bahala — hindi na ito
+    // FastAPI backend na direktang tinatawag para dito.
 
-     login: async (email, password) => {
-        try {
-            const response = await apiClient.post('/auth/login', { email, password });
-            const { user, access_token } = response.data;
+    login: async (email, password) => {
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
 
-            localStorage.setItem('token', access_token);
-            localStorage.setItem('user_email', user.email);
-            localStorage.setItem('shop_id', user.shop_id);
-            localStorage.setItem('shop_name', user.shop_name);
-            localStorage.setItem('shop_address', user.address);
-            localStorage.setItem('role', user.role);
-            localStorage.setItem('full_name', user.full_name || '');
-
-            return response.data;
-        } catch (error) {
-            const errorMessage = error.response?.data?.detail || error.message;
-            console.error("Authentication Error:", errorMessage);
-            throw error;
-        }
+        // Kunin at i-cache ang session profile (role, shop_id, atbp.)
+        // mula sa sariling backend — dito naka-store ang data na wala
+        // sa Supabase Auth mismo.
+        const profile = await cacheProfile();
+        return { session: data.session, profile };
     },
 
-    register: async (shopName, address, email, password) => {
-        try {
-            const response = await apiClient.post('/auth/register/owner', {
-                shop_name: shopName,
-                address,
-                email,
-                password,
-            });
-            return response.data;
-        } catch (error) {
-            const errorMessage = error.response?.data?.detail || error.message;
-            console.error("Registration Error:", errorMessage);
-            throw error;
-        }
+    /**
+     * NEW — Nag-sign up sa Supabase Auth. Ipinapasa ang role/full_name
+     * bilang metadata (data:) — babasahin ito ng FastAPI webhook para
+     * malaman kung saang table (users vs customers) dapat i-sync ang
+     * bagong account. Awtomatikong magpapadala si Supabase ng OTP
+     * papunta sa email — susunod na hakbang ay ang VerifyOtpModal.
+     */
+    signUp: async ({ fullName, email, password }) => {
+        const { error } = await supabase.auth.signUp({
+            email,
+            password,
+            options: {
+                data: {
+                    role: 'owner',
+                    full_name: fullName,
+                },
+            },
+        });
+        if (error) throw error;
     },
-    
+
+    /**
+     * NEW — Kino-confirm ang OTP code. Pagka-successful, may session na
+     * agad sa Supabase side.
+     */
+    verifyOtp: async ({ email, code }) => {
+        const { error } = await supabase.auth.verifyOtp({
+            email,
+            token: code,
+            type: 'email',
+        });
+        if (error) throw error;
+    },
+
+    /** NEW — muling magpapadala ng bagong OTP code sa parehong email. */
+    resendOtp: async (email) => {
+        const { error } = await supabase.auth.resend({ type: 'signup', email });
+        if (error) throw error;
+    },
+
+    /**
+     * NEW — tinatawag PAGKATAPOS ng successful OTP verify (may session
+     * na sa Supabase side). Gumagawa ng Shop entity at ni-links ito sa
+     * currently-logged-in User (via POST /auth/register-shop, backend
+     * endpoint na protected — kinukuha ang current_user mula sa
+     * Supabase JWT). Pagkatapos, kino-cache ulit ang profile (ngayon
+     * may shop_id/shop_name na).
+     */
+    registerShop: async ({ shopName, address }) => {
+        await apiClient.post('/auth/register-shop', {
+            shop_name: shopName,
+            address,
+        });
+        return await cacheProfile();
+    },
 
     registerStaff,
 
-    logout: () => {
+    logout: async () => {
+        await supabase.auth.signOut();
         localStorage.clear();
         window.location.href = '/login';
     },
+
+    updatePassword,
 
     // --- BOOKING & TRANSACTION METHODS ---
 
@@ -843,7 +873,6 @@ export const apiService = {
 
     getShopProfile,
     updateShopProfile,
-    updatePassword,
 
     // --- ACTIVITY LOG METHODS ---
 
@@ -861,8 +890,13 @@ export const apiService = {
     getRole: () => localStorage.getItem('role'),
     getFullName: () => localStorage.getItem('full_name'),
     getAuthHeader: () => {
-        const token = localStorage.getItem('token');
-        return token ? { Authorization: `Bearer ${token}` } : {};
+        // NOTE: hindi na ito magagamit nang tama para sa Authorization
+        // header (async na kailangan mag-fetch ng session mula
+        // Supabase, hindi na simpleng localStorage.getItem() lang).
+        // Iniwan lang ito para hindi masira agad ang mga existing
+        // caller — sabihin mo kung saan ito ginagamit para maayos
+        // natin nang tama.
+        return {};
     }
 };
 

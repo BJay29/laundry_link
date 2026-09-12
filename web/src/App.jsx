@@ -1,6 +1,9 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
+// Auth
+import { AuthProvider, useAuth } from './context/authcontext';
+
 // Layout and Wrapper Components
 import Layout from './components/layout/layout';
 import { NotificationProvider } from './context/notificationcontext';
@@ -13,76 +16,85 @@ import MachineHub from './pages/machinehub';
 import InventoryPage from './pages/inventory';
 import FinancialForecast from './pages/financialforecast';
 import OptimizationSettings from './pages/optimizationsettings';
-import Settings from './pages/settings';       // Account Settings page for profile and password management
-import CustomerHub from './pages/customerhub'; // Customer segmentation powered by K-Means AI engine
+import Settings from './pages/settings';
+import CustomerHub from './pages/customerhub';
 import ActivityLogs from './pages/activitylogs';
-import RecordSales from './pages/recordsales'; // NEW — Record Sales page (income summary + bookings table)
+import RecordSales from './pages/recordsales';
 
 /**
- * UPDATED: Inilipat ang "/activity-logs" route PAPASOK sa
- * <NotificationProvider><Layout /></NotificationProvider> wrapper.
+ * NEW — ProtectedRoute: gate para sa lahat ng authenticated-only pages.
  *
- * Dati, hiwalay itong nakatayo sa LABAS ng Layout — kaya wala itong
- * Sidebar/Header/NotificationContext mula sa shared layout, at
- * kailangan pa ng activitylogs.jsx na mag-import at mag-render ng
- * sarili niyang <Sidebar /> nang mag-isa. Ngayon, gaya ng ibang
- * protected pages, awtomatiko na itong may Sidebar + (papalapit na)
- * Header + notification context mula sa Layout — hindi na kailangan
- * ng activitylogs.jsx na mag-render pa ng sarili niyang Sidebar.
+ * FIXED: dati, WALANG kahit anong session/token check sa App.jsx —
+ * kahit sinong hindi naka-login ay puwedeng direktang mag-navigate
+ * papuntang /dashboard (o kahit anong ibang protected path) sa pamamagitan
+ * lang ng pag-type ng URL, dahil walang humahadlang dito. Ngayon,
+ * gamit ang useAuth() (mula sa Supabase session state via AuthContext),
+ * kino-check muna kung may valid na session bago i-render ang
+ * requested na page — kung wala, agad na i-redirect papuntang /login.
  *
- * NEW: Idinagdag ang "/record-sales" route, kasama ang ibang protected
- * pages sa loob ng Layout wrapper.
+ * Habang kinukuha pa ang unang session check (loading === true),
+ * nagpapakita muna ng simpleng loading state sa halip na agad mag-
+ * redirect — iniiwasan nito ang "flash ng /login page" habang
+ * hinihintay lang talaga ang unang supabase.auth.getSession() resolve.
  */
+function ProtectedRoute({ children }) {
+  const { isAuthenticated, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-slate-50">
+        <p className="text-slate-400 font-bold text-sm uppercase tracking-widest">
+          Loading...
+        </p>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return children;
+}
+
 function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        {/* 1. Public Routes: Accessible without Sidebar */}
-        <Route path="/login" element={<Login />} />
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          {/* 1. Public Routes: Accessible without Sidebar */}
+          <Route path="/login" element={<Login />} />
 
-        {/* 2. Protected/Private Routes: All routes inside will render with the Sidebar via Layout */}
-        <Route element={<NotificationProvider><Layout /></NotificationProvider>}>
+          {/* 2. Protected/Private Routes: kailangan na ngayon ng valid
+              na Supabase session (see ProtectedRoute sa itaas) bago
+              ma-access ang kahit alin sa mga nested routes dito */}
+          <Route
+            element={
+              <ProtectedRoute>
+                <NotificationProvider>
+                  <Layout />
+                </NotificationProvider>
+              </ProtectedRoute>
+            }
+          >
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/terminal" element={<ServiceTerminal />} />
+            <Route path="/machines" element={<MachineHub />} />
+            <Route path="/inventory" element={<InventoryPage />} />
+            <Route path="/forecast" element={<FinancialForecast />} />
+            <Route path="/settings" element={<OptimizationSettings />} />
+            <Route path="/account-settings" element={<Settings />} />
+            <Route path="/customer-hub" element={<CustomerHub />} />
+            <Route path="/activity-logs" element={<ActivityLogs />} />
+            <Route path="/record-sales" element={<RecordSales />} />
+          </Route>
 
-          {/* Default entry point after successful login */}
-          <Route path="/dashboard" element={<Dashboard />} />
-
-          {/* Management of daily laundry transactions */}
-          <Route path="/terminal" element={<ServiceTerminal />} />
-
-          {/* Monitoring and management of laundry machinery */}
-          <Route path="/machines" element={<MachineHub />} />
-
-          {/* Inventory management for shop supplies */}
-          <Route path="/inventory" element={<InventoryPage />} />
-
-          {/* Revenue and booking projections based on historical data */}
-          <Route path="/forecast" element={<FinancialForecast />} />
-
-          {/* Configuration for pricing, operating costs, and profit optimization */}
-          <Route path="/settings" element={<OptimizationSettings />} />
-
-          {/* Account settings for shop profile and password management */}
-          <Route path="/account-settings" element={<Settings />} />
-
-          {/* AI-powered K-Means customer behavioral segmentation hub */}
-          <Route path="/customer-hub" element={<CustomerHub />} />
-
-          {/* UPDATED — moved inside Layout, see note above */}
-          <Route path="/activity-logs" element={<ActivityLogs />} />
-
-          {/* NEW — Record Sales: income summary (today/week/month) + full bookings table */}
-          <Route path="/record-sales" element={<RecordSales />} />
-
-        </Route>
-
-        {/* 3. Global Fallbacks and Redirects */}
-        {/* Redirect root path to login by default */}
-        <Route path="/" element={<Navigate to="/login" replace />} />
-
-        {/* Wildcard route to handle 404s or undefined paths by redirecting to login */}
-        <Route path="*" element={<Navigate to="/login" replace />} />
-      </Routes>
-    </BrowserRouter>
+          {/* 3. Global Fallbacks and Redirects */}
+          <Route path="/" element={<Navigate to="/login" replace />} />
+          <Route path="*" element={<Navigate to="/login" replace />} />
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
   );
 }
 
