@@ -1,45 +1,27 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { 
   LayoutDashboard, 
   Monitor, 
   Cpu, 
   BarChart3, 
   Settings, 
-  LogOut,
-  AlertCircle,
-  X,
-  Package,
-  UserCog,
-  Users, // Import Users icon for Customer Hub
-  History, // icon for Activity Log
-  Receipt // icon for Record Sales
+  Package, 
+  Users, 
+  History, 
+  Receipt,
+  LogOut 
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import logo from '../../assets/Untitled design.png'; 
+import laundryLinkLogo from '../../assets/Untitled design.png';
 
 /**
  * SIDEBAR COMPONENT
- * Features synchronized navigation, custom branding, and a secure logout confirmation modal.
- * Includes both Optimization Settings (main nav) and Account Settings (below logout).
- * COLOR THEME: Light mode — uses white/slate-50 base to complement the dashboard background.
- * Sidebar is white while the dashboard content area is slate-50, keeping them visually related
- * but distinct through a subtle border and shadow separation.
- *
- * UPDATED: Tinanggal na ang role gate sa "Activity Log" nav item —
- * lahat ng roles (owner, manager, staff) ay makikita na ito ngayon.
- * Ito ay dahil sa backend na, ang GET /activity-logs endpoint mismo ang
- * nagfi-filter kung anong makikita ng bawat role (Staff = sariling
- * actions lang, Owner/Manager = lahat) — hindi na kailangan pang itago
- * ang link mismo sa frontend, dahil hindi na ito security boundary kundi
- * UX lang. See activitylogs.jsx para sa kaukulang pagbabago doon.
- *
- * NEW: Idinagdag ang "Record Sales" nav item — nagpapakita ng total
- * income (today/week/month) at listahan ng lahat ng bookings.
+ * Updated: Replaced "Main Navigation" text with logo image at the top,
+ * and restored Account Settings & Logout at the bottom.
  */
 const Sidebar = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   // Main navigation items synced with App.jsx routes
   const navItems = [
@@ -64,12 +46,12 @@ const Sidebar = () => {
       path: '/inventory' 
     },
     { 
-      name: 'Customer Hub', // Added Customer Hub navigation
+      name: 'Customer Hub', 
       icon: <Users size={20} />, 
       path: '/customer-hub' 
     },
     { 
-      name: 'Record Sales', // NEW
+      name: 'Record Sales', 
       icon: <Receipt size={20} />, 
       path: '/record-sales' 
     },
@@ -81,167 +63,92 @@ const Sidebar = () => {
     { 
       name: 'Optimization Settings',
       icon: <Settings size={20} />, 
-      path: '/settings' 
+      path: '/optimization-settings' 
     },
-    // UPDATED: Nakikita na ito ng LAHAT ng roles — tinanggal na ang
-    // canViewActivityLog gate. Ang GET /activity-logs endpoint mismo
-    // ang humahawak ng role-based filtering ng laman.
     {
       name: 'Activity Logs',
       icon: <History size={20} />,
       path: '/activity-logs'
     },
-
-    
   ];
 
-  /**
-   * HANDLER: Secure Logout
-   * Clears session data and redirects the user to the login portal.
-   */
-  const handleFinalLogout = () => {
-    // Clear local authentication data
-    localStorage.clear();
-    navigate('/login');
-  };
-
   return (
-    <>
-      {/* Sidebar — light white background with a right border to separate from slate-50 content area */}
-      <div className="w-72 h-screen bg-white text-slate-700 flex flex-col fixed left-0 top-0 border-r border-slate-200 z-50 shadow-sm">
-        
-        {/* Branding Section — actual logo image + wordmark */}
-        <div className="px-6 pt-8 pb-4">
-          <div className="flex items-center gap-3">
-            {/* Logo Image */}
-            <img
-              src={logo}
-              alt="LaundryLink logo"
-              className="h-8 w-8 object-contain shrink-0"
-            />
+    <aside className="w-72 h-screen bg-white text-slate-700 flex flex-col fixed left-0 top-0 border-r border-slate-200 z-40 shadow-sm">
+      
+      {/* 1. Top Section: Logo Image na kapantay ng Header */}
+      <div className="h-16 px-6 flex items-center border-b border-slate-100">
+        <Link to="/dashboard" className="flex items-center gap-2 group">
+          <img src={laundryLinkLogo} alt="LaundryLink Logo" className="h-8 w-8 object-contain" />
+          <span className="text-xl font-black italic tracking-tight">
+            <span className="text-sky-500"></span>
+            <span className="text-green-600"></span>
+          </span>
+        </Link>
+      </div>
 
-            {/* Logo Text */}
-            <h2 className="text-xl font-black italic tracking-tighter text-slate-900">
-              <span className="text-violet-500">LAUNDRY</span>
-              <span className="text-emerald-500">LINK</span>
-            </h2>
+      {/* 2. Navigation Links (Scrollable kung kinakailangan) */}
+      <nav className="flex-grow px-4 py-4 overflow-y-auto">
+        <ul className="space-y-1">
+          {navItems.map((item) => {
+            const isActive = location.pathname === item.path;
+            
+            return (
+              <li key={item.name}>
+                <Link
+                  to={item.path}
+                  className={`flex items-center gap-4 px-5 py-3 rounded-2xl font-bold transition-all duration-200 group ${
+                    isActive 
+                      ? 'bg-sky-500 text-white shadow-lg shadow-sky-200' 
+                      : 'text-slate-400 hover:bg-slate-100 hover:text-slate-700'
+                  }`}
+                >
+                  <span className={`transition-colors duration-200 ${
+                    isActive ? 'text-white' : 'text-slate-400 group-hover:text-slate-600'
+                  }`}>
+                    {item.icon}
+                  </span>
+                  <span className="text-sm tracking-wide">
+                    {item.name}
+                  </span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </nav>
+
+      {/* 3. Sidebar Footer: System Status, Account Settings, and Logout */}
+      <div className="p-4 border-t border-slate-100 m-4 space-y-3">
+        <div className="px-5 py-3 bg-slate-50 rounded-[20px] border border-slate-200">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>
+            <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest">
+              System Status
+            </span>
+          </div>
+          <div className="text-[11px] text-slate-400 font-bold mt-1.5 px-1">
+            <p>Mode: <span className="text-slate-700 font-black">Optimization Active</span></p>
           </div>
         </div>
 
-        {/* Navigation Links */}
-        <nav className="flex-grow px-4 mt-4">
-          <ul className="space-y-1">
-            {navItems.map((item) => {
-              const isActive = location.pathname === item.path;
-              
-              return (
-                <li key={item.name}>
-                  <Link
-                    to={item.path}
-                    className={`flex items-center gap-4 px-5 py-3.5 rounded-2xl font-bold transition-all duration-200 group ${
-                      isActive 
-                        ? 'bg-sky-500 text-white shadow-lg shadow-sky-200' 
-                        : 'text-slate-400 hover:bg-slate-100 hover:text-slate-700'
-                    }`}
-                  >
-                    <span className={`transition-colors duration-200 ${
-                      isActive ? 'text-white' : 'text-slate-400 group-hover:text-slate-600'
-                    }`}>
-                      {item.icon}
-                    </span>
-                    <span className="text-sm tracking-wide">
-                      {item.name}
-                    </span>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </nav>
-
-        {/* Sidebar Footer: Account Settings, Logout, and System Status */}
-        <div className="p-6 border-t border-slate-100">
-
-          {/* Account Settings link — placed above logout for easy access */}
-          <Link
-            to="/account-settings"
-            className={`flex items-center gap-4 px-5 py-3.5 w-full font-bold transition-all duration-200 group rounded-2xl mb-1 ${
-              location.pathname === '/account-settings'
-                ? 'bg-sky-500 text-white shadow-lg shadow-sky-200'
-                : 'text-slate-400 hover:bg-slate-100 hover:text-slate-700'
-            }`}
-          >
-            <UserCog size={20} className={`transition-colors duration-200 ${
-              location.pathname === '/account-settings' ? 'text-white' : 'text-slate-400 group-hover:text-slate-600'
-            }`} />
-            <span className="text-sm tracking-wide">Account Settings</span>
-          </Link>
-
-          {/* Logout Button */}
+        {/* Account Settings & Logout Buttons */}
+        <div className="space-y-1 px-1">
           <button 
-            onClick={() => setShowLogoutModal(true)}
-            className="flex items-center gap-4 px-5 py-3.5 w-full text-slate-400 hover:text-red-500 font-bold transition-all duration-200 group rounded-2xl hover:bg-red-50"
+            onClick={() => navigate('/optimization-settings')}
+            className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition"
           >
-            <LogOut size={20} className="group-hover:-translate-x-1 transition-transform" />
-            <span className="text-sm tracking-wide">Logout</span>
+            <Settings size={16} className="text-slate-400" /> Account Settings
           </button>
-          
-          {/* System Health Card — light version to match the new sidebar theme */}
-          <div className="mt-4 px-5 py-4 bg-slate-50 rounded-[20px] border border-slate-200">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>
-              <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest">
-                System Status
-              </span>
-            </div>
-            <div className="text-[11px] text-slate-400 font-bold mt-2 px-1">
-              <p>Mode: <span className="text-slate-700 font-black">Optimization Active</span></p>
-            </div>
-          </div>
+          <button 
+            onClick={() => navigate('/login')}
+            className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 transition"
+          >
+            <LogOut size={16} className="text-rose-500" /> Logout
+          </button>
         </div>
       </div>
 
-      {/* LOGOUT CONFIRMATION MODAL — unchanged */}
-      {showLogoutModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-[32px] p-8 w-full max-w-sm shadow-2xl border border-slate-100">
-            <div className="flex justify-between items-start mb-6">
-              <div className="p-3 bg-red-50 text-red-500 rounded-2xl">
-                <AlertCircle size={28} />
-              </div>
-              <button 
-                onClick={() => setShowLogoutModal(false)}
-                className="p-2 text-slate-400 hover:bg-slate-50 rounded-xl transition-colors"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <h3 className="text-xl font-black text-slate-900 tracking-tight mb-2">
-              Confirm Logout
-            </h3>
-            <p className="text-slate-500 font-medium leading-relaxed mb-8">
-              Are you sure you want to end your session?
-            </p>
-
-            <div className="flex flex-col gap-3">
-              <button 
-                onClick={handleFinalLogout}
-                className="w-full py-4 bg-red-500 hover:bg-red-600 text-white font-black rounded-2xl transition-all shadow-lg shadow-red-500/25 active:scale-95"
-              >
-                Logout Now
-              </button>
-              <button 
-                onClick={() => setShowLogoutModal(false)}
-                className="w-full py-4 bg-slate-100 hover:bg-slate-200 text-slate-600 font-black rounded-2xl transition-all active:scale-95"
-              >
-                Go Back
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
+    </aside>
   );
 };
 

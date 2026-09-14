@@ -14,17 +14,6 @@ const apiClient = axios.create({
     },
 });
 
-/**
- * Request Interceptor:
- * UPDATED (Supabase Auth migration) — dating kinukuha ang token mula
- * sa localStorage (sariling FastAPI-issued JWT). Ngayon, kinukuha na
- * ito LIVE mula sa kasalukuyang Supabase session — awtomatiko nang
- * pinapanatili at ni-refresh ni Supabase ang session na 'to, kaya
- * laging up-to-date ang access token na ipinapadala natin.
- *
- * Async na ngayon ang interceptor function (dating sync lang) dahil
- * async ang supabase.auth.getSession().
- */
 apiClient.interceptors.request.use(async (config) => {
     const { data: { session } } = await supabase.auth.getSession();
     if (session?.access_token) {
@@ -203,23 +192,6 @@ export const updateShopProfile = async (shopId, profileData) => {
     }
 };
 
-/**
- * UPDATED (Supabase Auth migration) — dating tumatawag ito sa
- * PUT /settings/password (na tinanggal na natin sa backend, kasabay
- * ng buong PasswordUpdate schema — see setting_routes.py). Ngayon,
- * direktang Supabase Auth SDK na ang bahala: muna nating "re-verify"
- * ang current password via signInWithPassword() (kailangan ang email
- * ng currently logged-in user), tapos saka lang tatawagin ang
- * updateUser() para itakda ang bago.
- *
- * Signature: tinanggal ang 'userId' param (hindi na kailangan —
- * kinukuha na natin ang naka-login na user mula sa Supabase session
- * mismo). Tinawag pa rin ito nang 'updatePassword' para hindi na
- * kailangang hanapin/palitan ang lahat ng calling sites — pero i-check
- * mo ang securitysettings.jsx mo kung ano ang eksaktong hugis ng
- * 'passwordData' na ipinapasa (in-assume kong { old_password,
- * new_password } ang mga keys, tugma sa dating backend contract).
- */
 export const updatePassword = async (passwordData) => {
     try {
         const { data: { user } } = await supabase.auth.getUser();
@@ -227,7 +199,6 @@ export const updatePassword = async (passwordData) => {
             throw new Error('You must be logged in to change your password.');
         }
 
-        // Re-verify current password bago mag-update.
         const { error: reauthError } = await supabase.auth.signInWithPassword({
             email: user.email,
             password: passwordData.old_password,
@@ -304,6 +275,18 @@ export const declineBooking = async (bookingId, reason) => {
     }
 };
 
+export const markBookingPaid = async (bookingId, paymentMethod = 'cash') => {
+    try {
+        const response = await apiClient.patch(`/bookings/${bookingId}/mark-paid`, {
+            payment_method: paymentMethod
+        });
+        return response.data;
+    } catch (error) {
+        console.error("Mark Booking Paid Error:", error.response?.data?.detail || error.message);
+        throw error;
+    }
+};
+
 // --- ADD-ON METHODS ---
 
 export const getAddOns = async () => {
@@ -368,7 +351,6 @@ export const getPromoCodes = async () => {
 export const addPromoCode = async (promoData) => {
     try {
         const payload = {
-            code: promoData.code,
             discount_type: promoData.discount_type || 'percent',
             discount_value: parseFloat(promoData.discount_value),
             is_active: promoData.is_active !== undefined ? Boolean(promoData.is_active) : true,
@@ -406,14 +388,6 @@ export const deletePromoCode = async (promoId) => {
     }
 };
 
-/**
- * NEW — kinukuha ang session profile (email, full_name, role, shop_id,
- * shop_name, address) mula sa GET /auth/profile, tapos kino-cache sa
- * localStorage para magamit ng mga convenience getters sa ibaba
- * (getShopId, getRole, atbp.) nang hindi na kailangang mag-fetch ulit.
- * Tinatawag ito pagkatapos ng login() AT pagkatapos ng registerShop()
- * (dahil doon lang lalabas ang shop_id/shop_name sa unang pagkakataon).
- */
 const cacheProfile = async () => {
     const response = await apiClient.get('/auth/profile');
     const profile = response.data;
@@ -432,29 +406,13 @@ const cacheProfile = async () => {
 
 export const apiService = {
 
-    // --- AUTHENTICATION METHODS ---
-    // UPDATED (Supabase Auth migration): password storage/verification
-    // at OTP email ay Supabase Auth SDK na ang bahala — hindi na ito
-    // FastAPI backend na direktang tinatawag para dito.
-
     login: async (email, password) => {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-
-        // Kunin at i-cache ang session profile (role, shop_id, atbp.)
-        // mula sa sariling backend — dito naka-store ang data na wala
-        // sa Supabase Auth mismo.
         const profile = await cacheProfile();
         return { session: data.session, profile };
     },
 
-    /**
-     * NEW — Nag-sign up sa Supabase Auth. Ipinapasa ang role/full_name
-     * bilang metadata (data:) — babasahin ito ng FastAPI webhook para
-     * malaman kung saang table (users vs customers) dapat i-sync ang
-     * bagong account. Awtomatikong magpapadala si Supabase ng OTP
-     * papunta sa email — susunod na hakbang ay ang VerifyOtpModal.
-     */
     signUp: async ({ fullName, email, password }) => {
         const { error } = await supabase.auth.signUp({
             email,
@@ -469,10 +427,6 @@ export const apiService = {
         if (error) throw error;
     },
 
-    /**
-     * NEW — Kino-confirm ang OTP code. Pagka-successful, may session na
-     * agad sa Supabase side.
-     */
     verifyOtp: async ({ email, code }) => {
         const { error } = await supabase.auth.verifyOtp({
             email,
@@ -482,20 +436,11 @@ export const apiService = {
         if (error) throw error;
     },
 
-    /** NEW — muling magpapadala ng bagong OTP code sa parehong email. */
     resendOtp: async (email) => {
         const { error } = await supabase.auth.resend({ type: 'signup', email });
         if (error) throw error;
     },
 
-    /**
-     * NEW — tinatawag PAGKATAPOS ng successful OTP verify (may session
-     * na sa Supabase side). Gumagawa ng Shop entity at ni-links ito sa
-     * currently-logged-in User (via POST /auth/register-shop, backend
-     * endpoint na protected — kinukuha ang current_user mula sa
-     * Supabase JWT). Pagkatapos, kino-cache ulit ang profile (ngayon
-     * may shop_id/shop_name na).
-     */
     registerShop: async ({ shopName, address }) => {
         await apiClient.post('/auth/register-shop', {
             shop_name: shopName,
@@ -572,6 +517,8 @@ export const apiService = {
         }
     },
 
+    // LEGACY — single washer + single dryer, one-time. Kept for backward
+    // compatibility only; not used by the new multi-machine flow.
     assignMachineToBooking: async (bookingId, assignData, shopId) => {
         try {
             const response = await apiClient.patch(
@@ -584,6 +531,48 @@ export const apiService = {
             throw error;
         }
     },
+
+    // NEW — assigns N machines (one per load) to a Pending booking.
+    // assignData shape: { machine_ids: [1, 2, ...] }
+     assignMachinesToBooking: async (bookingId, assignData) => {
+        try {
+            const response = await apiClient.post(`/bookings/${bookingId}/assign-machines`, assignData);
+            return response.data;
+        } catch (error) {
+            console.error("Assign Machines Error:", error.response?.data?.detail || error.message);
+            throw error;
+        }
+    },
+
+    /**
+     * FIXED — dating inaasahan ng function na PLAIN NUMBER ang 3rd
+     * argument (dryerId) tapos ginagawang { dryer_id: parseInt(dryerId) }.
+     * Pero ang MoveToDryerModal.jsx ay talagang nagpapasa ng OBJECT
+     * ({ dryer_id: parseInt(selectedDryer) }), hindi plain number — kaya
+     * ang parseInt() ng buong object ay nagiging NaN, na-JSON.stringify
+     * papuntang null, at bumabagsak sa backend's required int validation
+     * (422 error). Ngayon ay tinatanggap na nito ang OBJECT nang tama,
+     * kinukuha ang `.dryer_id` mula rito, PERO sinusuportahan pa rin ang
+     * plain-number na paraan ng tawag (fallback) kung sakaling ibang
+     * caller sa hinaharap ang gagamit nito nang ganoon.
+     */
+    moveLoadToDryer: async (bookingId, loadNumber, moveData) => {
+        try {
+            const dryerId = (moveData && typeof moveData === 'object')
+                ? moveData.dryer_id
+                : moveData;
+            const response = await apiClient.patch(
+                `/bookings/${bookingId}/loads/${loadNumber}/move-to-dryer`,
+                { dryer_id: parseInt(dryerId) }
+            );
+            return response.data;
+        } catch (error) {
+            console.error("Move to Dryer Error:", error.response?.data?.detail || error.message);
+            throw error;
+        }
+    },
+
+    markBookingPaid,
 
     // --- MACHINE HUB & TELEMETRY METHODS ---
 
@@ -823,6 +812,7 @@ export const apiService = {
                     ? parseInt(serviceData.duration_minutes)
                     : 45,
                 pricing_unit: serviceData.pricing_unit || 'load',
+                required_phases: serviceData.required_phases || 'full_service',
             };
             const response = await apiClient.post('/settings/services', payload);
             return response.data;
@@ -890,12 +880,6 @@ export const apiService = {
     getRole: () => localStorage.getItem('role'),
     getFullName: () => localStorage.getItem('full_name'),
     getAuthHeader: () => {
-        // NOTE: hindi na ito magagamit nang tama para sa Authorization
-        // header (async na kailangan mag-fetch ng session mula
-        // Supabase, hindi na simpleng localStorage.getItem() lang).
-        // Iniwan lang ito para hindi masira agad ang mga existing
-        // caller — sabihin mo kung saan ito ginagamit para maayos
-        // natin nang tama.
         return {};
     }
 };

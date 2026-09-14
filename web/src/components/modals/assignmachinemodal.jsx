@@ -1,90 +1,144 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Cpu, HardDrive, CheckCircle2, Loader2, AlertTriangle } from 'lucide-react';
 import apiService from '../../services/APIservices';
 
-/**
- * ASSIGN MACHINE MODAL
- * NEW COMPONENT
- * Shown when a booking is Pending with no machine assigned.
- * Allows the user to pick an available washer and/or dryer and assign them.
- * 
- * Props:
- *  - isOpen: boolean
- *  - booking: the pending booking object
- *  - availableMachines: array of machine objects with status available/idle/ready
- *  - onClose: () => void
- *  - onSuccess: (message: string) => void
- */
 const AssignMachineModal = ({ isOpen, booking, availableMachines, onClose, onSuccess }) => {
-  const [selectedWasher, setSelectedWasher] = useState(null);
-  const [selectedDryer, setSelectedDryer] = useState(null);
+  const [selectedMachineIds, setSelectedMachineIds] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [requiredPhases, setRequiredPhases] = useState('full_service');
+  const [isLoadingPhases, setIsLoadingPhases] = useState(false);
+  // NEW — true kapag hindi nakahanap ng matching service sa catalog
+  // (nag-fallback papuntang full_service). Ipinapakita sa UI mismo
+  // para agad na makita kung ito ang dahilan ng maling machine type
+  // na lumalabas, sa halip na tahimik lang na mali ang assumption.
+  const [serviceNotFound, setServiceNotFound] = useState(false);
+
+  const requiredCount = booking?.loads || 1;
+
+  useEffect(() => {
+    if (!isOpen || !booking) return;
+
+    setSelectedMachineIds([]);
+    setServiceNotFound(false);
+
+    const fetchRequiredPhases = async () => {
+      try {
+        setIsLoadingPhases(true);
+        const shopId = apiService.getShopId();
+        const serviceTypes = await apiService.getServiceTypes(shopId);
+
+        // FIXED — dating exact string match lang (s.name ===
+        // booking.service_type), kaya kahit maliit na pagkakaiba
+        // (extra space, ibang capitalization) ay bumabagsak sa
+        // fallback na "full_service" → Washer, kahit "dry_only" pala
+        // ang totoong service. Ginawa nang case-insensitive + trimmed
+        // ang comparison para mas matatag ito.
+        const normalizedBookingService = (booking.service_type || '').trim().toLowerCase();
+        const match = (serviceTypes || []).find(
+          (s) => (s.name || '').trim().toLowerCase() === normalizedBookingService
+        );
+
+        if (match) {
+          setRequiredPhases(match.required_phases || 'full_service');
+        } else {
+          // DEBUG — kung nakikita mo itong warning sa console, ibig
+          // sabihin talagang hindi nagta-tugma ang pangalan ng service
+          // sa booking kumpara sa kasalukuyang laman ng catalog
+          // (marahil na-rename o na-delete na ang service pagkatapos
+          // gawin ang booking na ito).
+          console.warn(
+            `AssignMachineModal: no catalog match for service "${booking.service_type}". ` +
+            `Available names: ${(serviceTypes || []).map((s) => s.name).join(', ')}`
+          );
+          setServiceNotFound(true);
+          setRequiredPhases('full_service');
+        }
+      } catch (error) {
+        console.error('Error fetching service required_phases:', error);
+        setServiceNotFound(true);
+        setRequiredPhases('full_service');
+      } finally {
+        setIsLoadingPhases(false);
+      }
+    };
+    fetchRequiredPhases();
+  }, [isOpen, booking]);
 
   if (!isOpen || !booking) return null;
 
-  const washers = availableMachines.filter(m => m.machine_type === 'Washer');
-  const dryers = availableMachines.filter(m => m.machine_type === 'Dryer');
+  const targetType = requiredPhases === 'dry_only' ? 'Dryer' : 'Washer';
+  const candidateMachines = availableMachines.filter(m => m.machine_type === targetType);
 
-  const hasMachineSelected = selectedWasher || selectedDryer;
+  const isFullySelected = selectedMachineIds.length === requiredCount;
+  const canSelectMore = selectedMachineIds.length < requiredCount;
+
+  const toggleMachine = (machineId) => {
+    setSelectedMachineIds(prev => {
+      if (prev.includes(machineId)) {
+        return prev.filter(id => id !== machineId);
+      }
+      if (prev.length >= requiredCount) return prev;
+      return [...prev, machineId];
+    });
+  };
 
   const handleAssign = async () => {
-    if (!hasMachineSelected) return;
+    if (!isFullySelected) return;
 
     setIsSubmitting(true);
     try {
-      await apiService.assignMachineToBooking(booking.id, {
-        washer_id: selectedWasher ? parseInt(selectedWasher) : null,
-        dryer_id: selectedDryer ? parseInt(selectedDryer) : null,
+      await apiService.assignMachinesToBooking(booking.id, {
+        machine_ids: selectedMachineIds.map(id => parseInt(id)),
       });
 
-      const parts = [];
-      if (selectedWasher) {
-        const w = washers.find(m => m.id === selectedWasher);
-        if (w) parts.push(`W${w.machine_number}`);
-      }
-      if (selectedDryer) {
-        const d = dryers.find(m => m.id === selectedDryer);
-        if (d) parts.push(`D${d.machine_number}`);
-      }
+      const labels = selectedMachineIds
+        .map(id => candidateMachines.find(m => m.id === id))
+        .filter(Boolean)
+        .sort((a, b) => a.machine_number - b.machine_number)
+        .map(m => `${targetType === 'Washer' ? 'W' : 'D'}${m.machine_number}`);
 
-      onSuccess(`✅ Machine${parts.length > 1 ? 's' : ''} ${parts.join(' & ')} assigned to ${booking.customer_name}.`);
+      onSuccess(`✅ ${labels.join(', ')} assigned to ${booking.customer_name}.`);
     } catch (error) {
-      console.error('Assign machine error:', error);
+      console.error('Assign machines error:', error);
       const msg = error.response?.data?.detail;
-      alert(typeof msg === 'string' ? msg : 'Failed to assign machine. Please try again.');
+      alert(typeof msg === 'string' ? msg : 'Failed to assign machines. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const renderMachineButtons = (machines, type, selectedId, setSelected) => {
-    if (machines.length === 0) {
+  const renderMachineButtons = () => {
+    if (candidateMachines.length === 0) {
       return (
-        <div className="col-span-3 py-4 text-center">
-          <span className="text-[10px] font-bold text-slate-300 uppercase italic">No {type}s Available</span>
+        <div className="col-span-4 py-4 text-center">
+          <span className="text-[10px] font-bold text-slate-300 uppercase italic">No {targetType}s Available</span>
         </div>
       );
     }
 
-    return machines
+    return candidateMachines
       .sort((a, b) => a.machine_number - b.machine_number)
       .map((machine) => {
-        const isSelected = selectedId === machine.id;
+        const isSelected = selectedMachineIds.includes(machine.id);
+        const isDisabled = !isSelected && !canSelectMore;
         return (
           <button
-            key={`assign-${type}-${machine.id}`}
+            key={`assign-${targetType}-${machine.id}`}
             type="button"
-            onClick={() => setSelected(isSelected ? null : machine.id)}
+            onClick={() => toggleMachine(machine.id)}
+            disabled={isDisabled}
             className={`h-14 rounded-2xl text-[12px] font-black border-2 transition-all duration-200 relative
               ${isSelected
-                ? type === 'Washer'
+                ? targetType === 'Washer'
                   ? 'bg-sky-500 border-sky-600 text-white shadow-lg shadow-sky-200 scale-105'
                   : 'bg-orange-500 border-orange-600 text-white shadow-lg shadow-orange-200 scale-105'
-                : 'bg-white border-slate-200 text-slate-600 hover:border-sky-300 hover:bg-sky-50/30'
+                : isDisabled
+                  ? 'bg-slate-50 border-slate-100 text-slate-300 cursor-not-allowed opacity-60'
+                  : 'bg-white border-slate-200 text-slate-600 hover:border-sky-300 hover:bg-sky-50/30'
               }`}
           >
             <div className="flex flex-col items-center justify-center leading-tight">
-              <span>{type === 'Washer' ? 'W' : 'D'}{machine.machine_number}</span>
+              <span>{targetType === 'Washer' ? 'W' : 'D'}{machine.machine_number}</span>
               <span className="text-[7px] opacity-60 uppercase">Available</span>
             </div>
             {isSelected && (
@@ -103,9 +157,13 @@ const AssignMachineModal = ({ isOpen, booking, availableMachines, onClose, onSuc
         <div className="px-8 pt-8 pb-5 border-b border-slate-50">
           <div className="flex justify-between items-start">
             <div>
-              <h2 className="text-2xl font-black text-slate-900 tracking-tighter">Assign Machine</h2>
+              <h2 className="text-2xl font-black text-slate-900 tracking-tighter">
+                Assign Machine{requiredCount > 1 ? 's' : ''}
+              </h2>
               <p className="text-slate-400 font-bold text-[11px] uppercase tracking-[0.15em] mt-1">
-                Select a machine for this booking
+                {requiredCount > 1
+                  ? `Select ${requiredCount} ${targetType.toLowerCase()}s (one per load)`
+                  : `Select a ${targetType.toLowerCase()} for this booking`}
               </p>
             </div>
             <button
@@ -126,7 +184,7 @@ const AssignMachineModal = ({ isOpen, booking, availableMachines, onClose, onSuc
             <div>
               <p className="text-slate-900 font-black text-sm">{booking.customer_name}</p>
               <p className="text-slate-500 text-[11px] font-bold">
-                {booking.service_type} · {booking.weight} KG
+                {booking.service_type} · {booking.weight > 0 ? `${booking.weight} KG` : `${requiredCount} ${requiredCount > 1 ? 'Loads' : 'Load'}`}
               </p>
             </div>
             <span className="ml-auto px-3 py-1 bg-amber-100 text-amber-700 rounded-full text-[9px] font-black uppercase tracking-widest">
@@ -138,33 +196,59 @@ const AssignMachineModal = ({ isOpen, booking, availableMachines, onClose, onSuc
         {/* Machine Selection */}
         <div className="px-8 py-6 space-y-6">
 
-          {/* Washer Selection */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
-              <Cpu size={13} className="text-sky-500" />
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Washers</span>
+          {isLoadingPhases ? (
+            <div className="flex items-center justify-center py-4 gap-2 text-sky-500 font-bold animate-pulse">
+              <Loader2 className="animate-spin" size={16} />
+              <span>Checking service requirements...</span>
             </div>
-            <div className="grid grid-cols-4 gap-3">
-              {renderMachineButtons(washers, 'Washer', selectedWasher, setSelectedWasher)}
+          ) : (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                <div className="flex items-center gap-2">
+                  {targetType === 'Washer'
+                    ? <Cpu size={13} className="text-sky-500" />
+                    : <HardDrive size={13} className="text-orange-500" />}
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{targetType}s</span>
+                </div>
+                <span className={`text-[10px] font-black uppercase tracking-widest ${isFullySelected ? 'text-emerald-500' : 'text-slate-400'}`}>
+                  {selectedMachineIds.length} / {requiredCount} selected
+                </span>
+              </div>
+              <div className="grid grid-cols-4 gap-3">
+                {renderMachineButtons()}
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* Dryer Selection */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
-              <HardDrive size={13} className="text-orange-500" />
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Dryers</span>
+          {/* NEW — makikita kaagad kung bakit "Washer" ang lumabas
+              kahit "Dry Only" ang service — hindi natugma ang service
+              name ng booking sa kasalukuyang catalog. */}
+          {!isLoadingPhases && serviceNotFound && (
+            <div className="flex items-center gap-2 text-amber-600 bg-amber-50 rounded-2xl px-4 py-3">
+              <AlertTriangle size={14} className="shrink-0" />
+              <p className="text-[11px] font-medium">
+                Couldn't find "{booking.service_type}" in your current service catalog — defaulting to
+                Wash + Dry. If this service was renamed or removed, update the booking's service or
+                re-check your Optimization Settings.
+              </p>
             </div>
-            <div className="grid grid-cols-4 gap-3">
-              {renderMachineButtons(dryers, 'Dryer', selectedDryer, setSelectedDryer)}
-            </div>
-          </div>
+          )}
 
-          {/* No selection warning */}
-          {!hasMachineSelected && (
+          {!isLoadingPhases && requiredPhases === 'full_service' && !serviceNotFound && (
+            <div className="flex items-center gap-2 text-sky-500 bg-sky-50 rounded-2xl px-4 py-3">
+              <AlertTriangle size={14} className="shrink-0" />
+              <p className="text-[11px] font-medium">
+                Dryers aren't assigned here — use "Move to Dryer" per load from the terminal once washing finishes.
+              </p>
+            </div>
+          )}
+
+          {!isLoadingPhases && !isFullySelected && (
             <div className="flex items-center gap-2 text-slate-400 bg-slate-50 rounded-2xl px-4 py-3">
               <AlertTriangle size={14} className="shrink-0" />
-              <p className="text-[11px] font-medium">Select at least one machine to assign.</p>
+              <p className="text-[11px] font-medium">
+                Select exactly {requiredCount} {targetType.toLowerCase()}{requiredCount > 1 ? 's' : ''} to continue.
+              </p>
             </div>
           )}
         </div>
@@ -181,9 +265,9 @@ const AssignMachineModal = ({ isOpen, booking, availableMachines, onClose, onSuc
           <button
             type="button"
             onClick={handleAssign}
-            disabled={!hasMachineSelected || isSubmitting}
+            disabled={!isFullySelected || isSubmitting || isLoadingPhases}
             className={`flex-[2] py-4 rounded-[24px] font-black text-sm text-white flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg
-              ${!hasMachineSelected || isSubmitting
+              ${!isFullySelected || isSubmitting || isLoadingPhases
                 ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
                 : 'bg-sky-500 hover:bg-sky-600 shadow-sky-200'
               }`}
@@ -191,7 +275,7 @@ const AssignMachineModal = ({ isOpen, booking, availableMachines, onClose, onSuc
             {isSubmitting ? (
               <><Loader2 size={18} className="animate-spin" /> Assigning...</>
             ) : (
-              <><CheckCircle2 size={18} /> Assign Machine</>
+              <><CheckCircle2 size={18} /> Assign {requiredCount > 1 ? `${requiredCount} Machines` : 'Machine'}</>
             )}
           </button>
         </div>

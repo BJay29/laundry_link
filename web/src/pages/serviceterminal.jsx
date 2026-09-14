@@ -16,6 +16,7 @@ import {
 import apiService from '../services/APIservices';
 import BookingModal from '../components/modals/bookingmodal';
 import AssignMachineModal from '../components/modals/assignmachinemodal';
+import MoveToDryerModal from '../components/modals/movetodryermodal';
 import BookingRequestModal from '../components/modals/bookingrequestmodal';
 import { useNotifications } from '../context/notificationcontext';
 import { formatTime, formatCurrency } from '../utils/formatters';
@@ -31,24 +32,69 @@ import { formatTime, formatCurrency } from '../utils/formatters';
  *
  * A booking still CANNOT move to "In Progress" until a machine is
  * assigned. Selecting that option while unassigned shows a blocking
- * message instead of allowing the change.
+ * message instead of allowing the change. In practice, this rarely
+ * fires for NEW bookings anymore — assign_machines_to_booking() on the
+ * backend already flips the booking to "In Progress" the moment
+ * machines are assigned, so this guard mostly protects against staff
+ * manually forcing the dropdown before that's happened.
  *
  * The status dropdown menu is rendered through a React Portal into
  * document.body with `position: fixed`, computed from the trigger
  * button's on-screen coordinates, escaping the table's overflow clipping.
  *
  * MOBILE APP BOOKING REQUESTS:
- * UPDATED — the WebSocket connection and "Awaiting Approval" list used
- * to live directly in this component, meaning the shop only received
- * real-time booking requests while this exact page was mounted. Both
- * now live in NotificationContext (app/layout level, see App.jsx),
- * which stays connected regardless of which page the user is on. This
- * component now just CONSUMES that shared state via useNotifications()
- * — the bell, dropdown, and modal UI are unchanged, only where the data
- * comes from.
+ * The WebSocket connection and "Awaiting Approval" list live in
+ * NotificationContext (app/layout level, see App.jsx), which stays
+ * connected regardless of which page the user is on. This component
+ * just CONSUMES that shared state via useNotifications().
+ *
+ * MACHINE ASSIGNMENT (UPDATED — multi-machine assignment feature):
+ * - `booking.washer_id` / `booking.dryer_id` are now LEGACY — they're
+ *   only ever populated for bookings assigned through the old
+ *   single-machine path (PATCH /{id}/assign-machine, no longer called
+ *   from this file). New bookings carry their machine assignment(s) in
+ *   `booking.machine_assignments`, one row per load (see
+ *   BookingMachineAssignment in models.py).
+ * - `needsMachineAssign()` / `bookingHasMachine()` below check BOTH the
+ *   legacy fields and `machine_assignments`, so old bookings created
+ *   before this feature still render correctly.
+ * - `getMachineDisplay()` renders a per-load breakdown ("Load 1: W2 •
+ *   Load 2: W5") when `machine_assignments` is present, falling back to
+ *   the old single-machine display otherwise.
+ * - A NEW per-load "Move to Dryer" button appears in Operations for any
+ *   load still in the "washing" phase — but only when that booking's
+ *   service is NOT "wash_only" (wash_only loads never get a dryer step;
+ *   see serviceRequiredPhases below, fetched from the shop's service
+ *   catalog since Booking itself doesn't carry required_phases).
+ * - The "Assign" button (opens AssignMachineModal) now handles N
+ *   machines per booking (N = booking.loads), not just one.
+ * - BookingModal itself now chains straight into its OWN
+ *   AssignMachineModal step right after creating a booking — so
+ *   `handleBookingSuccess` below must NOT close the modal; only
+ *   `onClose` (fired once that chained step finishes or is skipped)
+ *   does that. Closing on `onSubmit` would hide the modal before staff
+ *   ever sees the chained assign step.
  */
 
 const STATUS_OPTIONS = ['Pending', 'In Progress', 'Ready', 'Claimed', 'Cancelled'];
+
+// NEW (multi-machine assignment feature) — module-level helpers so they
+// have no dependency on component render order/closures. Both check the
+// LEGACY washer_id/dryer_id fields AND the new machine_assignments list,
+// so bookings from either path are handled correctly.
+
+const needsMachineAssign = (booking) =>
+  booking.status === 'Pending' &&
+  !booking.washer_id &&
+  !booking.dryer_id &&
+  (!booking.machine_assignments || booking.machine_assignments.length === 0);
+
+const bookingHasMachine = (booking) =>
+  Boolean(
+    booking.washer_id ||
+    booking.dryer_id ||
+    (booking.machine_assignments && booking.machine_assignments.length > 0)
+  );
 
 const ServiceTerminal = () => {
   const [bookings, setBookings]               = useState([]);
@@ -57,12 +103,25 @@ const ServiceTerminal = () => {
   const [isModalOpen, setIsModalOpen]         = useState(false);
   const [successMessage, setSuccessMessage]   = useState('');
 
-  // Assign Machine Modal state
+  // Assign Machine Modal state (manual trigger from the table's
+  // "Assign" button — separate from BookingModal's own chained step)
   const [assignModalOpen, setAssignModalOpen]               = useState(false);
   const [selectedBookingForAssign, setSelectedBookingForAssign] = useState(null);
 
+  // NEW (multi-machine assignment feature) — Move to Dryer modal state,
+  // scoped to one specific load of one specific booking.
+  const [moveToDryerModalOpen, setMoveToDryerModalOpen] = useState(false);
+  const [moveToDryerTarget, setMoveToDryerTarget]       = useState(null); // { booking, loadNumber }
+
   // Available machines list (used to decide whether to show Assign button)
   const [availableMachines, setAvailableMachines] = useState([]);
+
+  // NEW (multi-machine assignment feature) — { [serviceName]: required_phases }
+  // lookup, fetched from the shop's service catalog. Booking itself
+  // doesn't carry required_phases, so this is how we know whether a
+  // "washing" load should show a "Move to Dryer" button (skipped for
+  // "wash_only" services).
+  const [serviceRequiredPhases, setServiceRequiredPhases] = useState({});
 
   // Tracks previous busy count to detect when a machine frees up
   const [prevBusyCount, setPrevBusyCount] = useState(null);
@@ -134,9 +193,7 @@ const ServiceTerminal = () => {
 
       if (prevBusyCount !== null && currentBusyCount < prevBusyCount) {
         setBookings(prev => {
-          const hasPending = prev.some(
-            b => b.status === 'Pending' && !b.washer_id && !b.dryer_id
-          );
+          const hasPending = prev.some(needsMachineAssign);
           if (hasPending) {
             showNotification('🔔 Machine now available! Assign it to a pending booking.');
           }
@@ -168,18 +225,34 @@ const ServiceTerminal = () => {
     }
   }, []);
 
+  // ── Load Service Required Phases (NEW — multi-machine assignment feature) ──
+  const loadServiceRequiredPhases = useCallback(async () => {
+    try {
+      const shopId = apiService.getShopId();
+      const serviceTypes = await apiService.getServiceTypes(shopId);
+      const map = {};
+      (serviceTypes || []).forEach((s) => {
+        map[s.name] = s.required_phases || 'full_service';
+      });
+      setServiceRequiredPhases(map);
+    } catch (err) {
+      console.error('Service types fetch error:', err.message);
+    }
+  }, []);
+
   // ── Polling (bookings + machines only — awaiting-approval polling now
   //     lives inside NotificationContext) ─────────────────────────────
   useEffect(() => {
     loadBookings();
     loadAvailableMachines();
+    loadServiceRequiredPhases();
     const bookingInterval = setInterval(() => loadBookings(true), 30000);
     const machineInterval = setInterval(() => loadAvailableMachines(), 15000);
     return () => {
       clearInterval(bookingInterval);
       clearInterval(machineInterval);
     };
-  }, [loadBookings, loadAvailableMachines]);
+  }, [loadBookings, loadAvailableMachines, loadServiceRequiredPhases]);
 
   // ── Status Lifecycle ───────────────────────────────────────────────────────
   const handleStatusUpdate = async (bookingId, newStatus) => {
@@ -212,8 +285,7 @@ const ServiceTerminal = () => {
     closeStatusDropdown();
     if (newStatus === booking.status) return;
 
-    const hasMachine = booking.washer_id || booking.dryer_id;
-    if (newStatus === 'In Progress' && !hasMachine) {
+    if (newStatus === 'In Progress' && !bookingHasMachine(booking)) {
       alert('No machine available yet. Please assign a washer or dryer to this booking first — it will stay Pending as a reservation until then.');
       return;
     }
@@ -248,7 +320,14 @@ const ServiceTerminal = () => {
     setDropdownPosition(null);
   };
 
-  // ── Assign Machine ─────────────────────────────────────────────────────────
+  // ── Shared refresh + toast after any successful machine action ────────────
+  const refreshAfterAssign = (message) => {
+    showNotification(message || '✅ Machine assigned successfully.');
+    loadBookings(true);
+    loadAvailableMachines();
+  };
+
+  // ── Assign Machine (manual trigger from the table's "Assign" button) ──────
   const handleOpenAssignModal = (booking) => {
     setSelectedBookingForAssign(booking);
     setAssignModalOpen(true);
@@ -257,20 +336,50 @@ const ServiceTerminal = () => {
   const handleAssignSuccess = (message) => {
     setAssignModalOpen(false);
     setSelectedBookingForAssign(null);
-    showNotification(message || '✅ Machine assigned successfully.');
-    loadBookings(true);
-    loadAvailableMachines();
+    refreshAfterAssign(message);
+  };
+
+  /**
+   * NEW (multi-machine assignment feature) — success callback for
+   * BookingModal's OWN internal chained AssignMachineModal step.
+   * BookingModal manages closing/resetting itself; this only needs to
+   * refresh the terminal's data and show the toast.
+   */
+  const handleBookingModalAssignSuccess = (message) => {
+    refreshAfterAssign(message);
+  };
+
+  // ── Move to Dryer (NEW — multi-machine assignment feature) ────────────────
+  const handleOpenMoveToDryerModal = (booking, loadNumber) => {
+    setMoveToDryerTarget({ booking, loadNumber });
+    setMoveToDryerModalOpen(true);
+  };
+
+  const handleMoveToDryerClose = () => {
+    setMoveToDryerModalOpen(false);
+    setMoveToDryerTarget(null);
+  };
+
+  const handleMoveToDryerSuccess = (message) => {
+    setMoveToDryerModalOpen(false);
+    setMoveToDryerTarget(null);
+    refreshAfterAssign(message);
   };
 
   // ── Booking Created ────────────────────────────────────────────────────────
+  /**
+   * NEW (multi-machine assignment feature) — BookingModal no longer
+   * closes itself on submit; it stays open and immediately chains into
+   * its own AssignMachineModal step for the booking it just created.
+   * This handler ONLY refreshes data and shows a toast — closing the
+   * modal is entirely BookingModal's own responsibility now (via its
+   * `onClose` prop below, fired once the chained step finishes or is
+   * skipped).
+   */
   const handleBookingSuccess = (newBooking) => {
-    setIsModalOpen(false);
-    const hasMachine = newBooking?.washer_id || newBooking?.dryer_id;
-    if (!hasMachine) {
-      showNotification('🕐 Booking queued as Pending — assign a machine when one is available.');
-    } else {
-      showNotification('✓ New booking registered in queue');
-    }
+    showNotification(
+      `🕐 Booking for ${newBooking?.customer_name || 'the customer'} created — assign machine(s) next.`
+    );
     loadBookings(true);
     loadAvailableMachines();
   };
@@ -319,7 +428,40 @@ const ServiceTerminal = () => {
     }
   };
 
+  /**
+   * UPDATED (multi-machine assignment feature) — renders a per-load
+   * breakdown when `machine_assignments` is present (e.g.
+   * "L1: W2 • L2: W5", switching to "D#" once a load has moved into
+   * drying). Falls back to the old single-machine display for bookings
+   * assigned via the legacy path (no machine_assignments rows at all).
+   */
   const getMachineDisplay = (booking) => {
+    const assignments = booking.machine_assignments || [];
+
+    if (assignments.length > 0) {
+      const sorted = [...assignments].sort((a, b) => a.load_number - b.load_number);
+      return (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          {sorted.map((a) => {
+            const isDrying = a.phase === 'drying' || (a.phase === 'done' && a.dryer_number);
+            const label = isDrying
+              ? (a.dryer_number ? `D${a.dryer_number}` : '—')
+              : (a.washer_number ? `W${a.washer_number}` : (a.dryer_number ? `D${a.dryer_number}` : '—'));
+            return (
+              <span
+                key={a.id}
+                className={`font-black text-[11px] tracking-tighter ${isDrying ? 'text-orange-500' : 'text-sky-600'}`}
+              >
+                {sorted.length > 1 ? `L${a.load_number}: ` : ''}{label}
+              </span>
+            );
+          })}
+        </div>
+      );
+    }
+
+    // LEGACY fallback — bookings assigned via the old single-machine
+    // path (PATCH /{id}/assign-machine), no machine_assignments rows.
     const wNum = booking.washer?.machine_number || booking.washer_number;
     const dNum = booking.dryer?.machine_number  || booking.dryer_number;
     const parts = [];
@@ -351,8 +493,17 @@ const ServiceTerminal = () => {
     );
   };
 
-  const needsMachineAssign = (booking) =>
-    booking.status === 'Pending' && !booking.washer_id && !booking.dryer_id;
+  /**
+   * NEW (multi-machine assignment feature) — loads of this booking that
+   * are still washing AND belong to a service that isn't "wash_only"
+   * (wash_only loads never get a dryer step — see backend
+   * assign_machines_to_booking()/move_load_to_dryer()).
+   */
+  const getMovableToDryerLoads = (booking) => {
+    const requiredPhases = serviceRequiredPhases[booking.service_type] || 'full_service';
+    if (requiredPhases === 'wash_only') return [];
+    return (booking.machine_assignments || []).filter((a) => a.phase === 'washing');
+  };
 
   const pendingUnassignedCount = bookings.filter(needsMachineAssign).length;
 
@@ -528,8 +679,9 @@ const ServiceTerminal = () => {
                   </tr>
                 ) : (
                   bookings.map((booking) => {
-                    const hasMachine = booking.washer_id || booking.dryer_id;
                     const isDropdownOpen = openStatusDropdownId === booking.id;
+                    const movableToDryerLoads = getMovableToDryerLoads(booking);
+                    const totalLoads = booking.machine_assignments?.length > 1;
 
                     return (
                       <tr
@@ -602,15 +754,15 @@ const ServiceTerminal = () => {
 
                         {/* Operations */}
                         <td className="px-8 py-7">
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
                             {needsMachineAssign(booking) && availableMachines.length > 0 && (
                               <button
                                 onClick={() => handleOpenAssignModal(booking)}
                                 className="flex items-center gap-1.5 px-3 py-2.5 bg-amber-500 text-white rounded-xl transition-all shadow-sm shadow-amber-200 hover:bg-amber-600 active:scale-90 text-[10px] font-black uppercase tracking-tight"
-                                title="Assign Machine"
+                                title={`Assign ${booking.loads > 1 ? `${booking.loads} Machines` : 'Machine'}`}
                               >
                                 <Cpu size={13} />
-                                Assign
+                                Assign{booking.loads > 1 ? ` (${booking.loads})` : ''}
                               </button>
                             )}
 
@@ -623,6 +775,22 @@ const ServiceTerminal = () => {
                                 Please Wait
                               </div>
                             )}
+
+                            {/* NEW (multi-machine assignment feature) —
+                                one "Move to Dryer" button per load still
+                                washing, skipped entirely for wash_only
+                                services. */}
+                            {movableToDryerLoads.map((assignment) => (
+                              <button
+                                key={assignment.id}
+                                onClick={() => handleOpenMoveToDryerModal(booking, assignment.load_number)}
+                                className="flex items-center gap-1.5 px-3 py-2.5 bg-orange-500 text-white rounded-xl transition-all shadow-sm shadow-orange-200 hover:bg-orange-600 active:scale-90 text-[10px] font-black uppercase tracking-tight"
+                                title={`Move Load ${assignment.load_number} to Dryer`}
+                              >
+                                <HardDrive size={13} />
+                                {totalLoads ? `L${assignment.load_number}→Dryer` : 'To Dryer'}
+                              </button>
+                            ))}
 
                             {booking.status === 'Ready' && (
                               <button
@@ -660,8 +828,7 @@ const ServiceTerminal = () => {
           >
             {STATUS_OPTIONS.map((option) => {
               const isCurrent = option === openBooking.status;
-              const hasMachine = openBooking.washer_id || openBooking.dryer_id;
-              const isBlockedInProgress = option === 'In Progress' && !hasMachine;
+              const isBlockedInProgress = option === 'In Progress' && !bookingHasMachine(openBooking);
               return (
                 <button
                   key={option}
@@ -691,13 +858,21 @@ const ServiceTerminal = () => {
         document.body
       )}
 
+      {/* NEW (multi-machine assignment feature) — BookingModal now
+          chains straight into its OWN AssignMachineModal step right
+          after a successful creation. onClose (not onSubmit) is what
+          actually closes it, once that chained step finishes/is
+          skipped — see handleBookingSuccess above. */}
       <BookingModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSubmit={handleBookingSuccess}
+        onAssignSuccess={handleBookingModalAssignSuccess}
         actualBookingTime={currentTime}
       />
 
+      {/* Manual "Assign" trigger from the table (for bookings that
+          skipped BookingModal's chained step, or older Pending bookings) */}
       {assignModalOpen && selectedBookingForAssign && (
         <AssignMachineModal
           isOpen={assignModalOpen}
@@ -708,6 +883,18 @@ const ServiceTerminal = () => {
             setSelectedBookingForAssign(null);
           }}
           onSuccess={handleAssignSuccess}
+        />
+      )}
+
+      {/* NEW (multi-machine assignment feature) — per-load Move to Dryer */}
+      {moveToDryerModalOpen && moveToDryerTarget && (
+        <MoveToDryerModal
+          isOpen={moveToDryerModalOpen}
+          booking={moveToDryerTarget.booking}
+          loadNumber={moveToDryerTarget.loadNumber}
+          availableMachines={availableMachines}
+          onClose={handleMoveToDryerClose}
+          onSuccess={handleMoveToDryerSuccess}
         />
       )}
 

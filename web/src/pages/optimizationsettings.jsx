@@ -5,47 +5,14 @@ import apiService from '../services/APIservices';
 /**
  * OPTIMIZATION SETTINGS COMPONENT
  *
- * UPDATED: Each service now also has a duration_minutes field — how long
- * the service actually runs on a machine. This drives machine.remaining_time
- * on the backend, so the Machine Monitoring card reflects the shop's own
- * configured duration instead of a hardcoded estimate.
- *
- * UPDATED: Each service now also has a pricing_unit field ("load", "kg",
- * or "piece") — not every service in a shop is priced the same way (hal.
- * Regular Wash = per load, Wash & Fold = per kg, Comforter = per piece).
- * This is a dropdown alongside Price and Duration in both the Add and
- * Edit forms, and is shown next to the price in the services list
- * ("₱210.00 / load").
- *
- * FIXED (white screen crash): FastAPI validation errors (422) return
- * `detail` as an ARRAY of objects like { type, loc, msg, input }, not a
- * string. Rendering that array directly inside a <p> crashes React
- * ("Objects are not valid as a React child"). formatErrorDetail() below
- * normalizes ANY error shape (string, array, or fallback) into plain
- * text before it ever reaches component state / JSX.
- *
- * UPDATED (UX): Deleting a service no longer uses the native
- * window.confirm() dialog (the "localhost says..." browser popup).
- * It now opens a proper in-app confirmation modal. All success/error
- * feedback for service actions (delete, toggle active, etc.) is now
- * surfaced via a toast notification that slides in from the top-right
- * corner instead of a blocking window.alert().
- *
- * NEW: Three additional sections for the mobile-app booking flow —
- * Delivery Settings (has_delivery toggle + delivery_fee), Add-Ons
- * (fabric softener upgrade, rush, atbp.), and Promo Codes. Same CRUD
- * patterns as the Service Catalog section above.
- *
- * FIXED (services disappearing / add-ons not loading): fetchAll() used
- * to call Promise.all() across 5 endpoints — if ANY ONE of them failed
- * (e.g. /addons/ or /settings/profile not yet deployed on the backend),
- * the ENTIRE Promise.all() rejected, so setServiceTypes() never ran even
- * though the service-types request itself had already succeeded. That's
- * why services appeared to "vanish" after adding one — it wasn't gone,
- * it just never got the chance to render. Switched to Promise.allSettled()
- * so each section's data loads and applies independently — a failing
- * Add-Ons or Promo Codes fetch no longer blocks Services/Settings from
- * showing up.
+ * NEW (multi-machine assignment feature): Each service now also has a
+ * required_phases field ("full_service" | "wash_only" | "dry_only") —
+ * dropdown alongside Pricing Unit and Duration in both Add and Edit
+ * forms. Ginagamit ito ng backend (booking_controller.
+ * assign_machines_to_booking()) para malaman kung washers lang, dryers
+ * lang, o pareho (washers muna, dryers mamaya) ang dapat ipakita sa
+ * AssignMachineModal para sa isang booking na gumagamit ng service na
+ * ito.
  */
 
 const formatErrorDetail = (error, fallback = "Something went wrong.") => {
@@ -73,6 +40,15 @@ const PRICING_UNITS = [
   { value: 'kg', label: 'Kg' },
   { value: 'piece', label: 'Piece' },
 ];
+
+// NEW (multi-machine assignment feature)
+const REQUIRED_PHASES = [
+  { value: 'full_service', label: 'Washer + Dryer' },
+  { value: 'wash_only', label: 'Washer Only' },
+  { value: 'dry_only', label: 'Dryer Only' },
+];
+
+const getPhaseLabel = (phase) => REQUIRED_PHASES.find((p) => p.value === phase)?.label || 'Wash + Dry';
 
 const DISCOUNT_TYPES = [
   { value: 'percent', label: '%' },
@@ -224,11 +200,11 @@ const OptimizationSettings = () => {
     off_peak_hours: ""
   });
   const [serviceTypes, setServiceTypes] = useState([]);
-  const [newService, setNewService] = useState({ name: '', price: '', duration_minutes: '45', pricing_unit: 'load' });
+  const [newService, setNewService] = useState({ name: '', price: '', duration_minutes: '45', pricing_unit: 'load', required_phases: 'full_service' });
   const [isAddingService, setIsAddingService] = useState(false);
   const [serviceError, setServiceError] = useState('');
   const [editingServiceId, setEditingServiceId] = useState(null);
-  const [editValues, setEditValues] = useState({ name: '', price: '', duration_minutes: '', pricing_unit: 'load' });
+  const [editValues, setEditValues] = useState({ name: '', price: '', duration_minutes: '', pricing_unit: 'load', required_phases: 'full_service' });
   const [busyServiceId, setBusyServiceId] = useState(null);
 
   // Delivery settings state
@@ -248,7 +224,7 @@ const OptimizationSettings = () => {
 
   // Promo Codes state
   const [promoCodes, setPromoCodes] = useState([]);
-  const [newPromo, setNewPromo] = useState({ code: '', discount_type: 'percent', discount_value: '', max_uses: '' });
+  const [newPromo, setNewPromo] = useState({ discount_type: 'percent', discount_value: '', max_uses: '' });
   const [isAddingPromo, setIsAddingPromo] = useState(false);
   const [promoError, setPromoError] = useState('');
   const [busyPromoId, setBusyPromoId] = useState(null);
@@ -288,11 +264,6 @@ const OptimizationSettings = () => {
     toastTimers.current[id] = setTimeout(() => dismissToast(id), duration);
   }, [dismissToast]);
 
-  /**
-   * FIXED — see the top-of-file note. Promise.allSettled() instead of
-   * Promise.all() so each section's fetch/apply is independent; one
-   * failing endpoint no longer prevents the others from rendering.
-   */
   const fetchAll = async () => {
     try {
       setIsLoading(true);
@@ -412,6 +383,7 @@ const OptimizationSettings = () => {
     const price = parseFloat(newService.price);
     const duration_minutes = parseInt(newService.duration_minutes);
     const pricing_unit = newService.pricing_unit;
+    const required_phases = newService.required_phases;
 
     if (!name) {
       setServiceError("Service name is required.");
@@ -428,9 +400,9 @@ const OptimizationSettings = () => {
 
     try {
       setIsAddingService(true);
-      const created = await apiService.addServiceType({ name, price, duration_minutes, pricing_unit, is_active: true }, shopId);
+      const created = await apiService.addServiceType({ name, price, duration_minutes, pricing_unit, required_phases, is_active: true }, shopId);
       setServiceTypes(prev => [...prev, created]);
-      setNewService({ name: '', price: '', duration_minutes: '45', pricing_unit: 'load' });
+      setNewService({ name: '', price: '', duration_minutes: '45', pricing_unit: 'load', required_phases: 'full_service' });
       showToast({ type: 'success', title: 'Service Added', message: `"${name}" is now available for bookings.` });
     } catch (error) {
       setServiceError(formatErrorDetail(error, "Failed to add service."));
@@ -445,13 +417,14 @@ const OptimizationSettings = () => {
       name: service.name,
       price: String(service.price),
       duration_minutes: String(service.duration_minutes || 45),
-      pricing_unit: service.pricing_unit || 'load'
+      pricing_unit: service.pricing_unit || 'load',
+      required_phases: service.required_phases || 'full_service'
     });
   };
 
   const cancelEditing = () => {
     setEditingServiceId(null);
-    setEditValues({ name: '', price: '', duration_minutes: '', pricing_unit: 'load' });
+    setEditValues({ name: '', price: '', duration_minutes: '', pricing_unit: 'load', required_phases: 'full_service' });
   };
 
   const saveEditing = async (service) => {
@@ -459,6 +432,7 @@ const OptimizationSettings = () => {
     const price = parseFloat(editValues.price);
     const duration_minutes = parseInt(editValues.duration_minutes);
     const pricing_unit = editValues.pricing_unit;
+    const required_phases = editValues.required_phases;
 
     if (!name) {
       showToast({ type: 'error', message: 'Service name cannot be empty.' });
@@ -475,7 +449,7 @@ const OptimizationSettings = () => {
 
     try {
       setBusyServiceId(service.id);
-      const updated = await apiService.updateServiceType(service.id, { name, price, duration_minutes, pricing_unit }, shopId);
+      const updated = await apiService.updateServiceType(service.id, { name, price, duration_minutes, pricing_unit, required_phases }, shopId);
       setServiceTypes(prev => prev.map(s => s.id === service.id ? updated : s));
       cancelEditing();
       showToast({ type: 'success', title: 'Service Updated', message: `"${name}" has been saved.` });
@@ -686,14 +660,9 @@ const OptimizationSettings = () => {
     e.preventDefault();
     setPromoError('');
 
-    const code = newPromo.code.trim();
     const discount_value = parseFloat(newPromo.discount_value);
     const max_uses = newPromo.max_uses ? parseInt(newPromo.max_uses) : null;
 
-    if (!code) {
-      setPromoError('Promo code is required.');
-      return;
-    }
     if (isNaN(discount_value) || discount_value <= 0) {
       setPromoError('Please enter a valid discount value.');
       return;
@@ -702,15 +671,19 @@ const OptimizationSettings = () => {
     try {
       setIsAddingPromo(true);
       const created = await apiService.addPromoCode({
-        code,
         discount_type: newPromo.discount_type,
         discount_value,
         max_uses,
         is_active: true,
       });
       setPromoCodes(prev => [created, ...prev]);
-      setNewPromo({ code: '', discount_type: 'percent', discount_value: '', max_uses: '' });
-      showToast({ type: 'success', title: 'Promo Code Added', message: `"${created.code}" is now active.` });
+      setNewPromo({ discount_type: 'percent', discount_value: '', max_uses: '' });
+      showToast({
+        type: 'success',
+        title: 'Promo Code Generated',
+        message: `Your new code is "${created.code}" — share this with customers.`,
+        duration: 6000,
+      });
     } catch (error) {
       setPromoError(formatErrorDetail(error, 'Failed to add promo code.'));
     } finally {
@@ -861,6 +834,16 @@ const OptimizationSettings = () => {
                             <option key={u.value} value={u.value}>{u.label}</option>
                           ))}
                         </select>
+                        {/* NEW — Required Phases dropdown (edit row) */}
+                        <select
+                          value={editValues.required_phases}
+                          onChange={(e) => setEditValues(prev => ({ ...prev, required_phases: e.target.value }))}
+                          className="w-36 bg-slate-50 border-2 border-sky-200 rounded-xl px-3 py-2 font-bold text-slate-700 outline-none cursor-pointer"
+                        >
+                          {REQUIRED_PHASES.map((p) => (
+                            <option key={p.value} value={p.value}>{p.label}</option>
+                          ))}
+                        </select>
                         <div className="relative w-32">
                           <input
                             type="number"
@@ -897,6 +880,10 @@ const OptimizationSettings = () => {
                             <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Inactive</span>
                           )}
                         </div>
+                        {/* NEW — Required Phases badge (read view) */}
+                        <span className="inline-flex items-center font-black text-[10px] uppercase tracking-tight px-2.5 py-1 rounded-lg bg-violet-50 text-violet-500">
+                          {getPhaseLabel(service.required_phases)}
+                        </span>
                         <span className={`inline-flex items-center gap-1 font-black text-[10px] uppercase tracking-tight px-2.5 py-1 rounded-lg ${service.is_active ? 'bg-indigo-50 text-indigo-500' : 'bg-slate-100 text-slate-300'}`}>
                           <Clock size={11} />
                           {service.duration_minutes || 45} min
@@ -939,8 +926,8 @@ const OptimizationSettings = () => {
           )}
 
           {/* ADD NEW SERVICE FORM */}
-          <form onSubmit={handleAddService} className="flex flex-col sm:flex-row items-stretch sm:items-end gap-4">
-            <div className="flex-1 space-y-2">
+          <form onSubmit={handleAddService} className="flex flex-col sm:flex-row items-stretch sm:items-end gap-4 flex-wrap">
+            <div className="flex-1 space-y-2 min-w-[180px]">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Service Name</label>
               <input
                 value={newService.name}
@@ -968,6 +955,19 @@ const OptimizationSettings = () => {
               >
                 {PRICING_UNITS.map((u) => (
                   <option key={u.value} value={u.value}>{u.label}</option>
+                ))}
+              </select>
+            </div>
+            {/* NEW — Required Phases dropdown (Add Service form) */}
+            <div className="w-full sm:w-44 space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Required Phases</label>
+              <select
+                value={newService.required_phases}
+                onChange={(e) => setNewService(prev => ({ ...prev, required_phases: e.target.value }))}
+                className="w-full bg-slate-50/50 border-2 border-slate-100 rounded-2xl px-6 py-4 font-bold text-slate-700 focus:ring-4 ring-violet-50 focus:border-violet-200 outline-none transition-all cursor-pointer"
+              >
+                {REQUIRED_PHASES.map((p) => (
+                  <option key={p.value} value={p.value}>{p.label}</option>
                 ))}
               </select>
             </div>
@@ -1194,13 +1194,13 @@ const OptimizationSettings = () => {
             <h3 className="text-xl font-black text-slate-800 tracking-tight">Promo Codes</h3>
           </div>
           <p className="text-sm text-slate-400 mb-8 font-bold italic">
-            Discount codes customers can enter in the mobile app at checkout. Leave "Max Uses" blank for unlimited.
+            Set a discount type and value below — a unique code is generated automatically for you to share with customers. Leave "Max Uses" blank for unlimited.
           </p>
 
           {promoCodes.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 px-6 text-center bg-slate-50/50 rounded-[32px] border-2 border-dashed border-slate-200 mb-8">
               <PackageOpen size={28} className="text-slate-300 mb-3" />
-              <p className="text-slate-400 text-xs max-w-sm">No promo codes yet — add one below (e.g. "WELCOME10" — 10% off).</p>
+              <p className="text-slate-400 text-xs max-w-sm">No promo codes yet — set up a discount below and we'll generate a code for you.</p>
             </div>
           ) : (
             <div className="mb-8 divide-y divide-slate-100 border-2 border-slate-100 rounded-[32px] overflow-hidden">
@@ -1243,16 +1243,7 @@ const OptimizationSettings = () => {
           )}
 
           <form onSubmit={handleAddPromo} className="flex flex-col sm:flex-row items-stretch sm:items-end gap-4">
-            <div className="flex-1 space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Code</label>
-              <input
-                value={newPromo.code}
-                onChange={(e) => setNewPromo(prev => ({ ...prev, code: e.target.value.toUpperCase() }))}
-                placeholder="e.g. WELCOME10"
-                className="w-full bg-slate-50/50 border-2 border-slate-100 rounded-2xl px-6 py-4 font-bold text-slate-700 focus:ring-4 ring-rose-50 focus:border-rose-200 outline-none transition-all"
-              />
-            </div>
-            <div className="w-full sm:w-28 space-y-2">
+            <div className="w-full sm:w-32 space-y-2">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Type</label>
               <select
                 value={newPromo.discount_type}
@@ -1264,8 +1255,8 @@ const OptimizationSettings = () => {
                 ))}
               </select>
             </div>
-            <div className="w-full sm:w-32 space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Value</label>
+            <div className="flex-1 sm:w-40 space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Discount Value</label>
               <input
                 type="number"
                 value={newPromo.discount_value}
@@ -1274,7 +1265,7 @@ const OptimizationSettings = () => {
                 className="w-full bg-slate-50/50 border-2 border-slate-100 rounded-2xl px-6 py-4 font-bold text-slate-700 focus:ring-4 ring-rose-50 focus:border-rose-200 outline-none transition-all"
               />
             </div>
-            <div className="w-full sm:w-32 space-y-2">
+            <div className="w-full sm:w-40 space-y-2">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Max Uses</label>
               <input
                 type="number"
@@ -1290,7 +1281,7 @@ const OptimizationSettings = () => {
               className="bg-rose-600 hover:bg-rose-500 text-white px-8 py-4 rounded-2xl font-black shadow-lg shadow-rose-100 transition-all active:scale-95 disabled:opacity-60 flex items-center justify-center gap-2 whitespace-nowrap"
             >
               {isAddingPromo ? <Loader2 size={18} className="animate-spin" /> : <Plus size={18} strokeWidth={3} />}
-              Add
+              Generate Code
             </button>
           </form>
           {promoError && (
