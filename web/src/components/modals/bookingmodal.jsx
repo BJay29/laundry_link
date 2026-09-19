@@ -1,130 +1,78 @@
 import React, { useState, useEffect } from 'react';
-import { X, User, Weight, Settings2, CheckCircle2, Hash, Calculator, Edit3, Cpu, Loader2, AlertTriangle, Ban, Droplets } from 'lucide-react';
+import { X, User, Weight, Settings2, CheckCircle2, Hash, Calculator, Edit3, Cpu, HardDrive, Loader2, AlertTriangle, Ban, Droplets, ArrowRight, Receipt, Tag, Calendar, Wallet } from 'lucide-react';
 import apiService from '../../services/APIservices';
 import { optimizationLogic } from '../../utils/optimizationlogic';
-import AssignMachineModal from './assignmachinemodal';
+
+const PAYMENT_METHODS = [
+  { value: 'cash', label: 'Cash' },
+  { value: 'gcash', label: 'GCash' },
+  { value: 'paymaya', label: 'PayMaya' },
+];
 
 /**
  * BOOKING MODAL COMPONENT
- * Handles new laundry order creation with Smart Calculation and Manual Override modes.
  *
- * Service Type is fully dynamic, fetched from Optimization Settings via
- * apiService.getBookingPricing(). If the shop hasn't configured any
- * services yet, the Service Type dropdown is empty and submission is
- * blocked with a message pointing to Optimization Settings.
+ * FLOW (three internal steps):
+ *   'form'    — customer/service/weight/inventory/payment/promo
+ *               details. Every booking created here is always
+ *               "Pending" (no washer_id/dryer_id sent) — no inline
+ *               machine picker.
+ *   'assign'  — shown right after successful creation. Fetches the
+ *               correct machine type (Washer or Dryer) from the
+ *               selected service's required_phases, lets staff pick
+ *               exactly `booking.loads` machines of that ONE type, or
+ *               skip and assign later from the Service Terminal.
+ *   'receipt' — NEW. Shown after the assign step finishes (assigned OR
+ *               skipped) — a printable-style summary of what was just
+ *               booked: customer, service, weight/loads, price,
+ *               discount (if a promo was applied), payment method,
+ *               assigned machine(s) (if any), and the booking
+ *               timestamp. A single "Done" button here is what
+ *               actually closes the whole modal and resets state.
  *
- * Weight (kg) defaults to whatever minimum_weight_kg is configured in
- * Optimization Settings (falls back to 6kg if unset), and this is
- * enforced as a HARD LIMIT — the field carries a native `min` attribute
- * and submission is blocked (not just flagged) if the value goes below
- * it, matching the same limit the backend enforces in
- * booking_controller.create_booking().
+ * onSubmit fires right after the booking is created (Pending, no
+ * machines yet) — the parent uses this to refresh its booking list and
+ * show a toast, but must NOT close the modal from this callback (the
+ * assign + receipt steps still need to show). onAssignSuccess fires
+ * after a successful machine assignment in the 'assign' step, for the
+ * parent's own toast/refresh. onClose is the ONLY thing that actually
+ * hides the modal — fired once the receipt step's "Done" button is
+ * pressed.
  *
- * MACHINE ASSIGNMENT (UPDATED — multi-machine assignment feature):
- * - Every booking created here is ALWAYS "Pending", with NO machine
- *   assigned at creation time — regardless of load count. The inline
- *   single-washer/single-dryer picker that used to live in this modal
- *   has been REMOVED.
- * - Why: the backend's BookingCreate schema only ever supported ONE
- *   washer_id + ONE dryer_id (legacy path), and that legacy path does
- *   NOT check the service's required_phases — it would happily let you
- *   attach a washer to a "Dry Clean only" booking. The new
- *   POST /bookings/{id}/assign-machines endpoint (used by
- *   AssignMachineModal) is the one that correctly resolves washer vs.
- *   dryer from ServiceType.required_phases, and it also handles N
- *   machines at once (one per load). So ALL machine assignment — even
- *   for a single-load booking — now happens as a separate step, right
- *   after creation, via AssignMachineModal.
- * - This also removes the need to fetch machine data in this modal
- *   up front; machine data is only fetched on-demand, right after a
- *   booking is successfully created (see "CHAINED ASSIGN STEP" below).
- *
- * CHAINED ASSIGN STEP (NEW):
- * - Right after a booking is created, instead of just closing, this
- *   modal swaps straight into rendering <AssignMachineModal> for the
- *   booking that was just made — so the staff flow still feels like
- *   one continuous action, even though it's two backend calls
- *   (POST /bookings/ then POST /bookings/{id}/assign-machines).
- * - `onSubmit(response)` is still called immediately once the booking
- *   exists (so the parent's booking list updates right away, showing
- *   it as Pending), but `onClose()` is deferred until the chained
- *   Assign step is either completed or skipped ("Cancel" in
- *   AssignMachineModal just skips it — the booking stays Pending and
- *   can be assigned later from the terminal, same as before).
- * - Assumes the parent only uses `onClose` to actually unmount/hide
- *   this modal (not `onSubmit`) — if the parent closes the modal on
- *   `onSubmit` too, the chained Assign step would never be visible.
- *
- * INVENTORY (MULTI-ITEM):
- * - Shop's inventory items are fetched and shown as a checklist.
- * - Selecting an item auto-suggests a quantity = calculatedLoads × usage_rate
- *   (usage_rate is PER LOAD, not per day — see inventory_controller.py).
- * - The suggested quantity is editable — staff can override it manually.
- * - Once manually edited, that item's quantity is no longer auto-recalculated
- *   when loads changes (same "touched" pattern as the Weight field).
- * - A warning banner appears (non-blocking) if the deduction would push
- *   an item's stock into LOW or CRITICAL, or if it would exceed available
- *   stock entirely (blocking, since the backend would reject it anyway).
- * - On submit, selected items are sent as inventory_items: [{ inventory_item_id,
- *   quantity_used }], matching the backend's multi-item BookingCreate schema.
- *
- * PRICING UNIT:
- * - servicePricing (from getBookingPricing) is a flat { name: price } map
- *   with no unit info — that endpoint predates pricing_unit. To show
- *   "₱65.00 / load" in the Service Type dropdown, we ALSO fetch
- *   getServiceTypes() (which does carry pricing_unit) and build a
- *   serviceUnits lookup { name: pricing_unit }. Falls back to "load" for
- *   any name not found (shouldn't normally happen, but keeps the dropdown
- *   from crashing if the two lists are ever briefly out of sync).
+ * BUG FIX (Rules of Hooks violation — this was the actual cause of the
+ * receipt step "not showing"): a `useEffect` used to live AFTER the
+ * `if (!isOpen) return null;` early return. That meant this component
+ * called a DIFFERENT NUMBER of hooks depending on whether `isOpen` was
+ * true or false — a hard violation of React's Rules of Hooks. The
+ * moment `isOpen` flips from false→true (opening the modal), React
+ * detects the mismatched hook count and throws/corrupts internal hook
+ * state, which can silently break subsequent state updates (like
+ * `setStep('receipt')` never visibly taking effect) even though the
+ * business logic itself was correct. FIX: that `useEffect` (and the
+ * `assignRequiredPhases` value it depends on) is now computed ABOVE
+ * the early return, alongside the other effects, so the SAME number of
+ * hooks runs on every render regardless of `isOpen`.
  */
 const BookingModal = ({ isOpen, onClose, onSubmit, onAssignSuccess, actualBookingTime }) => {
+  const [step, setStep] = useState('form'); // 'form' | 'assign' | 'receipt'
+
   const [bookingMode, setBookingMode] = useState('smart');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingSettings, setIsLoadingSettings] = useState(false);
+  const [machineData, setMachineData] = useState([]);
 
-  // --- CHAINED ASSIGN STEP STATE (NEW) ---
-  // Holds the booking just returned by createBooking() while the
-  // chained AssignMachineModal step is showing. Non-null = we're in
-  // the assign step, not the create-booking form.
-  const [createdBooking, setCreatedBooking] = useState(null);
-  const [chainAvailableMachines, setChainAvailableMachines] = useState([]);
-  const [isLoadingChainMachines, setIsLoadingChainMachines] = useState(false);
-
-  // --- PROMO CODE STATE (NEW) ---
-  // Full list of the shop's promo codes (active and inactive), fetched
-  // once when the modal opens, so the code typed by staff can be
-  // validated and previewed client-side. The backend is still the
-  // authoritative source of truth — it re-validates and re-computes the
-  // discount itself in create_booking(), so this preview can never be
-  // used to under-pay.
-  const [availablePromoCodes, setAvailablePromoCodes] = useState([]);
-  const [promoCodeInput, setPromoCodeInput] = useState('');
-
-  // --- PAYMENT METHOD STATE (NEW) ---
-  const [paymentMethod, setPaymentMethod] = useState('cash');
-
-  // Dynamic Pricing State (Fetched from Backend)
-  // Shape: { [serviceName]: price, detergent_fee: number, minimum_weight_kg: number }
   const [servicePricing, setServicePricing] = useState({});
-
-  // { [serviceName]: pricing_unit } lookup, built from getServiceTypes()
-  // since getBookingPricing() itself doesn't carry pricing_unit.
   const [serviceUnits, setServiceUnits] = useState({});
+  const [serviceRequiredPhases, setServiceRequiredPhases] = useState({});
 
-  // Tracks whether the person has manually edited the weight field yet.
-  // Prevents the auto-filled minimum from overwriting their input once
-  // they've started typing their own value.
   const [weightTouched, setWeightTouched] = useState(false);
 
-  // --- INVENTORY STATE ---
-  // Full list of inventory items for this shop, used to render the checklist.
   const [inventoryData, setInventoryData] = useState([]);
-  // Map of { [inventoryItemId]: quantityUsed } — only contains SELECTED items.
   const [selectedInventory, setSelectedInventory] = useState({});
-  // Set of item IDs whose quantity was manually edited by the person —
-  // these stop being auto-recalculated when calculatedLoads changes,
-  // same pattern as weightTouched above.
   const [touchedInventory, setTouchedInventory] = useState({});
+
+  const [paymentMethod, setPaymentMethod] = useState('cash');
+  const [promoCodeInput, setPromoCodeInput] = useState('');
 
   const [formData, setFormData] = useState({
     customerName: '',
@@ -135,13 +83,26 @@ const BookingModal = ({ isOpen, onClose, onSubmit, onAssignSuccess, actualBookin
     totalPrice: 0
   });
 
-  // Business Logic: Weight limits per load based on item category
+  // --- ASSIGN STEP STATE ---
+  const [createdBooking, setCreatedBooking] = useState(null);
+  const [assignMachines, setAssignMachines] = useState([]);
+  const [selectedAssignIds, setSelectedAssignIds] = useState([]);
+  const [isLoadingAssignData, setIsLoadingAssignData] = useState(false);
+  const [isAssigning, setIsAssigning] = useState(false);
+  const [assignServiceNotFound, setAssignServiceNotFound] = useState(false);
+
+  // NEW — remembers which machines were actually assigned (or that the
+  // step was skipped), purely for the receipt step's display. Reset
+  // whenever the modal closes.
+  const [assignedMachineLabels, setAssignedMachineLabels] = useState([]);
+
   const CAPACITY = {
     CLOTHES_MAX: 6,
     LINENS_MAX: 4
   };
 
-  // Derived: list of actual service names the shop has configured
+  const normalizeName = (s) => (s || '').trim().toLowerCase();
+
   const serviceNames = Object.keys(servicePricing).filter(
     (key) => key !== 'detergent_fee' && key !== 'minimum_weight_kg'
   );
@@ -149,61 +110,6 @@ const BookingModal = ({ isOpen, onClose, onSubmit, onAssignSuccess, actualBookin
   const hasConfiguredServices = serviceNames.length > 0;
   const isBelowMinimumWeight = Number(formData.weight) < minimumWeightKg;
 
-  /**
-   * NEW (promo code) — client-side preview only. Mirrors the same
-   * checks _apply_promo_code() runs on the backend (active, not
-   * expired, under max_uses) so staff sees the discount before
-   * submitting — but the backend re-validates and re-computes this
-   * independently in create_booking(), so a stale/tampered preview
-   * here can never result in an under-charged booking.
-   */
-  const matchedPromo = promoCodeInput.trim()
-    ? availablePromoCodes.find(
-        (p) => p.code.toUpperCase() === promoCodeInput.trim().toUpperCase()
-      )
-    : null;
-
-  const promoValidationError = (() => {
-    if (!promoCodeInput.trim()) return '';
-    if (!matchedPromo) return 'Promo code not found.';
-    if (!matchedPromo.is_active) return 'This promo code is no longer active.';
-    if (matchedPromo.expires_at && new Date(matchedPromo.expires_at) < new Date()) {
-      return 'This promo code has expired.';
-    }
-    if (matchedPromo.max_uses !== null && matchedPromo.max_uses !== undefined
-        && matchedPromo.times_used >= matchedPromo.max_uses) {
-      return 'This promo code has reached its usage limit.';
-    }
-    return '';
-  })();
-
-  const isPromoValid = Boolean(matchedPromo) && !promoValidationError;
-
-  const promoPreviewDiscount = isPromoValid
-    ? Math.round(
-        Math.min(
-          matchedPromo.discount_type === 'percent'
-            ? formData.totalPrice * (matchedPromo.discount_value / 100)
-            : matchedPromo.discount_value,
-          formData.totalPrice
-        ) * 100
-      ) / 100
-    : 0;
-
-  const promoPreviewTotal = Math.max(0, Math.round((formData.totalPrice - promoPreviewDiscount) * 100) / 100);
-
-  const PAYMENT_METHODS = [
-    { value: 'cash', label: 'Cash' },
-    { value: 'gcash', label: 'GCash' },
-    { value: 'paymaya', label: 'PayMaya' },
-  ];
-
-  /**
-   * INVENTORY HELPER: mirrors classify_stock_status() in
-   * inventory_controller.py — CRITICAL at <=50% of reorder_point, LOW at
-   * <=100%, otherwise OK. Kept in sync manually since this is client-side
-   * only for warning display; the backend remains the source of truth.
-   */
   const classifyProjectedStock = (projectedStock, reorderPoint) => {
     if (!reorderPoint || reorderPoint <= 0) return 'OK';
     if (projectedStock <= reorderPoint * 0.5) return 'CRITICAL';
@@ -211,16 +117,6 @@ const BookingModal = ({ isOpen, onClose, onSubmit, onAssignSuccess, actualBookin
     return 'OK';
   };
 
-  /**
-   * SYNC: Fetch dynamic service pricing, service types (for pricing_unit),
-   * and inventory items from the backend. Also pre-fills the Weight field
-   * with the shop's configured minimum, unless the person has already
-   * started editing it.
-   *
-   * NOTE (multi-machine assignment feature): machine data is NO LONGER
-   * fetched here — this modal never assigns machines anymore, so there's
-   * nothing here that needs it.
-   */
   useEffect(() => {
     if (isOpen) {
       const fetchData = async () => {
@@ -228,24 +124,25 @@ const BookingModal = ({ isOpen, onClose, onSubmit, onAssignSuccess, actualBookin
           setIsLoadingSettings(true);
           const shopId = apiService.getShopId();
 
-          const [pricing, inventory, serviceTypeList, promoCodeList] = await Promise.all([
+          const [machines, pricing, inventory, serviceTypeList] = await Promise.all([
+            apiService.getMachines(shopId),
             apiService.getBookingPricing(shopId),
             apiService.getInventory(shopId),
-            apiService.getServiceTypes(shopId),
-            apiService.getPromoCodes()
+            apiService.getServiceTypes(shopId)
           ]);
 
+          setMachineData(machines || []);
           setServicePricing(pricing || {});
           setInventoryData(inventory || []);
-          setAvailablePromoCodes(promoCodeList || []);
 
-          // Build { name: pricing_unit } lookup from the full service
-          // type list, since getBookingPricing() doesn't carry it.
           const unitsMap = {};
+          const phasesMap = {};
           (serviceTypeList || []).forEach((s) => {
             unitsMap[s.name] = s.pricing_unit || 'load';
+            phasesMap[normalizeName(s.name)] = s.required_phases || 'full_service';
           });
           setServiceUnits(unitsMap);
+          setServiceRequiredPhases(phasesMap);
 
           const names = Object.keys(pricing || {}).filter(
             (key) => key !== 'detergent_fee' && key !== 'minimum_weight_kg'
@@ -265,23 +162,20 @@ const BookingModal = ({ isOpen, onClose, onSubmit, onAssignSuccess, actualBookin
       };
       fetchData();
     } else {
-      // Reset so the next time the modal opens, it pre-fills the
-      // configured minimum weight fresh again.
+      setStep('form');
       setWeightTouched(false);
       setSelectedInventory({});
       setTouchedInventory({});
-      // NEW — also clear any in-progress chained Assign step, in case
-      // the parent force-closes this modal from outside mid-chain.
-      setCreatedBooking(null);
-      setChainAvailableMachines([]);
-      setPromoCodeInput('');
       setPaymentMethod('cash');
+      setPromoCodeInput('');
+      setCreatedBooking(null);
+      setAssignMachines([]);
+      setSelectedAssignIds([]);
+      setAssignServiceNotFound(false);
+      setAssignedMachineLabels([]);
     }
   }, [isOpen]);
 
-  /**
-   * LOGIC: Auto-calculate pricing and load count.
-   */
   useEffect(() => {
     if (bookingMode === 'manual' || isLoadingSettings) return;
     if (!formData.serviceType) {
@@ -311,7 +205,6 @@ const BookingModal = ({ isOpen, onClose, onSubmit, onAssignSuccess, actualBookin
       loads = 1;
     }
     else {
-      // Generic fallback for any custom service name the owner configured
       loads = Math.ceil(Number(formData.weight) / 8) || 1;
       base = unitPrice * loads;
     }
@@ -323,16 +216,11 @@ const BookingModal = ({ isOpen, onClose, onSubmit, onAssignSuccess, actualBookin
     }));
   }, [bookingMode, formData.serviceType, formData.itemType, formData.weight, servicePricing, isLoadingSettings]);
 
-  /**
-   * INVENTORY: recalculate suggested quantities whenever calculatedLoads
-   * changes, but ONLY for items the person hasn't manually edited yet
-   * (same "touched" pattern used for the Weight field above).
-   */
   useEffect(() => {
     setSelectedInventory(prev => {
       const updated = { ...prev };
       Object.keys(updated).forEach((itemId) => {
-        if (touchedInventory[itemId]) return; // respect manual override
+        if (touchedInventory[itemId]) return;
         const item = inventoryData.find(i => String(i.id) === String(itemId));
         if (!item) return;
         const suggested = Math.round((formData.calculatedLoads * (item.usage_rate || 0)) * 100) / 100;
@@ -344,112 +232,24 @@ const BookingModal = ({ isOpen, onClose, onSubmit, onAssignSuccess, actualBookin
   }, [formData.calculatedLoads, inventoryData]);
 
   /**
-   * NEW (chained Assign step) — fetches currently-available machines
-   * and switches this modal into rendering <AssignMachineModal> for the
-   * booking that was just created. `booking.loads` (already on the
-   * response) tells AssignMachineModal how many machines to require.
-   *
-   * NOTE: these four helpers must stay ABOVE the early-return /
-   * chained-render block right below — that block calls
-   * handleAssignSkip/handleAssignSuccess during render, and `const`
-   * declarations are not accessible before their own line runs
-   * ("temporal dead zone"). Defining them here, before that block,
-   * avoids a "Cannot access before initialization" crash.
+   * NEW LOCATION (BUG FIX) — this value + its useEffect used to live
+   * AFTER `if (!isOpen) return null;` below, which meant this
+   * component called a different number of hooks depending on isOpen.
+   * Both now live here, alongside the other effects, so the hook count
+   * is identical on every render.
    */
-  const openAssignStepFor = async (booking) => {
-    setCreatedBooking(booking);
-    try {
-      setIsLoadingChainMachines(true);
-      const shopId = apiService.getShopId();
-      const machines = await apiService.getMachines(shopId);
-      const available = (machines || []).filter((m) => {
-        const s = m.status?.toLowerCase();
-        return s === 'available' || s === 'idle' || s === 'ready';
-      });
-      setChainAvailableMachines(available);
-    } catch (error) {
-      console.error('Error fetching machines for the Assign step:', error);
-      setChainAvailableMachines([]);
-    } finally {
-      setIsLoadingChainMachines(false);
+  const assignRequiredPhases = createdBooking
+    ? (serviceRequiredPhases[normalizeName(createdBooking.service_type)] ?? null)
+    : null;
+
+  useEffect(() => {
+    if (step === 'assign' && createdBooking && assignRequiredPhases === null) {
+      setAssignServiceNotFound(true);
     }
-  };
+  }, [step, createdBooking, assignRequiredPhases]);
 
-  /**
-   * NEW (chained Assign step) — resets the whole modal (create-booking
-   * form fields AND the assign-step state) and calls the parent's
-   * onClose(). Shared by both "skip" and "assigned successfully" exits.
-   */
-  const finishAndClose = () => {
-    setCreatedBooking(null);
-    setChainAvailableMachines([]);
-    onClose();
+  if (!isOpen) return null;
 
-    setWeightTouched(false);
-    setSelectedInventory({});
-    setTouchedInventory({});
-    setPromoCodeInput('');
-    setPaymentMethod('cash');
-    setFormData({
-      customerName: '',
-      serviceType: serviceNames[0] || '',
-      itemType: 'Clothes',
-      weight: minimumWeightKg,
-      calculatedLoads: 1,
-      totalPrice: 0
-    });
-  };
-
-  /**
-   * NEW (chained Assign step) — "Cancel" inside the chained
-   * AssignMachineModal. The booking stays Pending (already created)
-   * and can still be assigned later from the Service Terminal.
-   */
-  const handleAssignSkip = () => {
-    finishAndClose();
-  };
-
-  /**
-   * NEW (chained Assign step) — machines were assigned successfully.
-   * Bubbles the confirmation message up to the parent (e.g. for a
-   * toast) if it wants one, then closes out the whole flow.
-   */
-  const handleAssignSuccess = (message) => {
-    if (onAssignSuccess) onAssignSuccess(message);
-    finishAndClose();
-  };
-
-  if (!isOpen && !createdBooking) return null;
-
-  // NEW (chained Assign step) — a booking was just created; briefly show
-  // a loading state while fetching current machine availability, then
-  // render AssignMachineModal for it instead of the create-booking form.
-  if (createdBooking && isLoadingChainMachines) {
-    return (
-      <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4">
-        <div className="bg-white rounded-[32px] px-10 py-8 flex items-center gap-3 text-sky-500 font-bold">
-          <Loader2 className="animate-spin" size={20} />
-          <span>Loading available machines...</span>
-        </div>
-      </div>
-    );
-  }
-
-  if (createdBooking) {
-    return (
-      <AssignMachineModal
-        isOpen={true}
-        booking={createdBooking}
-        availableMachines={chainAvailableMachines}
-        onClose={handleAssignSkip}
-        onSuccess={handleAssignSuccess}
-      />
-    );
-  }
-
-  // INVENTORY: does any selected item exceed available stock? This would
-  // be rejected by the backend anyway, so it's treated as a hard block
-  // rather than just a warning.
   const insufficientStockItem = Object.entries(selectedInventory).find(([itemId, qty]) => {
     const item = inventoryData.find(i => String(i.id) === String(itemId));
     if (!item) return false;
@@ -457,32 +257,19 @@ const BookingModal = ({ isOpen, onClose, onSubmit, onAssignSuccess, actualBookin
   });
   const isBlockedByInventory = Boolean(insufficientStockItem);
 
-  // HARD LIMIT: block submission when Smart Calc has no configured
-  // service, when the weight is below the shop's configured minimum,
-  // or when a selected inventory item doesn't have enough stock.
   const isBlockedBySmartConfig = bookingMode === 'smart' && !hasConfiguredServices;
   const isBlockedByWeight = isBelowMinimumWeight;
-  const isBlockedByPromo = Boolean(promoCodeInput.trim()) && !isPromoValid;
-  const isSubmitBlocked = isBlockedBySmartConfig || isBlockedByWeight || isBlockedByInventory || isBlockedByPromo;
+  const isSubmitBlocked = isBlockedBySmartConfig || isBlockedByWeight || isBlockedByInventory;
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-
-    if (name === 'weight') {
-      setWeightTouched(true);
-    }
-
+    if (name === 'weight') setWeightTouched(true);
     setFormData(prev => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : (type === 'number' ? (value === '' ? 0 : parseFloat(value)) : value)
     }));
   };
 
-  /**
-   * INVENTORY: toggles an item on/off the "used in this booking" list.
-   * Selecting an item auto-fills the suggested quantity (loads × usage_rate).
-   * Deselecting removes it from both selectedInventory and touchedInventory.
-   */
   const toggleInventoryItem = (item) => {
     const itemId = String(item.id);
     setSelectedInventory(prev => {
@@ -497,16 +284,11 @@ const BookingModal = ({ isOpen, onClose, onSubmit, onAssignSuccess, actualBookin
     });
     setTouchedInventory(prev => {
       const updated = { ...prev };
-      delete updated[itemId]; // reset touched state on toggle
+      delete updated[itemId];
       return updated;
     });
   };
 
-  /**
-   * INVENTORY: manual override of a selected item's quantity. Marks the
-   * item as "touched" so the loads-based auto-recalculation effect above
-   * no longer overwrites it.
-   */
   const updateInventoryQuantity = (itemId, value) => {
     setSelectedInventory(prev => ({
       ...prev,
@@ -538,8 +320,6 @@ const BookingModal = ({ isOpen, onClose, onSubmit, onAssignSuccess, actualBookin
     setIsSubmitting(true);
 
     try {
-      // INVENTORY: build the multi-item list from selectedInventory,
-      // dropping any items with a zero/invalid quantity.
       const inventoryItems = Object.entries(selectedInventory)
         .filter(([, qty]) => Number(qty) > 0)
         .map(([itemId, qty]) => ({
@@ -554,12 +334,6 @@ const BookingModal = ({ isOpen, onClose, onSubmit, onAssignSuccess, actualBookin
         weight: parseFloat(formData.weight || 0),
         loads: parseInt(formData.calculatedLoads || 1),
         total_price: parseFloat(formData.totalPrice || 0),
-        // NEW (multi-machine assignment feature) — machine assignment
-        // never happens at creation time anymore, for ANY load count.
-        // Every booking is created "Pending" and gets its machine(s)
-        // assigned as a separate step via AssignMachineModal
-        // (POST /bookings/{id}/assign-machines), which correctly
-        // resolves washer vs. dryer from the service's required_phases.
         washer_id: null,
         dryer_id: null,
         inventory_items: inventoryItems,
@@ -567,15 +341,9 @@ const BookingModal = ({ isOpen, onClose, onSubmit, onAssignSuccess, actualBookin
         booking_mode: String(bookingMode),
         add_detergent: false,
         add_delivery: false,
-        // NEW (promo code) — sent as typed; the backend independently
-        // re-validates and computes the actual discount server-side
-        // (see _apply_promo_code() in booking_controller.py), so this
-        // is never trusted blindly even though we preview it here.
-        promo_code: isPromoValid ? matchedPromo.code : null,
-        // NEW (payment method) — chosen up front for walk-in bookings,
-        // same field the mobile app already uses at checkout.
-        payment_method: paymentMethod,
         shop_id: parseInt(apiService.getShopId() || 0),
+        payment_method: paymentMethod,
+        promo_code: promoCodeInput.trim() ? promoCodeInput.trim() : null,
         booking_timestamp: actualBookingTime
           ? (actualBookingTime instanceof Date ? actualBookingTime.toISOString() : actualBookingTime)
           : new Date().toISOString()
@@ -583,14 +351,15 @@ const BookingModal = ({ isOpen, onClose, onSubmit, onAssignSuccess, actualBookin
 
       const response = await apiService.createBooking(payload);
 
-      // Let the parent update its booking list right away — it's
-      // already a real Pending booking at this point.
       if (onSubmit) onSubmit(response);
 
-      // NEW — chain straight into the Assign step for this booking
-      // instead of closing. The form reset + onClose() now happen once
-      // that step is completed or skipped (see finishAndClose below).
-      await openAssignStepFor(response);
+      setIsLoadingAssignData(true);
+      const freshMachines = await apiService.getMachines(apiService.getShopId());
+      setAssignMachines(freshMachines || []);
+      setIsLoadingAssignData(false);
+
+      setCreatedBooking(response);
+      setStep('assign');
 
     } catch (error) {
       console.error("Booking Submission Error:", error);
@@ -602,9 +371,95 @@ const BookingModal = ({ isOpen, onClose, onSubmit, onAssignSuccess, actualBookin
   };
 
   /**
-   * INVENTORY: renders the checklist of items with per-item quantity
-   * input and projected stock warnings.
+   * FULL RESET + CLOSE — now only called from the RECEIPT step's
+   * "Done" button, not directly from the assign step anymore.
    */
+  const resetAndClose = () => {
+    setWeightTouched(false);
+    setSelectedInventory({});
+    setTouchedInventory({});
+    setPaymentMethod('cash');
+    setPromoCodeInput('');
+    setFormData({
+      customerName: '',
+      serviceType: serviceNames[0] || '',
+      itemType: 'Clothes',
+      weight: minimumWeightKg,
+      calculatedLoads: 1,
+      totalPrice: 0
+    });
+    setStep('form');
+    setCreatedBooking(null);
+    setAssignMachines([]);
+    setSelectedAssignIds([]);
+    setAssignServiceNotFound(false);
+    setAssignedMachineLabels([]);
+    onClose();
+  };
+
+  /**
+   * NEW — instead of closing directly, both "skip" and a successful
+   * assign now move into the 'receipt' step. resetAndClose() only runs
+   * once staff dismisses the receipt itself.
+   */
+  const handleSkipAssign = () => {
+    setAssignedMachineLabels([]);
+    setStep('receipt');
+  };
+
+  const resolvedRequiredPhases = assignRequiredPhases ?? 'full_service';
+  const assignTargetType = resolvedRequiredPhases === 'dry_only' ? 'Dryer' : 'Washer';
+  const assignRequiredCount = createdBooking?.loads || 1;
+
+  const assignCandidateMachines = assignMachines.filter((m) => {
+    const s = m.status?.toLowerCase();
+    const isAvailable = s === 'available' || s === 'idle' || s === 'ready';
+    return isAvailable && m.machine_type === assignTargetType;
+  });
+
+  const isAssignFullySelected = selectedAssignIds.length === assignRequiredCount;
+  const canSelectMoreAssign = selectedAssignIds.length < assignRequiredCount;
+
+  const toggleAssignMachine = (machineId) => {
+    setSelectedAssignIds(prev => {
+      if (prev.includes(machineId)) return prev.filter(id => id !== machineId);
+      if (prev.length >= assignRequiredCount) return prev;
+      return [...prev, machineId];
+    });
+  };
+
+  const handleConfirmAssign = async () => {
+    if (!isAssignFullySelected || !createdBooking) return;
+
+    setIsAssigning(true);
+    try {
+      await apiService.assignMachinesToBooking(createdBooking.id, {
+        machine_ids: selectedAssignIds.map(id => parseInt(id)),
+      });
+
+      const labels = selectedAssignIds
+        .map(id => assignCandidateMachines.find(m => m.id === id))
+        .filter(Boolean)
+        .sort((a, b) => a.machine_number - b.machine_number)
+        .map(m => `${assignTargetType === 'Washer' ? 'W' : 'D'}${m.machine_number}`);
+
+      if (onAssignSuccess) {
+        onAssignSuccess(`✅ ${labels.join(', ')} assigned to ${createdBooking.customer_name}.`);
+      }
+
+      // NEW — remember what was assigned, then move to the receipt
+      // step instead of closing immediately.
+      setAssignedMachineLabels(labels);
+      setStep('receipt');
+    } catch (error) {
+      console.error('Assign machines error:', error);
+      const msg = error.response?.data?.detail;
+      alert(typeof msg === 'string' ? msg : 'Failed to assign machines. Please try again.');
+    } finally {
+      setIsAssigning(false);
+    }
+  };
+
   const renderInventoryChecklist = () => {
     if (inventoryData.length === 0) {
       return (
@@ -703,11 +558,301 @@ const BookingModal = ({ isOpen, onClose, onSubmit, onAssignSuccess, actualBookin
     });
   };
 
+  const renderAssignGrid = () => {
+    if (assignCandidateMachines.length === 0) {
+      return (
+        <div className="col-span-4 py-4 text-center">
+          <span className="text-[10px] font-bold text-slate-300 uppercase italic">No {assignTargetType}s Available</span>
+        </div>
+      );
+    }
+
+    return assignCandidateMachines
+      .sort((a, b) => a.machine_number - b.machine_number)
+      .map((machine) => {
+        const isSelected = selectedAssignIds.includes(machine.id);
+        const isDisabled = !isSelected && !canSelectMoreAssign;
+        return (
+          <button
+            key={`assign-${assignTargetType}-${machine.id}`}
+            type="button"
+            onClick={() => toggleAssignMachine(machine.id)}
+            disabled={isDisabled}
+            className={`h-14 rounded-2xl text-[12px] font-black border-2 transition-all duration-200 relative
+              ${isSelected
+                ? assignTargetType === 'Washer'
+                  ? 'bg-sky-500 border-sky-600 text-white shadow-lg shadow-sky-200 scale-105'
+                  : 'bg-orange-500 border-orange-600 text-white shadow-lg shadow-orange-200 scale-105'
+                : isDisabled
+                  ? 'bg-slate-50 border-slate-100 text-slate-300 cursor-not-allowed opacity-60'
+                  : 'bg-white border-slate-200 text-slate-600 hover:border-sky-300 hover:bg-sky-50/30'
+              }`}
+          >
+            <div className="flex flex-col items-center justify-center leading-tight">
+              <span>{assignTargetType === 'Washer' ? 'W' : 'D'}{machine.machine_number}</span>
+              <span className="text-[7px] opacity-60 uppercase">Available</span>
+            </div>
+            {isSelected && (
+              <span className="absolute -top-1 -right-1 w-3 h-3 bg-white rounded-full border-2 border-inherit animate-pulse" />
+            )}
+          </button>
+        );
+      });
+  };
+
+  /* ------------------------------------------------------------------ */
+  /*  RENDER — 'receipt' step                                            */
+  /* ------------------------------------------------------------------ */
+  if (step === 'receipt' && createdBooking) {
+    const paymentLabel = PAYMENT_METHODS.find(p => p.value === (createdBooking.payment_method || paymentMethod))?.label
+      || (createdBooking.payment_method || paymentMethod);
+    const hasDiscount = Number(createdBooking.discount_amount || 0) > 0;
+    const subtotal = hasDiscount
+      ? Number(createdBooking.total_price) + Number(createdBooking.discount_amount)
+      : Number(createdBooking.total_price);
+    const bookingDate = createdBooking.booking_timestamp
+      ? new Date(createdBooking.booking_timestamp)
+      : new Date();
+
+    return (
+      <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4">
+        <div className="bg-white w-full max-w-md rounded-[40px] shadow-2xl overflow-hidden flex flex-col border border-white/20 max-h-[92vh]">
+
+          <div className="px-8 pt-10 pb-6 flex flex-col items-center border-b border-dashed border-slate-200">
+            <div className="w-16 h-16 rounded-full bg-emerald-50 flex items-center justify-center mb-4">
+              <CheckCircle2 size={32} className="text-emerald-500" />
+            </div>
+            <h2 className="text-2xl font-black text-slate-900 tracking-tighter">Booking Confirmed</h2>
+            <p className="text-slate-400 font-bold text-[11px] uppercase tracking-[0.15em] mt-1">
+              Receipt #{createdBooking.id}
+            </p>
+          </div>
+
+          <div className="px-8 py-6 overflow-y-auto custom-scrollbar space-y-5">
+
+            <div className="flex items-center gap-3 pb-4 border-b border-slate-100">
+              <div className="w-10 h-10 rounded-xl bg-slate-900 flex items-center justify-center text-white font-black text-sm shrink-0">
+                {createdBooking.customer_name?.charAt(0).toUpperCase() || 'C'}
+              </div>
+              <div>
+                <p className="text-slate-900 font-black text-sm">{createdBooking.customer_name}</p>
+                <p className="text-slate-400 text-[11px] font-bold flex items-center gap-1.5">
+                  <Calendar size={11} />
+                  {bookingDate.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  {' · '}
+                  {bookingDate.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' })}
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-400 font-bold">Service Type</span>
+                <span className="text-slate-800 font-black">{createdBooking.service_type}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-400 font-bold">Weight / Loads</span>
+                <span className="text-slate-800 font-black">
+                  {createdBooking.weight > 0 ? `${createdBooking.weight} kg` : ''}
+                  {createdBooking.weight > 0 && createdBooking.loads ? ' · ' : ''}
+                  {createdBooking.loads} {createdBooking.loads > 1 ? 'loads' : 'load'}
+                </span>
+              </div>
+
+              {assignedMachineLabels.length > 0 ? (
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-400 font-bold flex items-center gap-1.5">
+                    <Cpu size={13} /> Machine{assignedMachineLabels.length > 1 ? 's' : ''}
+                  </span>
+                  <span className="text-sky-600 font-black">{assignedMachineLabels.join(', ')}</span>
+                </div>
+              ) : (
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-400 font-bold flex items-center gap-1.5">
+                    <Cpu size={13} /> Machine
+                  </span>
+                  <span className="text-amber-500 font-black uppercase text-xs">Not yet assigned</span>
+                </div>
+              )}
+
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-400 font-bold flex items-center gap-1.5">
+                  <Wallet size={13} /> Payment Method
+                </span>
+                <span className="text-slate-800 font-black">{paymentLabel}</span>
+              </div>
+            </div>
+
+            <div className="pt-4 border-t border-dashed border-slate-200 space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-400 font-bold">Subtotal</span>
+                <span className="text-slate-600 font-bold">{optimizationLogic.formatCurrency(subtotal)}</span>
+              </div>
+              {hasDiscount && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-emerald-500 font-bold flex items-center gap-1.5">
+                    <Tag size={13} /> Promo {createdBooking.promo_code ? `(${createdBooking.promo_code})` : ''}
+                  </span>
+                  <span className="text-emerald-500 font-bold">
+                    -{optimizationLogic.formatCurrency(createdBooking.discount_amount)}
+                  </span>
+                </div>
+              )}
+              <div className="flex justify-between items-center pt-2">
+                <span className="text-slate-900 font-black text-base">Total</span>
+                <span className="text-slate-900 font-black text-2xl tracking-tighter">
+                  {optimizationLogic.formatCurrency(createdBooking.total_price)}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="px-8 pb-8 pt-2">
+            <button
+              type="button"
+              onClick={resetAndClose}
+              className="w-full py-4 rounded-[24px] font-black text-sm text-white bg-slate-900 hover:bg-slate-800 transition-all active:scale-95 flex items-center justify-center gap-2"
+            >
+              <Receipt size={18} /> Done
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  RENDER — 'assign' step                                             */
+  /* ------------------------------------------------------------------ */
+  if (step === 'assign' && createdBooking) {
+    return (
+      <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4">
+        <div className="bg-white w-full max-w-md rounded-[40px] shadow-2xl overflow-hidden flex flex-col border border-white/20">
+
+          <div className="px-8 pt-8 pb-5 border-b border-slate-50">
+            <div className="flex items-center gap-2 text-emerald-500 mb-2">
+              <CheckCircle2 size={16} />
+              <span className="text-[10px] font-black uppercase tracking-widest">Booking Created</span>
+            </div>
+            <h2 className="text-2xl font-black text-slate-900 tracking-tighter">
+              Assign Machine{assignRequiredCount > 1 ? 's' : ''}
+            </h2>
+            <p className="text-slate-400 font-bold text-[11px] uppercase tracking-[0.15em] mt-1">
+              {assignRequiredCount > 1
+                ? `Select ${assignRequiredCount} ${assignTargetType.toLowerCase()}s (one per load)`
+                : `Select a ${assignTargetType.toLowerCase()} for this booking`}
+            </p>
+          </div>
+
+          <div className="px-8 py-5 bg-amber-50/60 border-b border-amber-100">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center text-amber-600 font-black text-sm shrink-0">
+                {createdBooking.customer_name?.charAt(0).toUpperCase() || 'C'}
+              </div>
+              <div>
+                <p className="text-slate-900 font-black text-sm">{createdBooking.customer_name}</p>
+                <p className="text-slate-500 text-[11px] font-bold">
+                  {createdBooking.service_type} · {createdBooking.weight > 0 ? `${createdBooking.weight} KG` : `${assignRequiredCount} ${assignRequiredCount > 1 ? 'Loads' : 'Load'}`}
+                </p>
+              </div>
+              <span className="ml-auto px-3 py-1 bg-amber-100 text-amber-700 rounded-full text-[9px] font-black uppercase tracking-widest">
+                Pending
+              </span>
+            </div>
+          </div>
+
+          <div className="px-8 py-6 space-y-6">
+            {isLoadingAssignData ? (
+              <div className="flex items-center justify-center py-4 gap-2 text-sky-500 font-bold animate-pulse">
+                <Loader2 className="animate-spin" size={16} />
+                <span>Checking machine availability...</span>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                  <div className="flex items-center gap-2">
+                    {assignTargetType === 'Washer'
+                      ? <Cpu size={13} className="text-sky-500" />
+                      : <HardDrive size={13} className="text-orange-500" />}
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{assignTargetType}s</span>
+                  </div>
+                  <span className={`text-[10px] font-black uppercase tracking-widest ${isAssignFullySelected ? 'text-emerald-500' : 'text-slate-400'}`}>
+                    {selectedAssignIds.length} / {assignRequiredCount} selected
+                  </span>
+                </div>
+                <div className="grid grid-cols-4 gap-3">
+                  {renderAssignGrid()}
+                </div>
+              </div>
+            )}
+
+            {!isLoadingAssignData && assignServiceNotFound && (
+              <div className="flex items-center gap-2 text-amber-600 bg-amber-50 rounded-2xl px-4 py-3">
+                <AlertTriangle size={14} className="shrink-0" />
+                <p className="text-[11px] font-medium">
+                  Couldn't find "{createdBooking.service_type}" in your current service catalog — defaulting to
+                  Wash + Dry. Check Optimization Settings if this looks wrong.
+                </p>
+              </div>
+            )}
+
+            {!isLoadingAssignData && resolvedRequiredPhases === 'full_service' && !assignServiceNotFound && (
+              <div className="flex items-center gap-2 text-sky-500 bg-sky-50 rounded-2xl px-4 py-3">
+                <AlertTriangle size={14} className="shrink-0" />
+                <p className="text-[11px] font-medium">
+                  Dryers aren't assigned here — use "Move to Dryer" per load from the terminal once washing finishes.
+                </p>
+              </div>
+            )}
+
+            {!isLoadingAssignData && !isAssignFullySelected && (
+              <div className="flex items-center gap-2 text-slate-400 bg-slate-50 rounded-2xl px-4 py-3">
+                <AlertTriangle size={14} className="shrink-0" />
+                <p className="text-[11px] font-medium">
+                  Select exactly {assignRequiredCount} {assignTargetType.toLowerCase()}{assignRequiredCount > 1 ? 's' : ''}, or skip and assign later.
+                </p>
+              </div>
+            )}
+          </div>
+
+          <div className="px-8 pb-8 pt-2 flex gap-3">
+            <button
+              type="button"
+              onClick={handleSkipAssign}
+              disabled={isAssigning}
+              className="flex-1 py-4 rounded-[24px] border-2 border-slate-100 text-slate-400 font-black text-sm hover:bg-slate-50 transition-all active:scale-95 disabled:opacity-50"
+            >
+              Skip for Now
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmAssign}
+              disabled={!isAssignFullySelected || isAssigning || isLoadingAssignData}
+              className={`flex-[2] py-4 rounded-[24px] font-black text-sm text-white flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg
+                ${!isAssignFullySelected || isAssigning || isLoadingAssignData
+                  ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+                  : 'bg-sky-500 hover:bg-sky-600 shadow-sky-200'
+                }`}
+            >
+              {isAssigning ? (
+                <><Loader2 size={18} className="animate-spin" /> Assigning...</>
+              ) : (
+                <><CheckCircle2 size={18} /> Assign {assignRequiredCount > 1 ? `${assignRequiredCount} Machines` : 'Machine'}</>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  RENDER — 'form' step                                               */
+  /* ------------------------------------------------------------------ */
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4">
       <div className="bg-white w-full max-w-xl rounded-[48px] shadow-2xl overflow-hidden flex flex-col max-h-[92vh] border border-white/20">
 
-        {/* HEADER SECTION */}
         <div className="px-10 pt-10 pb-6 border-b border-slate-50 shrink-0">
           <div className="flex justify-between items-start mb-6">
             <div>
@@ -729,7 +874,6 @@ const BookingModal = ({ isOpen, onClose, onSubmit, onAssignSuccess, actualBookin
           </div>
         </div>
 
-        {/* FORM CONTENT */}
         <form onSubmit={handleSubmit} className="px-10 py-8 space-y-8 overflow-y-auto custom-scrollbar flex-1">
           {isLoadingSettings && (
             <div className="flex items-center justify-center py-4 gap-2 text-sky-500 font-bold animate-pulse">
@@ -832,95 +976,60 @@ const BookingModal = ({ isOpen, onClose, onSubmit, onAssignSuccess, actualBookin
             </div>
           </div>
 
-          {/* MACHINE ASSIGNMENT — NEW (multi-machine assignment feature):
-              always deferred to a separate step after creation, for ANY
-              load count, so this is now purely informational. */}
-          <div className="space-y-4 p-8 bg-sky-50/60 rounded-[40px] border-2 border-sky-100">
-            <div className="flex justify-between items-center px-2">
-              <label className="text-[11px] font-black text-sky-700 uppercase flex items-center gap-2 tracking-[0.2em]">
-                <Cpu size={14} className="text-sky-500" /> Machine Assignment
-              </label>
-              <span className="text-[10px] font-bold text-sky-600 bg-white px-3 py-1 rounded-full uppercase tracking-tighter border border-sky-100">
-                Next Step
-              </span>
-            </div>
-            <div className="flex items-start gap-3 px-2">
-              <Cpu size={18} className="text-sky-500 shrink-0 mt-0.5" />
-              <p className="text-[11px] text-sky-700 font-medium">
-                This booking will be created as <strong>Pending</strong> with {formData.calculatedLoads}{' '}
-                {formData.calculatedLoads > 1 ? 'loads' : 'load'}. Right after, you'll be asked to assign{' '}
-                {formData.calculatedLoads > 1 ? 'the machines' : 'a machine'} for it — the picker shows the correct
-                machine type (washer or dryer) for this service. You can also skip that and assign later from the
-                Service Terminal.
-              </p>
-            </div>
-          </div>
-
-          {/* PROMO CODE (NEW) */}
-          <div className="space-y-3 p-8 bg-rose-50/40 rounded-[40px] border-2 border-rose-100">
-            <div className="flex justify-between items-center px-2">
-              <label className="text-[11px] font-black text-rose-600 uppercase flex items-center gap-2 tracking-[0.2em]">
-                Promo Code
-              </label>
-              <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-3 py-1 rounded-full uppercase tracking-tighter border border-amber-100">
-                Optional
-              </span>
-            </div>
-            <input
-              value={promoCodeInput}
-              onChange={(e) => setPromoCodeInput(e.target.value.toUpperCase())}
-              placeholder="e.g. SAVE20-X7K9"
-              className={`w-full border-2 rounded-[24px] px-6 py-4 font-bold uppercase tracking-wide outline-none transition-all ${
-                promoValidationError
-                  ? 'bg-rose-50/60 border-rose-300 text-rose-600 focus:border-rose-400'
-                  : isPromoValid
-                    ? 'bg-emerald-50/50 border-emerald-200 text-emerald-700 focus:border-emerald-300'
-                    : 'bg-white border-rose-100 text-slate-700 focus:border-rose-200'
-              }`}
-            />
-            {promoValidationError && (
-              <p className="text-[10px] font-bold text-rose-500 px-2">{promoValidationError}</p>
-            )}
-            {isPromoValid && (
-              <p className="text-[10px] font-bold text-emerald-600 px-2">
-                Applied — {matchedPromo.discount_type === 'percent'
-                  ? `${matchedPromo.discount_value}% off`
-                  : `₱${Number(matchedPromo.discount_value).toFixed(2)} off`} (−{optimizationLogic.formatCurrency(promoPreviewDiscount)})
-              </p>
-            )}
-          </div>
-
-          {/* PAYMENT METHOD (NEW) */}
+          {/* PAYMENT METHOD */}
           <div className="space-y-3">
             <label className="text-[11px] font-black text-slate-400 uppercase ml-2 flex items-center gap-2 tracking-widest">
               Payment Method
             </label>
-            <div className="bg-slate-100/80 p-1.5 rounded-[24px] flex items-center gap-1.5">
-              {PAYMENT_METHODS.map((method) => (
+            <div className="grid grid-cols-3 gap-3">
+              {PAYMENT_METHODS.map((pm) => (
                 <button
-                  key={method.value}
+                  key={pm.value}
                   type="button"
-                  onClick={() => setPaymentMethod(method.value)}
-                  className={`flex-1 py-3 rounded-[18px] text-[11px] font-black transition-all ${
-                    paymentMethod === method.value
-                      ? 'text-slate-900 bg-white shadow-sm'
-                      : 'text-slate-400 hover:text-slate-500'
+                  onClick={() => setPaymentMethod(pm.value)}
+                  className={`py-4 rounded-[20px] font-black text-sm border-2 transition-all ${
+                    paymentMethod === pm.value
+                      ? 'bg-slate-900 border-slate-900 text-white shadow-lg'
+                      : 'bg-slate-50/50 border-slate-100 text-slate-500 hover:border-slate-200'
                   }`}
                 >
-                  {method.label}
+                  {pm.label}
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* PROMO CODE */}
+          <div className="space-y-3">
+            <label className="text-[11px] font-black text-slate-400 uppercase ml-2 flex items-center gap-2 tracking-widest">
+              Promo Code <span className="normal-case text-slate-300 font-bold">(optional)</span>
+            </label>
+            <input
+              value={promoCodeInput}
+              onChange={(e) => setPromoCodeInput(e.target.value.toUpperCase())}
+              placeholder="e.g. WELCOME10"
+              className="w-full bg-slate-50/50 border-2 border-slate-100 rounded-[24px] px-6 py-4 font-bold text-slate-800 focus:ring-4 ring-emerald-50 focus:border-emerald-200 outline-none transition-all placeholder:text-slate-300"
+            />
+            <p className="text-[10px] text-slate-400 font-medium ml-2">
+              The discount is validated and applied automatically when you create this booking.
+            </p>
+          </div>
+
+          {/* Machine assignment happens in the NEXT step, after creation */}
+          <div className="flex items-start gap-3 bg-sky-50 border border-sky-100 rounded-[20px] px-5 py-4">
+            <ArrowRight size={18} className="text-sky-500 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-[11px] font-black text-sky-700 uppercase tracking-wide">Machine Assignment Comes Next</p>
+              <p className="text-[11px] text-sky-600 font-medium mt-0.5">
+                After creating this booking, you'll pick the right machine{formData.calculatedLoads > 1 ? 's' : ''} for it —
+                only washers or only dryers, whichever this service needs.
+              </p>
             </div>
           </div>
 
           <div className={`rounded-[32px] p-8 flex justify-between items-center shadow-2xl transition-all duration-500 ${bookingMode === 'manual' ? 'bg-orange-600 shadow-orange-100' : 'bg-slate-900 shadow-slate-200'}`}>
             <div className="flex flex-col">
               <span className="font-bold text-white/40 text-[10px] uppercase tracking-[0.4em]">Total Payable</span>
-              {isPromoValid && (
-                <span className="text-white/50 text-xs font-bold line-through mt-1">
-                  {optimizationLogic.formatCurrency(formData.totalPrice)}
-                </span>
-              )}
             </div>
             <div className="flex items-center gap-3 bg-white/10 p-3 px-6 rounded-[24px] border border-white/20">
               {bookingMode === 'manual' ? (
@@ -930,7 +1039,7 @@ const BookingModal = ({ isOpen, onClose, onSubmit, onAssignSuccess, actualBookin
                 </div>
               ) : (
                 <span className="text-4xl font-black text-white tracking-tighter">
-                  {optimizationLogic.formatCurrency(isPromoValid ? promoPreviewTotal : formData.totalPrice)}
+                  {optimizationLogic.formatCurrency(formData.totalPrice)}
                 </span>
               )}
             </div>
@@ -945,22 +1054,17 @@ const BookingModal = ({ isOpen, onClose, onSubmit, onAssignSuccess, actualBookin
             `}
           >
             {isSubmitting ? (
-              <><Loader2 size={24} className="animate-spin" /> Processing...</>
+              <><Loader2 size={24} className="animate-spin" /> Creating...</>
             ) : isSubmitBlocked ? (
               <><Ban size={24} /> {
                 isBlockedByWeight
                   ? `Below ${minimumWeightKg}kg Minimum`
                   : isBlockedByInventory
                     ? 'Insufficient Stock'
-                    : isBlockedByPromo
-                      ? 'Invalid Promo Code'
-                      : 'No Services Configured'
+                    : 'No Services Configured'
               }</>
             ) : (
-              <>
-                <CheckCircle2 size={28} />
-                Create Booking (Pending)
-              </>
+              <><CheckCircle2 size={28} /> Create & Assign Machine</>
             )}
           </button>
         </form>

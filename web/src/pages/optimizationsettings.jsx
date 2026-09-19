@@ -1,19 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Save, RefreshCcw, Info, Loader2, CheckCircle2, Settings2, Zap, Droplets, Banknote, Clock, Weight, Plus, Trash2, Pencil, X, Power, PackageOpen, AlertTriangle, XCircle, Truck, Ticket } from 'lucide-react';
+import { Save, RefreshCcw, Info, Loader2, CheckCircle2, Settings2, Zap, Droplets, Banknote, Clock, Weight, Plus, Trash2, Pencil, X, Power, PackageOpen, AlertTriangle, XCircle, Truck, Ticket, QrCode, Upload, ImageOff, Wallet, HandCoins, Smartphone } from 'lucide-react';
 import apiService from '../services/APIservices';
 
-/**
- * OPTIMIZATION SETTINGS COMPONENT
- *
- * NEW (multi-machine assignment feature): Each service now also has a
- * required_phases field ("full_service" | "wash_only" | "dry_only") —
- * dropdown alongside Pricing Unit and Duration in both Add and Edit
- * forms. Ginagamit ito ng backend (booking_controller.
- * assign_machines_to_booking()) para malaman kung washers lang, dryers
- * lang, o pareho (washers muna, dryers mamaya) ang dapat ipakita sa
- * AssignMachineModal para sa isang booking na gumagamit ng service na
- * ito.
- */
 
 const formatErrorDetail = (error, fallback = "Something went wrong.") => {
   const detail = error?.response?.data?.detail;
@@ -41,7 +29,6 @@ const PRICING_UNITS = [
   { value: 'piece', label: 'Piece' },
 ];
 
-// NEW (multi-machine assignment feature)
 const REQUIRED_PHASES = [
   { value: 'full_service', label: 'Washer + Dryer' },
   { value: 'wash_only', label: 'Washer Only' },
@@ -49,6 +36,28 @@ const REQUIRED_PHASES = [
 ];
 
 const getPhaseLabel = (phase) => REQUIRED_PHASES.find((p) => p.value === phase)?.label || 'Wash + Dry';
+
+// NEW — helpers na nagsasabi kung aling duration field ang dapat
+// lumabas/i-validate, base sa napiling required_phases.
+const needsWasherDuration = (phase) => phase === 'full_service' || phase === 'wash_only';
+const needsDryerDuration = (phase) => phase === 'full_service' || phase === 'dry_only';
+
+// NEW — maikling text summary ng duration ng isang service, para sa
+// listahan (hal. "30m wash · 40m dry", "30m wash", "40m dry").
+// UPDATED — tinanggal ang tahimik na `?? 45` fallback. Kung walang
+// value mula sa backend, "—" ang ipapakita sa halip na magpanggap
+// na 45 min — mas madaling mahalata kung hindi pa na-migrate ang
+// service_types table (washer_duration_minutes / dryer_duration_minutes).
+const getDurationSummary = (service) => {
+  const parts = [];
+  if (needsWasherDuration(service.required_phases)) {
+    parts.push(service.washer_duration_minutes ? `${service.washer_duration_minutes}m wash` : '— wash');
+  }
+  if (needsDryerDuration(service.required_phases)) {
+    parts.push(service.dryer_duration_minutes ? `${service.dryer_duration_minutes}m dry` : '— dry');
+  }
+  return parts.join(' · ');
+};
 
 const DISCOUNT_TYPES = [
   { value: 'percent', label: '%' },
@@ -186,6 +195,108 @@ const ConfirmDeleteModal = ({ item, itemLabel, isDeleting, onCancel, onConfirm }
   );
 };
 
+/* ------------------------------------------------------------------ */
+/*  PAYMENT METHOD TOGGLE ROW (NEW — Payment Methods feature)          */
+/* ------------------------------------------------------------------ */
+
+const PaymentMethodToggleRow = ({ icon: Icon, label, description, enabled, onToggle, accentColor = 'emerald' }) => {
+  const colorClasses = {
+    emerald: { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-600', switch: 'bg-emerald-400' },
+    sky: { bg: 'bg-sky-50', border: 'border-sky-200', text: 'text-sky-600', switch: 'bg-sky-400' },
+    violet: { bg: 'bg-violet-50', border: 'border-violet-200', text: 'text-violet-600', switch: 'bg-violet-400' },
+  };
+  const colors = colorClasses[accentColor] || colorClasses.emerald;
+
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className={`w-full flex items-center gap-4 px-6 py-5 rounded-[28px] border-2 transition-all text-left ${
+        enabled ? `${colors.bg} ${colors.border}` : 'bg-slate-50/50 border-slate-100'
+      }`}
+    >
+      <div className={`p-3 rounded-2xl shrink-0 ${enabled ? `bg-white ${colors.text}` : 'bg-white text-slate-300'}`}>
+        <Icon size={20} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className={`font-black text-sm ${enabled ? 'text-slate-800' : 'text-slate-400'}`}>{label}</p>
+        <p className="text-[10px] font-bold text-slate-400 mt-0.5">{description}</p>
+      </div>
+      <span className={`w-11 h-6 rounded-full relative transition-all shrink-0 ${enabled ? colors.switch : 'bg-slate-300'}`}>
+        <span className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${enabled ? 'left-6' : 'left-1'}`} />
+      </span>
+    </button>
+  );
+};
+
+/* ------------------------------------------------------------------ */
+/*  PAYMENT QR UPLOAD SLOT (Online Payment feature)                    */
+/* ------------------------------------------------------------------ */
+
+const QRUploadSlot = ({ label, provider, currentUrl, isUploading, onFileSelected, accentColor }) => {
+  const inputRef = useRef(null);
+
+  const colorClasses = {
+    sky: {
+      border: 'border-sky-200',
+      bg: 'bg-sky-50/50',
+      text: 'text-sky-600',
+      button: 'bg-sky-600 hover:bg-sky-500 shadow-sky-100',
+    },
+    violet: {
+      border: 'border-violet-200',
+      bg: 'bg-violet-50/50',
+      text: 'text-violet-600',
+      button: 'bg-violet-600 hover:bg-violet-500 shadow-violet-100',
+    },
+  };
+  const colors = colorClasses[accentColor] || colorClasses.sky;
+
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) onFileSelected(file, provider);
+    // Reset so selecting the same file again still fires onChange
+    e.target.value = '';
+  };
+
+  return (
+    <div className={`flex-1 min-w-[220px] rounded-[32px] border-2 ${colors.border} ${colors.bg} p-6 flex flex-col items-center text-center gap-4`}>
+      <p className={`text-[11px] font-black uppercase tracking-[0.2em] ${colors.text}`}>{label}</p>
+
+      <div className="w-40 h-40 rounded-[24px] bg-white border-2 border-dashed border-slate-200 flex items-center justify-center overflow-hidden shrink-0">
+        {isUploading ? (
+          <Loader2 size={28} className={`animate-spin ${colors.text}`} />
+        ) : currentUrl ? (
+          <img src={currentUrl} alt={`${label} QR code`} className="w-full h-full object-contain" />
+        ) : (
+          <div className="flex flex-col items-center gap-2 text-slate-300">
+            <ImageOff size={28} />
+            <span className="text-[9px] font-black uppercase tracking-widest">No QR Yet</span>
+          </div>
+        )}
+      </div>
+
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleFileChange}
+      />
+
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        disabled={isUploading}
+        className={`flex items-center gap-2 px-5 py-3 rounded-2xl font-black text-[11px] text-white ${colors.button} shadow-lg transition-all active:scale-95 disabled:opacity-60`}
+      >
+        {isUploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+        {currentUrl ? 'Replace QR Code' : 'Upload QR Code'}
+      </button>
+    </div>
+  );
+};
+
 const OptimizationSettings = () => {
 
 /* ------------------------------------------------------------------ */
@@ -200,16 +311,44 @@ const OptimizationSettings = () => {
     off_peak_hours: ""
   });
   const [serviceTypes, setServiceTypes] = useState([]);
-  const [newService, setNewService] = useState({ name: '', price: '', duration_minutes: '45', pricing_unit: 'load', required_phases: 'full_service' });
+
+  const [newService, setNewService] = useState({
+    name: '',
+    price: '',
+    pricing_unit: 'load',
+    required_phases: 'full_service',
+    washer_duration_minutes: '45',
+    dryer_duration_minutes: '45',
+  });
   const [isAddingService, setIsAddingService] = useState(false);
   const [serviceError, setServiceError] = useState('');
   const [editingServiceId, setEditingServiceId] = useState(null);
-  const [editValues, setEditValues] = useState({ name: '', price: '', duration_minutes: '', pricing_unit: 'load', required_phases: 'full_service' });
+  const [editValues, setEditValues] = useState({
+    name: '',
+    price: '',
+    pricing_unit: 'load',
+    required_phases: 'full_service',
+    washer_duration_minutes: '45',
+    dryer_duration_minutes: '45',
+  });
   const [busyServiceId, setBusyServiceId] = useState(null);
 
   // Delivery settings state
   const [deliverySettings, setDeliverySettings] = useState({ has_delivery: false, delivery_fee: '0' });
   const [isSavingDelivery, setIsSavingDelivery] = useState(false);
+
+  // --- PAYMENT METHODS STATE (NEW — replaces old "Payment QR Codes"
+  //     section). Three shop-level toggles: which payment methods this
+  //     shop accepts at all. GCash/PayMaya QR upload only matters (and
+  //     only renders) when accepts_online is true. ---
+  const [paymentMethods, setPaymentMethods] = useState({
+    accepts_cash: true,
+    accepts_cod: false,
+    accepts_online: false,
+  });
+  const [isSavingPaymentMethods, setIsSavingPaymentMethods] = useState(false);
+  const [paymentQR, setPaymentQR] = useState({ gcash_qr_url: '', paymaya_qr_url: '' });
+  const [uploadingQR, setUploadingQR] = useState({ gcash: false, paymaya: false });
 
   // Add-Ons state
   const [addOns, setAddOns] = useState([]);
@@ -296,6 +435,17 @@ const OptimizationSettings = () => {
           has_delivery: Boolean(shopProfileResult.value.has_delivery),
           delivery_fee: String(shopProfileResult.value.delivery_fee ?? 0),
         });
+        // NEW (Payment Methods feature) — pre-fill current toggles and
+        // QR previews, kung meron nang naka-configure dati.
+        setPaymentMethods({
+          accepts_cash: shopProfileResult.value.accepts_cash ?? true,
+          accepts_cod: shopProfileResult.value.accepts_cod ?? false,
+          accepts_online: shopProfileResult.value.accepts_online ?? false,
+        });
+        setPaymentQR({
+          gcash_qr_url: shopProfileResult.value.gcash_qr_url || '',
+          paymaya_qr_url: shopProfileResult.value.paymaya_qr_url || '',
+        });
       } else if (shopProfileResult.status === 'rejected') {
         console.error("Failed to load shop profile / delivery settings:", formatErrorDetail(shopProfileResult.reason));
       }
@@ -373,7 +523,114 @@ const OptimizationSettings = () => {
     }
   };
 
+  // --- PAYMENT METHODS HANDLERS (NEW) ---
+
+  /**
+   * Toggle ng isa sa tatlong accepts_* fields — staged lang sa local
+   * state, hindi pa naka-save hanggang i-click ang "Save Payment
+   * Methods" button (parehong pattern ng Delivery Settings section).
+   */
+  const handlePaymentMethodToggle = (key) => {
+    setPaymentMethods(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  /**
+   * Ise-save ang tatlong toggle papunta sa Shop profile. Blocked kung
+   * WALANG kahit isang paraan ng bayad na naka-ON — dapat may kahit
+   * isa, o walang paraan ang customer/staff para makapagbayad.
+   */
+  const savePaymentMethods = async () => {
+    const { accepts_cash, accepts_cod, accepts_online } = paymentMethods;
+    if (!accepts_cash && !accepts_cod && !accepts_online) {
+      showToast({
+        type: 'error',
+        title: 'No Payment Method Selected',
+        message: 'Please enable at least one payment method for your shop.',
+      });
+      return;
+    }
+
+    try {
+      setIsSavingPaymentMethods(true);
+      await apiService.updateShopProfile(shopId, {
+        accepts_cash,
+        accepts_cod,
+        accepts_online,
+      });
+      showToast({
+        type: 'success',
+        title: 'Payment Methods Saved',
+        message: 'Customers and staff will now see the updated payment options.',
+      });
+    } catch (error) {
+      showToast({
+        type: 'error',
+        title: 'Save Failed',
+        message: formatErrorDetail(error, 'Could not save payment methods.'),
+      });
+    } finally {
+      setIsSavingPaymentMethods(false);
+    }
+  };
+
+  /**
+   * Ina-upload ang napiling image file papunta sa Supabase Storage
+   * (bucket "payment-qr-codes") via apiService.uploadPaymentQR(), tapos
+   * ise-save agad ang resulting public URL sa Shop profile via
+   * apiService.updateShopProfile() — hindi hinihintay ang "Save Payment
+   * Methods" button sa itaas, dahil sarili nitong independiyenteng
+   * na-se-save (parehong pattern ng Add-Ons / Promo Codes sections).
+   */
+  const handleQRFileSelected = async (file, provider) => {
+    if (!file.type.startsWith('image/')) {
+      showToast({ type: 'error', title: 'Invalid File', message: 'Please select an image file (PNG/JPG).' });
+      return;
+    }
+
+    const fieldName = `${provider}_qr_url`; // "gcash_qr_url" | "paymaya_qr_url"
+
+    try {
+      setUploadingQR(prev => ({ ...prev, [provider]: true }));
+
+      const publicUrl = await apiService.uploadPaymentQR(file, shopId, provider);
+      await apiService.updateShopProfile(shopId, { [fieldName]: publicUrl });
+
+      setPaymentQR(prev => ({ ...prev, [fieldName]: publicUrl }));
+      showToast({
+        type: 'success',
+        title: 'QR Code Uploaded',
+        message: `Your ${provider === 'gcash' ? 'GCash' : 'PayMaya'} QR code is now live for customers.`,
+      });
+    } catch (error) {
+      showToast({
+        type: 'error',
+        title: 'Upload Failed',
+        message: formatErrorDetail(error, 'Could not upload QR code. Please try again.'),
+      });
+    } finally {
+      setUploadingQR(prev => ({ ...prev, [provider]: false }));
+    }
+  };
+
   // --- SERVICE CATALOG HANDLERS ---
+
+  const resolveDurations = (values) => {
+    const phase = values.required_phases;
+    const washer = parseInt(values.washer_duration_minutes);
+    const dryer = parseInt(values.dryer_duration_minutes);
+
+    if (needsWasherDuration(phase) && (isNaN(washer) || washer <= 0)) {
+      return { error: 'Please enter a valid washer duration (minutes).' };
+    }
+    if (needsDryerDuration(phase) && (isNaN(dryer) || dryer <= 0)) {
+      return { error: 'Please enter a valid dryer duration (minutes).' };
+    }
+
+    return {
+      washer_duration_minutes: needsWasherDuration(phase) ? washer : 45,
+      dryer_duration_minutes: needsDryerDuration(phase) ? dryer : 45,
+    };
+  };
 
   const handleAddService = async (e) => {
     e.preventDefault();
@@ -381,7 +638,6 @@ const OptimizationSettings = () => {
 
     const name = newService.name.trim();
     const price = parseFloat(newService.price);
-    const duration_minutes = parseInt(newService.duration_minutes);
     const pricing_unit = newService.pricing_unit;
     const required_phases = newService.required_phases;
 
@@ -393,16 +649,33 @@ const OptimizationSettings = () => {
       setServiceError("Please enter a valid price.");
       return;
     }
-    if (isNaN(duration_minutes) || duration_minutes <= 0) {
-      setServiceError("Please enter a valid duration (in minutes).");
+
+    const durations = resolveDurations(newService);
+    if (durations.error) {
+      setServiceError(durations.error);
       return;
     }
 
     try {
       setIsAddingService(true);
-      const created = await apiService.addServiceType({ name, price, duration_minutes, pricing_unit, required_phases, is_active: true }, shopId);
+      const created = await apiService.addServiceType({
+        name,
+        price,
+        pricing_unit,
+        required_phases,
+        washer_duration_minutes: durations.washer_duration_minutes,
+        dryer_duration_minutes: durations.dryer_duration_minutes,
+        is_active: true,
+      }, shopId);
       setServiceTypes(prev => [...prev, created]);
-      setNewService({ name: '', price: '', duration_minutes: '45', pricing_unit: 'load', required_phases: 'full_service' });
+      setNewService({
+        name: '',
+        price: '',
+        pricing_unit: 'load',
+        required_phases: 'full_service',
+        washer_duration_minutes: '45',
+        dryer_duration_minutes: '45',
+      });
       showToast({ type: 'success', title: 'Service Added', message: `"${name}" is now available for bookings.` });
     } catch (error) {
       setServiceError(formatErrorDetail(error, "Failed to add service."));
@@ -416,21 +689,28 @@ const OptimizationSettings = () => {
     setEditValues({
       name: service.name,
       price: String(service.price),
-      duration_minutes: String(service.duration_minutes || 45),
       pricing_unit: service.pricing_unit || 'load',
-      required_phases: service.required_phases || 'full_service'
+      required_phases: service.required_phases || 'full_service',
+      washer_duration_minutes: String(service.washer_duration_minutes ?? 45),
+      dryer_duration_minutes: String(service.dryer_duration_minutes ?? 45),
     });
   };
 
   const cancelEditing = () => {
     setEditingServiceId(null);
-    setEditValues({ name: '', price: '', duration_minutes: '', pricing_unit: 'load', required_phases: 'full_service' });
+    setEditValues({
+      name: '',
+      price: '',
+      pricing_unit: 'load',
+      required_phases: 'full_service',
+      washer_duration_minutes: '45',
+      dryer_duration_minutes: '45',
+    });
   };
 
   const saveEditing = async (service) => {
     const name = editValues.name.trim();
     const price = parseFloat(editValues.price);
-    const duration_minutes = parseInt(editValues.duration_minutes);
     const pricing_unit = editValues.pricing_unit;
     const required_phases = editValues.required_phases;
 
@@ -442,14 +722,23 @@ const OptimizationSettings = () => {
       showToast({ type: 'error', message: 'Please enter a valid price.' });
       return;
     }
-    if (isNaN(duration_minutes) || duration_minutes <= 0) {
-      showToast({ type: 'error', message: 'Please enter a valid duration (in minutes).' });
+
+    const durations = resolveDurations(editValues);
+    if (durations.error) {
+      showToast({ type: 'error', message: durations.error });
       return;
     }
 
     try {
       setBusyServiceId(service.id);
-      const updated = await apiService.updateServiceType(service.id, { name, price, duration_minutes, pricing_unit, required_phases }, shopId);
+      const updated = await apiService.updateServiceType(service.id, {
+        name,
+        price,
+        pricing_unit,
+        required_phases,
+        washer_duration_minutes: durations.washer_duration_minutes,
+        dryer_duration_minutes: durations.dryer_duration_minutes,
+      }, shopId);
       setServiceTypes(prev => prev.map(s => s.id === service.id ? updated : s));
       cancelEditing();
       showToast({ type: 'success', title: 'Service Updated', message: `"${name}" has been saved.` });
@@ -790,7 +1079,7 @@ const OptimizationSettings = () => {
             <h3 className="text-xl font-black text-slate-800 tracking-tight">Your Services</h3>
           </div>
           <p className="text-sm text-slate-400 mb-8 font-bold italic">
-            Add the services your shop offers, their prices, and how long each one takes. These populate the Service Type dropdown in the Create Booking modal and drive machine cycle timers.
+            Add the services your shop offers, their prices, and how long each phase runs. A "Washer + Dryer" service has separate wash and dry durations; wash-only or dry-only services need just one.
           </p>
 
           {serviceTypes.length === 0 ? (
@@ -798,7 +1087,7 @@ const OptimizationSettings = () => {
               <PackageOpen size={32} className="text-slate-300 mb-3" />
               <h4 className="text-slate-700 font-black uppercase tracking-tight text-sm mb-1">No Services Yet</h4>
               <p className="text-slate-400 text-xs max-w-sm">
-                Add your first service below (e.g. "Full Service" — ₱210, 45 min) so staff can start creating bookings.
+                Add your first service below (e.g. "Full Service" — ₱210, 30 min wash + 40 min dry) so staff can start creating bookings.
               </p>
             </div>
           ) : (
@@ -807,86 +1096,110 @@ const OptimizationSettings = () => {
                 const isEditing = editingServiceId === service.id;
                 const isBusy = busyServiceId === service.id;
                 return (
-                  <div key={service.id} className={`flex items-center gap-4 px-6 py-4 ${!service.is_active ? 'bg-slate-50/60' : 'bg-white'}`}>
+                  <div key={service.id} className={`px-6 py-4 ${!service.is_active ? 'bg-slate-50/60' : 'bg-white'}`}>
                     {isEditing ? (
-                      <>
-                        <input
-                          value={editValues.name}
-                          onChange={(e) => setEditValues(prev => ({ ...prev, name: e.target.value }))}
-                          className="flex-1 bg-slate-50 border-2 border-sky-200 rounded-xl px-4 py-2 font-bold text-slate-700 outline-none"
-                          placeholder="Service name"
-                        />
-                        <div className="relative w-32">
-                          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">₱</span>
+                      <div className="flex flex-col gap-3">
+                        <div className="flex items-center gap-4 flex-wrap">
                           <input
-                            type="number"
-                            value={editValues.price}
-                            onChange={(e) => setEditValues(prev => ({ ...prev, price: e.target.value }))}
-                            className="w-full pl-8 pr-3 bg-slate-50 border-2 border-sky-200 rounded-xl py-2 font-bold text-slate-700 outline-none"
+                            value={editValues.name}
+                            onChange={(e) => setEditValues(prev => ({ ...prev, name: e.target.value }))}
+                            className="flex-1 min-w-[160px] bg-slate-50 border-2 border-sky-200 rounded-xl px-4 py-2 font-bold text-slate-700 outline-none"
+                            placeholder="Service name"
                           />
+                          <div className="relative w-32">
+                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">₱</span>
+                            <input
+                              type="number"
+                              value={editValues.price}
+                              onChange={(e) => setEditValues(prev => ({ ...prev, price: e.target.value }))}
+                              className="w-full pl-8 pr-3 bg-slate-50 border-2 border-sky-200 rounded-xl py-2 font-bold text-slate-700 outline-none"
+                            />
+                          </div>
+                          <select
+                            value={editValues.pricing_unit}
+                            onChange={(e) => setEditValues(prev => ({ ...prev, pricing_unit: e.target.value }))}
+                            className="w-28 bg-slate-50 border-2 border-sky-200 rounded-xl px-3 py-2 font-bold text-slate-700 outline-none cursor-pointer"
+                          >
+                            {PRICING_UNITS.map((u) => (
+                              <option key={u.value} value={u.value}>{u.label}</option>
+                            ))}
+                          </select>
+                          <select
+                            value={editValues.required_phases}
+                            onChange={(e) => setEditValues(prev => ({ ...prev, required_phases: e.target.value }))}
+                            className="w-36 bg-slate-50 border-2 border-sky-200 rounded-xl px-3 py-2 font-bold text-slate-700 outline-none cursor-pointer"
+                          >
+                            {REQUIRED_PHASES.map((p) => (
+                              <option key={p.value} value={p.value}>{p.label}</option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => saveEditing(service)}
+                            disabled={isBusy}
+                            className="p-2 rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-all disabled:opacity-50"
+                          >
+                            {isBusy ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={cancelEditing}
+                            className="p-2 rounded-xl bg-slate-50 text-slate-400 hover:bg-slate-100 transition-all"
+                          >
+                            <X size={16} />
+                          </button>
                         </div>
-                        <select
-                          value={editValues.pricing_unit}
-                          onChange={(e) => setEditValues(prev => ({ ...prev, pricing_unit: e.target.value }))}
-                          className="w-28 bg-slate-50 border-2 border-sky-200 rounded-xl px-3 py-2 font-bold text-slate-700 outline-none cursor-pointer"
-                        >
-                          {PRICING_UNITS.map((u) => (
-                            <option key={u.value} value={u.value}>{u.label}</option>
-                          ))}
-                        </select>
-                        {/* NEW — Required Phases dropdown (edit row) */}
-                        <select
-                          value={editValues.required_phases}
-                          onChange={(e) => setEditValues(prev => ({ ...prev, required_phases: e.target.value }))}
-                          className="w-36 bg-slate-50 border-2 border-sky-200 rounded-xl px-3 py-2 font-bold text-slate-700 outline-none cursor-pointer"
-                        >
-                          {REQUIRED_PHASES.map((p) => (
-                            <option key={p.value} value={p.value}>{p.label}</option>
-                          ))}
-                        </select>
-                        <div className="relative w-32">
-                          <input
-                            type="number"
-                            value={editValues.duration_minutes}
-                            onChange={(e) => setEditValues(prev => ({ ...prev, duration_minutes: e.target.value }))}
-                            className="w-full pl-3 pr-10 bg-slate-50 border-2 border-sky-200 rounded-xl py-2 font-bold text-slate-700 outline-none"
-                            placeholder="min"
-                          />
-                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-[10px] font-bold uppercase">min</span>
+
+                        <div className="flex items-center gap-4 flex-wrap pl-1">
+                          {needsWasherDuration(editValues.required_phases) && (
+                            <div className="flex items-center gap-2">
+                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Washer</label>
+                              <div className="relative w-28">
+                                <input
+                                  type="number"
+                                  min="1"
+                                  value={editValues.washer_duration_minutes}
+                                  onChange={(e) => setEditValues(prev => ({ ...prev, washer_duration_minutes: e.target.value }))}
+                                  className="w-full pl-3 pr-10 bg-slate-50 border-2 border-sky-200 rounded-xl py-2 font-bold text-slate-700 outline-none"
+                                />
+                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-[10px] font-bold uppercase">min</span>
+                              </div>
+                            </div>
+                          )}
+                          {needsDryerDuration(editValues.required_phases) && (
+                            <div className="flex items-center gap-2">
+                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Dryer</label>
+                              <div className="relative w-28">
+                                <input
+                                  type="number"
+                                  min="1"
+                                  value={editValues.dryer_duration_minutes}
+                                  onChange={(e) => setEditValues(prev => ({ ...prev, dryer_duration_minutes: e.target.value }))}
+                                  className="w-full pl-3 pr-10 bg-slate-50 border-2 border-orange-200 rounded-xl py-2 font-bold text-slate-700 outline-none"
+                                />
+                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-[10px] font-bold uppercase">min</span>
+                              </div>
+                            </div>
+                          )}
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => saveEditing(service)}
-                          disabled={isBusy}
-                          className="p-2 rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-all disabled:opacity-50"
-                        >
-                          {isBusy ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={cancelEditing}
-                          className="p-2 rounded-xl bg-slate-50 text-slate-400 hover:bg-slate-100 transition-all"
-                        >
-                          <X size={16} />
-                        </button>
-                      </>
+                      </div>
                     ) : (
-                      <>
+                      <div className="flex items-center gap-4">
                         <div className="flex-1">
                           <p className={`font-black text-sm ${service.is_active ? 'text-slate-800' : 'text-slate-400 line-through'}`}>
                             {service.name}
                           </p>
-                          {!service.is_active && (
-                            <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Inactive</span>
-                          )}
+                          <div className="flex items-center gap-2 mt-0.5">
+                            {!service.is_active && (
+                              <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Inactive</span>
+                            )}
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">
+                              {getDurationSummary(service)}
+                            </span>
+                          </div>
                         </div>
-                        {/* NEW — Required Phases badge (read view) */}
                         <span className="inline-flex items-center font-black text-[10px] uppercase tracking-tight px-2.5 py-1 rounded-lg bg-violet-50 text-violet-500">
                           {getPhaseLabel(service.required_phases)}
-                        </span>
-                        <span className={`inline-flex items-center gap-1 font-black text-[10px] uppercase tracking-tight px-2.5 py-1 rounded-lg ${service.is_active ? 'bg-indigo-50 text-indigo-500' : 'bg-slate-100 text-slate-300'}`}>
-                          <Clock size={11} />
-                          {service.duration_minutes || 45} min
                         </span>
                         <span className={`font-black text-sm w-32 text-right ${service.is_active ? 'text-slate-700' : 'text-slate-300'}`}>
                           ₱{Number(service.price).toFixed(2)}
@@ -917,7 +1230,7 @@ const OptimizationSettings = () => {
                         >
                           <Trash2 size={16} />
                         </button>
-                      </>
+                      </div>
                     )}
                   </div>
                 );
@@ -925,7 +1238,6 @@ const OptimizationSettings = () => {
             </div>
           )}
 
-          {/* ADD NEW SERVICE FORM */}
           <form onSubmit={handleAddService} className="flex flex-col sm:flex-row items-stretch sm:items-end gap-4 flex-wrap">
             <div className="flex-1 space-y-2 min-w-[180px]">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Service Name</label>
@@ -936,7 +1248,7 @@ const OptimizationSettings = () => {
                 className="w-full bg-slate-50/50 border-2 border-slate-100 rounded-2xl px-6 py-4 font-bold text-slate-700 focus:ring-4 ring-sky-50 focus:border-sky-200 outline-none transition-all"
               />
             </div>
-            <div className="w-full sm:w-40 space-y-2">
+            <div className="w-full sm:w-36 space-y-2">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Price (₱)</label>
               <input
                 type="number"
@@ -946,41 +1258,59 @@ const OptimizationSettings = () => {
                 className="w-full bg-slate-50/50 border-2 border-slate-100 rounded-2xl px-6 py-4 font-bold text-slate-700 focus:ring-4 ring-sky-50 focus:border-sky-200 outline-none transition-all"
               />
             </div>
-            <div className="w-full sm:w-36 space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Pricing Unit</label>
+            <div className="w-full sm:w-32 space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Unit</label>
               <select
                 value={newService.pricing_unit}
                 onChange={(e) => setNewService(prev => ({ ...prev, pricing_unit: e.target.value }))}
-                className="w-full bg-slate-50/50 border-2 border-slate-100 rounded-2xl px-6 py-4 font-bold text-slate-700 focus:ring-4 ring-sky-50 focus:border-sky-200 outline-none transition-all cursor-pointer"
+                className="w-full bg-slate-50/50 border-2 border-slate-100 rounded-2xl px-5 py-4 font-bold text-slate-700 focus:ring-4 ring-sky-50 focus:border-sky-200 outline-none transition-all cursor-pointer"
               >
                 {PRICING_UNITS.map((u) => (
                   <option key={u.value} value={u.value}>{u.label}</option>
                 ))}
               </select>
             </div>
-            {/* NEW — Required Phases dropdown (Add Service form) */}
             <div className="w-full sm:w-44 space-y-2">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Required Phases</label>
               <select
                 value={newService.required_phases}
                 onChange={(e) => setNewService(prev => ({ ...prev, required_phases: e.target.value }))}
-                className="w-full bg-slate-50/50 border-2 border-slate-100 rounded-2xl px-6 py-4 font-bold text-slate-700 focus:ring-4 ring-violet-50 focus:border-violet-200 outline-none transition-all cursor-pointer"
+                className="w-full bg-slate-50/50 border-2 border-slate-100 rounded-2xl px-5 py-4 font-bold text-slate-700 focus:ring-4 ring-violet-50 focus:border-violet-200 outline-none transition-all cursor-pointer"
               >
                 {REQUIRED_PHASES.map((p) => (
                   <option key={p.value} value={p.value}>{p.label}</option>
                 ))}
               </select>
             </div>
-            <div className="w-full sm:w-40 space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Duration (min)</label>
-              <input
-                type="number"
-                value={newService.duration_minutes}
-                onChange={(e) => setNewService(prev => ({ ...prev, duration_minutes: e.target.value }))}
-                placeholder="e.g. 45"
-                className="w-full bg-slate-50/50 border-2 border-slate-100 rounded-2xl px-6 py-4 font-bold text-slate-700 focus:ring-4 ring-sky-50 focus:border-sky-200 outline-none transition-all"
-              />
-            </div>
+
+            {needsWasherDuration(newService.required_phases) && (
+              <div className="w-full sm:w-36 space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Washer (min)</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={newService.washer_duration_minutes}
+                  onChange={(e) => setNewService(prev => ({ ...prev, washer_duration_minutes: e.target.value }))}
+                  placeholder="e.g. 30"
+                  className="w-full bg-slate-50/50 border-2 border-slate-100 rounded-2xl px-6 py-4 font-bold text-slate-700 focus:ring-4 ring-sky-50 focus:border-sky-200 outline-none transition-all"
+                />
+              </div>
+            )}
+
+            {needsDryerDuration(newService.required_phases) && (
+              <div className="w-full sm:w-36 space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Dryer (min)</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={newService.dryer_duration_minutes}
+                  onChange={(e) => setNewService(prev => ({ ...prev, dryer_duration_minutes: e.target.value }))}
+                  placeholder="e.g. 40"
+                  className="w-full bg-slate-50/50 border-2 border-slate-100 rounded-2xl px-6 py-4 font-bold text-slate-700 focus:ring-4 ring-orange-50 focus:border-orange-200 outline-none transition-all"
+                />
+              </div>
+            )}
+
             <button
               type="submit"
               disabled={isAddingService}
@@ -995,7 +1325,93 @@ const OptimizationSettings = () => {
           )}
         </div>
 
-        {/* SECTION 2: DELIVERY SETTINGS */}
+        {/* SECTION 2: PAYMENT METHODS (UPDATED — replaces old "Payment
+            QR Codes" section). Toggle which payment methods this shop
+            accepts; GCash/PayMaya QR upload only shows up once "Online
+            Payment" is turned ON. */}
+        <div className="bg-white p-10 rounded-[48px] border-2 border-slate-100 shadow-xl shadow-slate-200/50">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl">
+              <Wallet size={24} />
+            </div>
+            <h3 className="text-xl font-black text-slate-800 tracking-tight">Payment Methods</h3>
+          </div>
+          <p className="text-sm text-slate-400 mb-8 font-bold italic">
+            Choose which payment methods your shop accepts. These control the options shown to walk-in staff and to customers checking out in the mobile app.
+          </p>
+
+          <div className="space-y-4">
+            <PaymentMethodToggleRow
+              icon={Banknote}
+              label="Cash"
+              description="In-person payment at drop-off or pickup."
+              enabled={paymentMethods.accepts_cash}
+              onToggle={() => handlePaymentMethodToggle('accepts_cash')}
+              accentColor="emerald"
+            />
+            <PaymentMethodToggleRow
+              icon={HandCoins}
+              label="Cash on Delivery (COD)"
+              description="Customer pays in cash when their laundry is delivered."
+              enabled={paymentMethods.accepts_cod}
+              onToggle={() => handlePaymentMethodToggle('accepts_cod')}
+              accentColor="violet"
+            />
+            <PaymentMethodToggleRow
+              icon={Smartphone}
+              label="Online Payment (GCash / PayMaya)"
+              description="Customer scans your QR code and uploads proof of payment."
+              enabled={paymentMethods.accepts_online}
+              onToggle={() => handlePaymentMethodToggle('accepts_online')}
+              accentColor="sky"
+            />
+          </div>
+
+          {/* GCash/PayMaya QR upload — ONLY shown when Online Payment is ON */}
+          {paymentMethods.accepts_online && (
+            <div className="mt-6 p-8 bg-sky-50/40 rounded-[36px] border-2 border-sky-100">
+              <div className="flex items-center gap-2 mb-1">
+                <QrCode size={16} className="text-sky-500" />
+                <p className="text-[11px] font-black text-sky-700 uppercase tracking-[0.2em]">QR Codes for Online Payment</p>
+              </div>
+              <p className="text-xs text-slate-400 font-bold mb-6">
+                Upload your shop's GCash and/or PayMaya QR code. Customers who choose online payment will scan this and upload their proof of payment for you to verify.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-6">
+                <QRUploadSlot
+                  label="GCash QR Code"
+                  provider="gcash"
+                  currentUrl={paymentQR.gcash_qr_url}
+                  isUploading={uploadingQR.gcash}
+                  onFileSelected={handleQRFileSelected}
+                  accentColor="sky"
+                />
+                <QRUploadSlot
+                  label="PayMaya QR Code"
+                  provider="paymaya"
+                  currentUrl={paymentQR.paymaya_qr_url}
+                  isUploading={uploadingQR.paymaya}
+                  onFileSelected={handleQRFileSelected}
+                  accentColor="violet"
+                />
+              </div>
+            </div>
+          )}
+
+          <div className="mt-6 flex justify-end">
+            <button
+              type="button"
+              onClick={savePaymentMethods}
+              disabled={isSavingPaymentMethods}
+              className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-8 py-4 rounded-2xl font-black shadow-lg shadow-emerald-100 transition-all active:scale-95 disabled:opacity-60"
+            >
+              {isSavingPaymentMethods ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+              Save Payment Methods
+            </button>
+          </div>
+        </div>
+
+        {/* SECTION 3: DELIVERY SETTINGS */}
         <div className="bg-white p-10 rounded-[48px] border-2 border-slate-100 shadow-xl shadow-slate-200/50">
           <div className="flex items-center gap-3 mb-2">
             <div className="p-3 bg-orange-50 text-orange-600 rounded-2xl">
@@ -1048,7 +1464,7 @@ const OptimizationSettings = () => {
           </div>
         </div>
 
-        {/* SECTION 3: ADD-ONS */}
+        {/* SECTION 4: ADD-ONS */}
         <div className="bg-white p-10 rounded-[48px] border-2 border-slate-100 shadow-xl shadow-slate-200/50">
           <div className="flex items-center gap-3 mb-2">
             <div className="p-3 bg-violet-50 text-violet-600 rounded-2xl">
@@ -1185,7 +1601,7 @@ const OptimizationSettings = () => {
           )}
         </div>
 
-        {/* SECTION 4: PROMO CODES */}
+        {/* SECTION 5: PROMO CODES */}
         <div className="bg-white p-10 rounded-[48px] border-2 border-slate-100 shadow-xl shadow-slate-200/50">
           <div className="flex items-center gap-3 mb-2">
             <div className="p-3 bg-rose-50 text-rose-600 rounded-2xl">
@@ -1289,7 +1705,7 @@ const OptimizationSettings = () => {
           )}
         </div>
 
-        {/* SECTION 5: BOOKING RULES */}
+        {/* SECTION 6: BOOKING RULES */}
         <div className="bg-white p-10 rounded-[48px] border-2 border-slate-100 shadow-xl shadow-slate-200/50">
           <div className="flex items-center gap-3 mb-8">
             <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl">
@@ -1309,7 +1725,7 @@ const OptimizationSettings = () => {
           </div>
         </div>
 
-        {/* SECTION 6: UTILITY CALIBRATION */}
+        {/* SECTION 7: UTILITY CALIBRATION */}
         <div className="bg-white p-10 rounded-[48px] border-2 border-slate-100 shadow-xl shadow-slate-200/50 relative overflow-hidden">
           <div className="absolute top-0 right-0 p-8">
             <div className="bg-emerald-50 text-emerald-600 p-3 rounded-2xl" title="Calibration: CASURECO II & MNWD Rates">
@@ -1356,7 +1772,7 @@ const OptimizationSettings = () => {
           </div>
         </div>
 
-        {/* SECTION 7: SCHEDULING */}
+        {/* SECTION 8: SCHEDULING */}
         <div className="bg-white p-10 rounded-[48px] border-2 border-slate-100 shadow-xl shadow-slate-200/50">
           <div className="flex items-center gap-3 mb-8">
             <div className="p-3 bg-amber-50 text-amber-600 rounded-2xl">
@@ -1378,7 +1794,7 @@ const OptimizationSettings = () => {
         {/* FOOTER ACTIONS */}
         <div className="pt-6 flex flex-col md:flex-row items-center justify-between gap-6">
           <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest text-center md:text-left">
-            * Operational rate changes affect real-time analytics and transaction logic immediately once saved. Service, delivery, add-on, and promo changes above save instantly.
+            * Operational rate changes affect real-time analytics and transaction logic immediately once saved. Services, payment methods, delivery, add-on, and promo changes above save instantly (their own save button).
           </p>
           <div className="flex items-center gap-8">
             <button

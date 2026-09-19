@@ -17,6 +17,16 @@ import { connectNotificationSocket } from '../services/notificationsocket';
  * Kahit sino mang component ang kailangang malaman ng bagong booking
  * requests o ang kasalukuyang "Awaiting Approval" list, tumawag lang
  * ng useNotifications() sa loob nito.
+ *
+ * NEW (Weighing / Finalize Pricing feature) — idinagdag ang
+ * `awaitingWeighing` list (mobile bookings na "Awaiting Weighing" na
+ * status — na-accept na, hinihintay pang timbangin/i-finalize ang
+ * presyo ng staff), kasabay ng `finalizePricing()` action. Parehong
+ * "accept → move to the next list" na pattern ito ng existing
+ * awaitingApproval/acceptBooking sa itaas: pagka-Accept ng isang
+ * "Awaiting Approval" booking, awtomatiko na itong lilipat sa backend
+ * papuntang "Awaiting Weighing" — kaya dito rin natin ire-refresh ang
+ * awaitingWeighing list sa parehong sandali.
  */
 
 const NotificationContext = createContext(null);
@@ -31,6 +41,8 @@ export const useNotifications = () => {
 
 export const NotificationProvider = ({ children }) => {
   const [awaitingApproval, setAwaitingApproval] = useState([]);
+  // NEW (Weighing / Finalize Pricing feature)
+  const [awaitingWeighing, setAwaitingWeighing] = useState([]);
   const [toast, setToast] = useState(null);
   const toastTimerRef = useRef(null);
 
@@ -40,6 +52,16 @@ export const NotificationProvider = ({ children }) => {
       setAwaitingApproval(data || []);
     } catch (err) {
       console.error('Awaiting Approval fetch error:', err.message);
+    }
+  }, []);
+
+  // NEW (Weighing / Finalize Pricing feature)
+  const loadAwaitingWeighing = useCallback(async () => {
+    try {
+      const data = await apiService.getAwaitingWeighingBookings();
+      setAwaitingWeighing(data || []);
+    } catch (err) {
+      console.error('Awaiting Weighing fetch error:', err.message);
     }
   }, []);
 
@@ -54,9 +76,13 @@ export const NotificationProvider = ({ children }) => {
   // anong page ang kasalukuyang binubuksan ng user.
   useEffect(() => {
     loadAwaitingApproval();
-    const interval = setInterval(() => loadAwaitingApproval(), 20000);
+    loadAwaitingWeighing();
+    const interval = setInterval(() => {
+      loadAwaitingApproval();
+      loadAwaitingWeighing();
+    }, 20000);
     return () => clearInterval(interval);
-  }, [loadAwaitingApproval]);
+  }, [loadAwaitingApproval, loadAwaitingWeighing]);
 
   // WebSocket — isang beses lang kumo-connect dito sa app/layout level
   // (hindi na per-page), kaya nananatiling "online" ang shop at
@@ -69,6 +95,13 @@ export const NotificationProvider = ({ children }) => {
           showToast(`🔔 New booking request from ${data.customer_name}`);
           loadAwaitingApproval();
         }
+        // NEW (Weighing / Finalize Pricing feature) — in case another
+        // connected Service Terminal tab/device finalizes a booking's
+        // pricing, refresh this tab's Awaiting Weighing list too so it
+        // doesn't show a stale entry that's already been handled.
+        if (data.type === 'booking_price_finalized') {
+          loadAwaitingWeighing();
+        }
       },
     });
 
@@ -79,7 +112,11 @@ export const NotificationProvider = ({ children }) => {
   const acceptBooking = useCallback(async (bookingId) => {
     await apiService.acceptBooking(bookingId);
     setAwaitingApproval(prev => prev.filter(b => b.id !== bookingId));
-  }, []);
+    // NEW (Weighing / Finalize Pricing feature) — an accepted booking
+    // now lands in "Awaiting Weighing" on the backend, so refresh that
+    // list right away instead of waiting for the next 20s poll.
+    loadAwaitingWeighing();
+  }, [loadAwaitingWeighing]);
 
   /**
    * reason: forwarded to apiService.declineBooking(bookingId, reason) —
@@ -91,11 +128,28 @@ export const NotificationProvider = ({ children }) => {
     setAwaitingApproval(prev => prev.filter(b => b.id !== bookingId));
   }, []);
 
+  /**
+   * NEW (Weighing / Finalize Pricing feature) — tinatawag pagka-Confirm
+   * sa WeighingPricingModal. pricingData: { final_weight, addon_charges }.
+   * Tinatanggal agad ang booking sa awaitingWeighing list sa success —
+   * lilipat na ito sa "Pending" o "Awaiting Payment" sa backend, kaya
+   * wala na itong dapat gawin dito sa panel na ito.
+   */
+  const finalizePricing = useCallback(async (bookingId, pricingData) => {
+    const updated = await apiService.finalizeBookingPricing(bookingId, pricingData);
+    setAwaitingWeighing(prev => prev.filter(b => b.id !== bookingId));
+    return updated;
+  }, []);
+
   const value = {
     awaitingApproval,
     refreshAwaitingApproval: loadAwaitingApproval,
     acceptBooking,
     declineBooking,
+    // NEW (Weighing / Finalize Pricing feature)
+    awaitingWeighing,
+    refreshAwaitingWeighing: loadAwaitingWeighing,
+    finalizePricing,
   };
 
   return (

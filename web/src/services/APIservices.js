@@ -1,10 +1,6 @@
 import axios from 'axios';
 import supabase from './supabaseclient';
 
-/**
- * Base URL for the FastAPI backend.
- * Hosted on Render for production access.
- */
 const BASE_URL = 'https://laundrylink-backend-8p1l.onrender.com';
 
 const apiClient = axios.create({
@@ -192,6 +188,49 @@ export const updateShopProfile = async (shopId, profileData) => {
     }
 };
 
+/**
+ * FIXED / NEW — uploads a shop's payment QR code image directly to
+ * Supabase Storage (bucket "payment-qr-codes") and returns the public
+ * URL, which the caller then saves onto the Shop profile via
+ * updateShopProfile().
+ *
+ * IMPORTANT: pulls the CURRENT Supabase session via
+ * supabase.auth.getSession() — the same pattern the apiClient
+ * interceptor above uses — instead of reading a raw token from
+ * localStorage. Nothing in this file ever writes a plain 'token' key
+ * to localStorage (only user_email/shop_id/shop_name/shop_address/
+ * role/full_name are cached there — see cacheProfile() below), so any
+ * code that tried to read `localStorage.getItem('token')` to
+ * authenticate a Storage upload would always get null and silently
+ * upload as an unauthenticated request, which the bucket's
+ * "authenticated users can INSERT" policy then rejects.
+ *
+ * methodId is used as part of the storage path so multiple payment
+ * methods (gcash, paymaya, or any custom provider id) each get their
+ * own file without overwriting one another.
+ */
+export const uploadPaymentQR = async (file, shopId, methodId) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+        throw new Error("You're not logged in. Please refresh the page and log in again.");
+    }
+
+    const fileExt = file.name.split('.').pop();
+    const filePath = `${shopId}/${methodId}-${Date.now()}.${fileExt}`;
+
+    const { error: uploadError } = await supabase.storage
+        .from('payment-qr-codes')
+        .upload(filePath, file, { upsert: true, contentType: file.type });
+
+    if (uploadError) {
+        console.error("Upload Payment QR Error:", uploadError.message);
+        throw uploadError;
+    }
+
+    const { data } = supabase.storage.from('payment-qr-codes').getPublicUrl(filePath);
+    return data.publicUrl;
+};
+
 export const updatePassword = async (passwordData) => {
     try {
         const { data: { user } } = await supabase.auth.getUser();
@@ -222,7 +261,6 @@ export const registerStaff = async (staffData) => {
         const payload = {
             full_name: staffData.full_name,
             email: staffData.email,
-            password: staffData.password,
             role: staffData.role || 'staff',
         };
         const response = await apiClient.post('/auth/register/staff', payload);
@@ -275,7 +313,7 @@ export const declineBooking = async (bookingId, reason) => {
     }
 };
 
-export const markBookingPaid = async (bookingId, paymentMethod = 'cash') => {
+export const markBookingPaid = async (bookingId, paymentMethod = null) => {
     try {
         const response = await apiClient.patch(`/bookings/${bookingId}/mark-paid`, {
             payment_method: paymentMethod
@@ -283,6 +321,61 @@ export const markBookingPaid = async (bookingId, paymentMethod = 'cash') => {
         return response.data;
     } catch (error) {
         console.error("Mark Booking Paid Error:", error.response?.data?.detail || error.message);
+        throw error;
+    }
+};
+
+// --- ONLINE PAYMENT VERIFICATION METHODS (NEW — Online Payment feature) ---
+
+export const getPendingVerificationBookings = async () => {
+    try {
+        const response = await apiClient.get('/bookings/pending-verification');
+        return response.data;
+    } catch (error) {
+        console.error("Fetch Pending Verification Error:", error.response?.data?.detail || error.message);
+        throw error;
+    }
+};
+
+export const rejectPayment = async (bookingId, reason) => {
+    try {
+        const response = await apiClient.patch(`/bookings/${bookingId}/reject-payment`, { reason });
+        return response.data;
+    } catch (error) {
+        console.error("Reject Payment Error:", error.response?.data?.detail || error.message);
+        throw error;
+    }
+};
+
+// --- WEIGHING / FINALIZE PRICING METHODS (NEW — Weighing / Finalize
+//     Pricing feature, reconciled mula sa Admin Dashboard spec Module B) ---
+
+export const getAwaitingWeighingBookings = async () => {
+    try {
+        const response = await apiClient.get('/bookings/awaiting-weighing');
+        return response.data;
+    } catch (error) {
+        console.error("Fetch Awaiting Weighing Error:", error.response?.data?.detail || error.message);
+        throw error;
+    }
+};
+
+/**
+ * pricingData: { final_weight: number, addon_charges: number }
+ * Ang buong computation (final_weight × ServiceType.price + addon_charges)
+ * ay ginagawa sa BACKEND (finalize_booking_pricing()) — dito lang
+ * ipinapasa ang dalawang raw inputs na kinuha sa WeighingPricingModal.
+ */
+export const finalizeBookingPricing = async (bookingId, pricingData) => {
+    try {
+        const payload = {
+            final_weight: parseFloat(pricingData.final_weight),
+            addon_charges: parseFloat(pricingData.addon_charges || 0),
+        };
+        const response = await apiClient.patch(`/bookings/${bookingId}/finalize-pricing`, payload);
+        return response.data;
+    } catch (error) {
+        console.error("Finalize Pricing Error:", error.response?.data?.detail || error.message);
         throw error;
     }
 };
@@ -517,8 +610,6 @@ export const apiService = {
         }
     },
 
-    // LEGACY — single washer + single dryer, one-time. Kept for backward
-    // compatibility only; not used by the new multi-machine flow.
     assignMachineToBooking: async (bookingId, assignData, shopId) => {
         try {
             const response = await apiClient.patch(
@@ -532,8 +623,6 @@ export const apiService = {
         }
     },
 
-    // NEW — assigns N machines (one per load) to a Pending booking.
-    // assignData shape: { machine_ids: [1, 2, ...] }
      assignMachinesToBooking: async (bookingId, assignData) => {
         try {
             const response = await apiClient.post(`/bookings/${bookingId}/assign-machines`, assignData);
@@ -544,18 +633,6 @@ export const apiService = {
         }
     },
 
-    /**
-     * FIXED — dating inaasahan ng function na PLAIN NUMBER ang 3rd
-     * argument (dryerId) tapos ginagawang { dryer_id: parseInt(dryerId) }.
-     * Pero ang MoveToDryerModal.jsx ay talagang nagpapasa ng OBJECT
-     * ({ dryer_id: parseInt(selectedDryer) }), hindi plain number — kaya
-     * ang parseInt() ng buong object ay nagiging NaN, na-JSON.stringify
-     * papuntang null, at bumabagsak sa backend's required int validation
-     * (422 error). Ngayon ay tinatanggap na nito ang OBJECT nang tama,
-     * kinukuha ang `.dryer_id` mula rito, PERO sinusuportahan pa rin ang
-     * plain-number na paraan ng tawag (fallback) kung sakaling ibang
-     * caller sa hinaharap ang gagamit nito nang ganoon.
-     */
     moveLoadToDryer: async (bookingId, loadNumber, moveData) => {
         try {
             const dryerId = (moveData && typeof moveData === 'object')
@@ -573,6 +650,14 @@ export const apiService = {
     },
 
     markBookingPaid,
+
+    // --- ONLINE PAYMENT VERIFICATION METHODS (NEW) ---
+    getPendingVerificationBookings,
+    rejectPayment,
+
+    // --- WEIGHING / FINALIZE PRICING METHODS (NEW) ---
+    getAwaitingWeighingBookings,
+    finalizeBookingPricing,
 
     // --- MACHINE HUB & TELEMETRY METHODS ---
 
@@ -602,6 +687,15 @@ export const apiService = {
         }
     },
 
+    /**
+     * UPDATED (reverted to per-service durations): HINDI NA ito ginagamit
+     * para mag-set ng cycle duration — tinanggal na ang dating
+     * "Machine Durations" section sa Optimization Settings, at ang
+     * duration ay nasa ServiceType na ulit (washer_duration_minutes /
+     * dryer_duration_minutes). Nanatili ito bilang generic machine
+     * config updater (status, telemetry overrides, atbp.) na ginagamit
+     * ng Machine Hub.
+     */
     updateMachineConfig: async (machineId, updateData, shopId) => {
         try {
             const response = await apiClient.patch(`/machines/${machineId}`, updateData);
@@ -802,17 +896,32 @@ export const apiService = {
         }
     },
 
-    addServiceType: async (serviceData, shopId) => {
+    /**
+     * Ang washer_duration_minutes / dryer_duration_minutes ay per-SERVICE
+     * na ngayon (hindi per-machine) — ang required_phases ang nagsasabi
+     * kung alin sa dalawa ang aktwal na gagamitin sa isang booking:
+     *   - "full_service" → parehong washer at dryer duration
+     *   - "wash_only"    → washer_duration_minutes lang
+     *   - "dry_only"     → dryer_duration_minutes lang
+     * Pinapadala pa rin ang PAREHONG fields kahit isa lang ang
+     * applicable — tumutugma ito sa ServiceTypeBase sa backend, kung
+     * saan required (may default na 45) ang dalawa; yung hindi
+     * applicable ay basta hindi ginagamit sa booking flow.
+     */
+       addServiceType: async (serviceData, shopId) => {
         try {
             const payload = {
                 name: serviceData.name,
                 price: parseFloat(serviceData.price),
                 is_active: serviceData.is_active !== undefined ? Boolean(serviceData.is_active) : true,
-                duration_minutes: serviceData.duration_minutes !== undefined
-                    ? parseInt(serviceData.duration_minutes)
-                    : 45,
                 pricing_unit: serviceData.pricing_unit || 'load',
                 required_phases: serviceData.required_phases || 'full_service',
+                washer_duration_minutes: serviceData.washer_duration_minutes !== undefined && serviceData.washer_duration_minutes !== ''
+                    ? parseInt(serviceData.washer_duration_minutes)
+                    : 45,
+                dryer_duration_minutes: serviceData.dryer_duration_minutes !== undefined && serviceData.dryer_duration_minutes !== ''
+                    ? parseInt(serviceData.dryer_duration_minutes)
+                    : 45,
             };
             const response = await apiClient.post('/settings/services', payload);
             return response.data;
@@ -826,7 +935,8 @@ export const apiService = {
         try {
             const payload = { ...updateData };
             if (payload.price !== undefined) payload.price = parseFloat(payload.price);
-            if (payload.duration_minutes !== undefined) payload.duration_minutes = parseInt(payload.duration_minutes);
+            if (payload.washer_duration_minutes !== undefined) payload.washer_duration_minutes = parseInt(payload.washer_duration_minutes);
+            if (payload.dryer_duration_minutes !== undefined) payload.dryer_duration_minutes = parseInt(payload.dryer_duration_minutes);
             const response = await apiClient.put(`/settings/services/${serviceId}`, payload);
             return response.data;
         } catch (error) {
@@ -834,7 +944,6 @@ export const apiService = {
             throw error;
         }
     },
-
     deleteServiceType: async (serviceId, shopId) => {
         try {
             const response = await apiClient.delete(`/settings/services/${serviceId}`);
@@ -863,6 +972,7 @@ export const apiService = {
 
     getShopProfile,
     updateShopProfile,
+    uploadPaymentQR,
 
     // --- ACTIVITY LOG METHODS ---
 

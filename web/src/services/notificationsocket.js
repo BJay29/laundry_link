@@ -1,3 +1,5 @@
+import supabase from './supabaseclient';
+
 /**
  * NOTIFICATION SOCKET SERVICE
  *
@@ -12,6 +14,18 @@
  * page (Dashboard, Inventory, Settings, atbp.) ang binibisita nila.
  * Ang function mismo ay walang binago — connection helper lang ito,
  * hindi nito alam kung sino ang tumatawag dito.
+ *
+ * FIXED (auth token source): dating `localStorage.getItem('token')`
+ * ang ginagamit dito para kunin ang JWT — pero walang kahit saang
+ * bahagi ng app (see APIservices.js's cacheProfile()) ang nagse-save
+ * ng access token sa localStorage key na 'token'. Ang totoong Supabase
+ * session ay AUTO-MANAGED ng supabase-js client mismo (sarili niyang
+ * internal storage key, hindi 'token'), kaya kailangang kunin ito nang
+ * fresh sa pamamagitan ng supabase.auth.getSession() — parehong pattern
+ * na ginagamit na ng apiClient interceptor sa APIservices.js. Dahil
+ * dito, dating LAGING wala/expired ang "token" na nakikita ng function
+ * na ito, kaya laging "no auth token found, skipping connection." ang
+ * lumalabas kahit naka-login naman talaga ang user.
  *
  * Konektado sa GET /ws/notifications?token=<JWT> (backend endpoint).
  * Kung mahihiwalay ang connection (network blip, backend restart, atbp.),
@@ -42,10 +56,21 @@ export function connectNotificationSocket({ onMessage, onOpen, onClose }) {
   let reconnectTimer = null;
   let manuallyClosed = false;
 
-  const getToken = () => localStorage.getItem('token');
+  /**
+   * FIXED: pulls the CURRENT Supabase session's access_token instead
+   * of a localStorage key that nothing in the app ever writes to.
+   * Supabase's client refreshes this token in the background as
+   * needed, so calling getSession() fresh (instead of caching the
+   * token somewhere ourselves) also means we always connect with a
+   * token that hasn't expired.
+   */
+  const getToken = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.access_token || null;
+  };
 
-  const openSocket = () => {
-    const token = getToken();
+  const openSocket = async () => {
+    const token = await getToken();
     if (!token) {
       console.warn('NotificationSocket: no auth token found, skipping connection.');
       return;

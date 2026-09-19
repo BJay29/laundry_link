@@ -1,29 +1,47 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Zap, Droplets, FlaskConical, Trash2, RefreshCw, AlertTriangle, Waves, Wind, CheckCircle, Repeat, Boxes } from 'lucide-react';
+import { Plus, Zap, Droplets, FlaskConical, Trash2, RefreshCw, AlertTriangle, Waves, Wind, CheckCircle, Repeat, Boxes, Clock } from 'lucide-react';
 import Swal from 'sweetalert2';
 import apiService from '../services/APIservices';
 import optimizationLogic from '../utils/optimizationlogic';
 import MachineModal from '../components/modals/machinemodal';
 
+/**
+ * MACHINE HUB
+ *
+ * UPDATED (reverted to per-service durations): ang "Live Timer" column
+ * ay hindi na umaasa sa tinanggal nang per-machine
+ * `configured_duration_minutes`. Kinukuha na ngayon ang duration mula
+ * sa ServiceType ng kasalukuyang cycle (current_service_type), at
+ * pinipili kung washer_duration_minutes o dryer_duration_minutes base
+ * sa machine_type.
+ */
 const MachineHub = () => {
   const shopId = localStorage.getItem('shop_id');
 
   const [dbMachines, setDbMachines] = useState([]);
+  const [serviceDurations, setServiceDurations] = useState({});
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [successMsg, setSuccessMsg] = useState('');
   const [costs, setCosts] = useState({ detergent: 0, electricity: 0, water: 0 });
 
-  /**
-   * TELEMETRY SYNC
-   * Synchronizes hardware states and resource consumption from the backend.
-   * Only machines that actually exist in the DB for this shop are shown.
-   * New shops with no registered units will simply render an empty state.
-   */
+  const [now, setNow] = useState(new Date());
+
+  useEffect(() => {
+    const tick = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(tick);
+  }, []);
+
   const syncMachineData = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await apiService.getMachines(shopId);
+
+      const [machinesResult, servicesResult] = await Promise.allSettled([
+        apiService.getMachines(shopId),
+        apiService.getServiceTypes(shopId),
+      ]);
+
+      const data = machinesResult.status === 'fulfilled' ? machinesResult.value : [];
 
       const list = (data || []).map(m => {
         const cycles = parseInt(m.total_cycles) || 0;
@@ -46,7 +64,6 @@ const MachineHub = () => {
         };
       });
 
-      // Sort: Washers first, then Dryers, ordered by machine_number
       list.sort((a, b) => {
         if (a.machine_type !== b.machine_type) {
           return a.machine_type === 'Washer' ? -1 : 1;
@@ -55,6 +72,17 @@ const MachineHub = () => {
       });
 
       setDbMachines(list);
+
+      if (servicesResult.status === 'fulfilled') {
+        const map = {};
+        (servicesResult.value || []).forEach((s) => {
+          map[s.name] = {
+            washer: s.washer_duration_minutes,
+            dryer: s.dryer_duration_minutes,
+          };
+        });
+        setServiceDurations(map);
+      }
 
       const totals = list.reduce((acc, m) => ({
         detergent:   acc.detergent   + (parseFloat(m.metrics?.detergent_cost) || 0),
@@ -76,11 +104,27 @@ const MachineHub = () => {
     return () => clearInterval(interval);
   }, [syncMachineData]);
 
-  /**
-   * HARDWARE DECOMMISSIONING
-   * Uses SweetAlert2 to bypass the "localhost says" browser message.
-   * Performs automatic deletion after user confirmation in the styled modal.
-   */
+  const getRemainingSeconds = (machine) => {
+    if (machine.status !== 'Busy' || !machine.cycle_started_at) return null;
+
+    const service = serviceDurations[machine.current_service_type];
+    if (!service) return null;
+
+    const durationMinutes = machine.machine_type === 'Washer' ? service.washer : service.dryer;
+    if (!durationMinutes) return null;
+
+    const totalSeconds = durationMinutes * 60;
+    const startedAt = new Date(machine.cycle_started_at);
+    const elapsedSeconds = Math.floor((now.getTime() - startedAt.getTime()) / 1000);
+    return Math.max(0, totalSeconds - elapsedSeconds);
+  };
+
+  const formatCountdown = (totalSeconds) => {
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  };
+
   const handleDeleteMachine = async (id, status) => {
     if (!id) return;
 
@@ -165,7 +209,6 @@ const MachineHub = () => {
         </div>
       )}
 
-      {/* Header Section */}
       <div className="flex justify-between items-start mb-8">
         <div>
           <h2 className="text-slate-900 font-bold text-lg mb-1 italic">
@@ -193,17 +236,14 @@ const MachineHub = () => {
         </div>
       </div>
 
-      {/* Global Cost Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <CostCard icon={<FlaskConical size={24} />} label="Aggregated Detergent" value={optimizationLogic.formatCurrency(costs.detergent)} color="purple" />
         <CostCard icon={<Zap size={24} />} label="Energy Consumption" value={optimizationLogic.formatCurrency(costs.electricity)} color="amber" />
         <CostCard icon={<Droplets size={24} />} label="Water Utility Cost" value={optimizationLogic.formatCurrency(costs.water)} color="blue" />
       </div>
 
-      {/* Main Hardware Grid */}
       <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden">
         {!loading && !hasMachines ? (
-          // EMPTY STATE — new shop, no units registered yet
           <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
             <div className="p-5 bg-slate-50 rounded-3xl mb-5">
               <Boxes size={32} className="text-slate-300" />
@@ -218,67 +258,84 @@ const MachineHub = () => {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50/50">
-                  {['Unit ID', 'Type', 'Status', 'Usage Logs', 'Elec (PHP)', 'Water (PHP)', 'Det (PHP)', 'Actions'].map(h => (
+                  {['Unit ID', 'Type', 'Status', 'Live Timer', 'Usage Logs', 'Elec (PHP)', 'Water (PHP)', 'Det (PHP)', 'Actions'].map(h => (
                     <th key={h} className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {dbMachines.map((m) => (
-                  <tr key={m.id} className="hover:bg-slate-50/50 transition-colors group">
-                    <td className="px-6 py-5">
-                      <div className="flex items-center gap-3">
-                        <div className={`p-2.5 rounded-xl ${m.machine_type === 'Washer' ? 'bg-sky-50 text-sky-500' : 'bg-orange-50 text-orange-500'}`}>
-                          {m.machine_type === 'Washer' ? <Waves size={16} /> : <Wind size={16} />}
+                {dbMachines.map((m) => {
+                  const remainingSeconds = getRemainingSeconds(m);
+                  return (
+                    <tr key={m.id} className="hover:bg-slate-50/50 transition-colors group">
+                      <td className="px-6 py-5">
+                        <div className="flex items-center gap-3">
+                          <div className={`p-2.5 rounded-xl ${m.machine_type === 'Washer' ? 'bg-sky-50 text-sky-500' : 'bg-orange-50 text-orange-500'}`}>
+                            {m.machine_type === 'Washer' ? <Waves size={16} /> : <Wind size={16} />}
+                          </div>
+                          <span className="font-black text-slate-800 text-base tracking-tighter">{getMachineLabel(m)}</span>
                         </div>
-                        <span className="font-black text-slate-800 text-base tracking-tighter">{getMachineLabel(m)}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-5 font-bold text-slate-400 text-[11px] uppercase tracking-wider">{m.machine_type}</td>
-                    <td className="px-6 py-5">
-                      <span className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-tight border ${
-                        m.status === 'Busy' ? 'bg-blue-50 text-blue-600 border-blue-100' :
-                        m.status === 'Maintenance' ? 'bg-rose-50 text-rose-600 border-rose-100' :
-                        m.status === 'Available' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
-                        'bg-slate-100 text-slate-400 border-slate-200'
-                      }`}>
-                        {m.status || 'Unknown'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-5">
-                      <div className="flex items-center gap-2">
-                        <Repeat size={14} className="text-slate-300" />
-                        <span className="text-[11px] font-black uppercase text-slate-600 tracking-tight">{m.total_cycles} Cycles</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-5"><MetricValue value={m.metrics?.electricity_cost} cycles={m.total_cycles} /></td>
-                    <td className="px-6 py-5"><MetricValue value={m.metrics?.water_cost} cycles={m.total_cycles} /></td>
-                    <td className="px-6 py-5"><MetricValue value={m.metrics?.detergent_cost} cycles={m.total_cycles} /></td>
-                    <td className="px-6 py-5 text-right">
-                      <div className="flex items-center gap-2 justify-end">
-                        <button
-                          onClick={() => handleToggleMaintenance(m.id)}
-                          disabled={m.status === 'Busy'}
-                          className={`p-2 rounded-xl transition-all ${
-                            m.status === 'Busy' ? 'opacity-10 cursor-not-allowed' :
-                            m.status === 'Maintenance' ? 'bg-amber-100 text-amber-600' : 'bg-slate-50 text-slate-300 hover:text-amber-500 hover:bg-amber-50'
-                          }`}
-                        >
-                          <AlertTriangle size={16} />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteMachine(m.id, m.status)}
-                          disabled={m.status === 'Busy'}
-                          className={`p-2 rounded-xl transition-all ${
-                            m.status === 'Busy' ? 'opacity-10 cursor-not-allowed' : 'bg-slate-50 text-slate-300 hover:text-rose-500 hover:bg-rose-50'
-                          }`}
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="px-6 py-5 font-bold text-slate-400 text-[11px] uppercase tracking-wider">{m.machine_type}</td>
+                      <td className="px-6 py-5">
+                        <span className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-tight border ${
+                          m.status === 'Busy' ? 'bg-blue-50 text-blue-600 border-blue-100' :
+                          m.status === 'Maintenance' ? 'bg-rose-50 text-rose-600 border-rose-100' :
+                          m.status === 'Available' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
+                          'bg-slate-100 text-slate-400 border-slate-200'
+                        }`}>
+                          {m.status || 'Unknown'}
+                        </span>
+                      </td>
+
+                      <td className="px-6 py-5">
+                        {remainingSeconds !== null ? (
+                          <div className="flex items-center gap-1.5">
+                            <Clock size={13} className={remainingSeconds <= 60 ? 'text-rose-500' : 'text-blue-500'} />
+                            <span className={`font-black text-sm tabular-nums ${remainingSeconds <= 60 ? 'text-rose-600' : 'text-blue-600'}`}>
+                              {formatCountdown(remainingSeconds)}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-[10px] font-bold text-slate-300 uppercase">—</span>
+                        )}
+                      </td>
+
+                      <td className="px-6 py-5">
+                        <div className="flex items-center gap-2">
+                          <Repeat size={14} className="text-slate-300" />
+                          <span className="text-[11px] font-black uppercase text-slate-600 tracking-tight">{m.total_cycles} Cycles</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-5"><MetricValue value={m.metrics?.electricity_cost} cycles={m.total_cycles} /></td>
+                      <td className="px-6 py-5"><MetricValue value={m.metrics?.water_cost} cycles={m.total_cycles} /></td>
+                      <td className="px-6 py-5"><MetricValue value={m.metrics?.detergent_cost} cycles={m.total_cycles} /></td>
+                      <td className="px-6 py-5 text-right">
+                        <div className="flex items-center gap-2 justify-end">
+                          <button
+                            onClick={() => handleToggleMaintenance(m.id)}
+                            disabled={m.status === 'Busy'}
+                            className={`p-2 rounded-xl transition-all ${
+                              m.status === 'Busy' ? 'opacity-10 cursor-not-allowed' :
+                              m.status === 'Maintenance' ? 'bg-amber-100 text-amber-600' : 'bg-slate-50 text-slate-300 hover:text-amber-500 hover:bg-amber-50'
+                            }`}
+                          >
+                            <AlertTriangle size={16} />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteMachine(m.id, m.status)}
+                            disabled={m.status === 'Busy'}
+                            className={`p-2 rounded-xl transition-all ${
+                              m.status === 'Busy' ? 'opacity-10 cursor-not-allowed' : 'bg-slate-50 text-slate-300 hover:text-rose-500 hover:bg-rose-50'
+                            }`}
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

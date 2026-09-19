@@ -1,33 +1,23 @@
-import React from 'react';
-import Sidebar from './sidebar';
-import Header from './header';
+import React, { useState } from 'react';
 import { Outlet } from 'react-router-dom';
+import Sidebar from './sidebar'; 
+import Header from './header';     
 
-/**
- * Layout Component
- * This component wraps protected routes and provides a consistent structure
- * with a fixed sidebar, a sticky header, and a scrollable main content area.
- */
 const Layout = () => {
+  const [isCollapsed, setIsCollapsed] = useState(false);
+
   return (
-    <div className="flex min-h-screen bg-slate-50">
-      {/* 1. Fixed Sidebar Section */}
-      <Sidebar />
+    <div className="min-h-screen bg-slate-50 flex">
+      {/* 1. Sidebar na may dalang collapse state */}
+      <Sidebar isCollapsed={isCollapsed} setIsCollapsed={setIsCollapsed} />
 
-      {/* 2. Main Content Area (May ml-72 para hindi matakpan ng fixed sidebar) */}
-      <div className="flex-1 ml-72 flex flex-col min-h-screen">
-        {/* Sticky Header sa Itaas */}
+      {/* 2. Main Content Area na kusang nag-a-adjust ang margin at lapad */}
+      <div className={`flex-1 flex flex-col transition-all duration-300 ease-in-out ${
+        isCollapsed ? 'ml-20' : 'ml-72'
+      }`}>
         <Header />
-
-        {/* Main Body kung saan lumalabas ang mga Routes/Pages */}
-        <main className="flex-1 p-6">
-          <div className="max-w-[1600px] mx-auto">
-            {/* 
-              The <Outlet /> component is a placeholder that renders 
-              the child route elements defined in App.jsx.
-            */}
-            <Outlet />
-          </div>
+        <main className="p-6 flex-grow">
+          <Outlet />
         </main>
       </div>
     </div>

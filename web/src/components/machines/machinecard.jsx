@@ -1,10 +1,17 @@
 import React from 'react';
-import { Waves, Wind, AlertCircle, Clock, TrendingUp, Zap } from 'lucide-react';
+import { Waves, Wind, AlertCircle, Clock, TrendingUp } from 'lucide-react';
 
 /**
  * MachineCard Component
- * Displays real-time telemetry from the Backend PredictionService.
- * UI focus: Hardware-specific cycle time, dynamic profitability bars, and lifetime net earnings.
+ *
+ * UPDATED (reverted to per-service durations): ang cycle countdown ay
+ * hindi na ibinabase sa tinanggal nang `configured_duration_minutes`
+ * (per-machine). Ngayon, ang PARENT na ang naghahanap ng tamang
+ * duration mula sa ServiceType ng kasalukuyang cycle
+ * (washer_duration_minutes o dryer_duration_minutes, depende sa
+ * machine_type), at ipinapasa ito dito bilang `service_duration_minutes`.
+ * Kung wala ito (hal. hindi nahanap ang service record), babalik ito sa
+ * static `remaining_time` display bilang fallback.
  */
 const MachineCard = ({ 
   machine_number, 
@@ -14,24 +21,54 @@ const MachineCard = ({
   net_profit_accumulated = 0, 
   total_cycles = 0, 
   remaining_time = 0, 
+  service_duration_minutes,
+  cycle_started_at,
+  now,
   current_service_type = "None",
   current_price = 0,
   onClick
 }) => {
   
-  // Logic helpers for UI styling based on machine category
   const isDryer = machine_type?.toLowerCase() === 'dryer';
   const isBusy = status?.toLowerCase() === 'busy';
   const isMaintenance = status?.toLowerCase() === 'maintenance';
   
-  // Generates ID labels like W1 or D1 for better UX scannability
   const machineId = `${machine_type?.charAt(0).toUpperCase() || 'M'}${machine_number}`;
 
-  // Formatting currency for the "Net Profit" footer
   const formattedNetProfit = Number(net_profit_accumulated).toLocaleString(undefined, { 
     minimumFractionDigits: 2, 
     maximumFractionDigits: 2 
   });
+
+  /**
+   * UPDATED — kino-compute ang live countdown gamit ang
+   * service_duration_minutes (galing sa ServiceType, resolved na ng
+   * parent) at cycle_started_at. Walang hardcoded na 45 dito — kung
+   * walang duration na naipasa, fallback na lang sa static
+   * remaining_time galing sa backend.
+   */
+  const getLiveDisplay = () => {
+    if (isBusy && service_duration_minutes && cycle_started_at && now) {
+      const totalSeconds = service_duration_minutes * 60;
+      const startedAt = new Date(cycle_started_at);
+      const elapsedSeconds = Math.floor((now.getTime() - startedAt.getTime()) / 1000);
+      const remainingSeconds = Math.max(0, totalSeconds - elapsedSeconds);
+      const minutes = Math.floor(remainingSeconds / 60);
+      const seconds = remainingSeconds % 60;
+      return {
+        text: `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`,
+        isLive: true,
+        isEndingSoon: remainingSeconds <= 60,
+      };
+    }
+    return {
+      text: `${remaining_time || 0} min`,
+      isLive: false,
+      isEndingSoon: false,
+    };
+  };
+
+  const liveDisplay = getLiveDisplay();
 
   return (
     <div 
@@ -45,7 +82,7 @@ const MachineCard = ({
       }`}
     >
       
-      {/* --- 1. HEADER: Machine Identity & Live Status Badge --- */}
+      {/* --- 1. HEADER --- */}
       <div className="flex justify-between items-start mb-6">
         <div className="flex gap-3">
           <div className={`p-3 rounded-2xl transition-all duration-300 ${
@@ -67,7 +104,7 @@ const MachineCard = ({
         </span>
       </div>
 
-      {/* --- 2. HARDWARE TELEMETRY: Service Selection & Remaining Cycle Time --- */}
+      {/* --- 2. TELEMETRY --- */}
       <div className="min-h-[80px] mb-6">
         {isMaintenance ? (
           <div className="bg-rose-50 p-4 rounded-2xl flex items-center gap-3 text-rose-600 border border-rose-100">
@@ -75,15 +112,22 @@ const MachineCard = ({
             <span className="font-bold text-sm">Hardware Maintenance</span>
           </div>
         ) : isBusy ? (
-          <div className="bg-sky-50/50 p-4 rounded-2xl border border-sky-100/50 flex justify-between items-center">
+          <div className={`p-4 rounded-2xl border flex justify-between items-center ${
+            liveDisplay.isLive && liveDisplay.isEndingSoon
+              ? 'bg-rose-50/50 border-rose-100/50'
+              : 'bg-sky-50/50 border-sky-100/50'
+          }`}>
             <div className="space-y-1">
-              <p className="text-sky-600 text-[10px] font-black uppercase tracking-tighter">
+              <p className={`text-[10px] font-black uppercase tracking-tighter ${
+                liveDisplay.isLive && liveDisplay.isEndingSoon ? 'text-rose-600' : 'text-sky-600'
+              }`}>
                 {current_service_type || "Standard Cycle"}
               </p>
-              <div className="flex items-center gap-1.5 text-slate-900">
-                <Clock size={12} className="text-sky-500" />
-                {/* remaining_time now displays the hardware-specific runtime from PredictionService */}
-                <p className="text-xl font-black">{remaining_time || 0} min</p>
+              <div className={`flex items-center gap-1.5 ${
+                liveDisplay.isLive && liveDisplay.isEndingSoon ? 'text-rose-700' : 'text-slate-900'
+              }`}>
+                <Clock size={12} className={liveDisplay.isLive && liveDisplay.isEndingSoon ? 'text-rose-500' : 'text-sky-500'} />
+                <p className="text-xl font-black tabular-nums">{liveDisplay.text}</p>
               </div>
             </div>
             <div className="text-right">
@@ -97,7 +141,7 @@ const MachineCard = ({
         )}
       </div>
 
-      {/* --- 3. PERFORMANCE ANALYTICS: Profit Margin Visualization --- */}
+      {/* --- 3. PERFORMANCE --- */}
       <div className="space-y-4 pt-2">
         <div className="flex justify-between items-end">
           <div className="flex items-center gap-1">
@@ -105,12 +149,10 @@ const MachineCard = ({
             <span className="text-slate-400 text-[11px] font-black uppercase tracking-tight">Profitability</span>
           </div>
           <span className="text-slate-900 text-sm font-black">
-            {/* Displaying the backend-calculated rate */}
             {Math.round(profitability_rate)}%
           </span>
         </div>
         
-        {/* Profitability Bar: Visualizes current revenue vs utility overhead */}
         <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
           <div 
             className={`h-full transition-all duration-1000 ease-out rounded-full ${
@@ -122,7 +164,6 @@ const MachineCard = ({
           />
         </div>
 
-        {/* --- FOOTER METRICS: Historical Usage & Lifetime Net Earnings --- */}
         <div className="flex justify-between text-[11px] font-black border-t border-slate-50 pt-3">
           <div className="flex flex-col">
              <span className="text-slate-300 text-[8px] uppercase">Usage History</span>

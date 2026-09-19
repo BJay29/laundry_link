@@ -7,12 +7,10 @@ import {
   Activity, 
   TrendingUp, 
   CheckCircle, 
-  DollarSign,
   History
 } from 'lucide-react';
 import apiService from '../services/APIservices';
 
-// Component Imports
 import StatCard from '../components/ui/statcard';
 import ForecastCharts from '../components/charts/forecastcharts';
 import OptimizationTip from '../components/ui/optimizationtip';
@@ -22,25 +20,20 @@ import HistoryModal from '../components/modals/historymodal';
 
 /**
  * DASHBOARD COMPONENT
- * The central intelligence hub for LaundryLink.
- * Visualizes running operational tasks, data telemetry streams, and hardware metrics.
- * UPDATED: ForecastCharts chart container no longer uses a fixed height —
- * the redesigned component renders two stacked charts and expands naturally.
- * UPDATED: forecast mapping now carries rain_mm through from the backend,
- * and modelTier (shop_model / pooled_model / weather_only) is tracked
- * separately so ForecastCharts can show the weather outlook strip and the
- * tier badge, and can hide the bookings/income charts entirely when the
- * backend has no basis yet to predict them (brand-new shop, weather_only).
  *
- * REMOVED: Service breakdown row (Full Service / Titan Wash / Regular
- * Wash / Comforter / Total Load) — no longer shown on the dashboard.
+ * UPDATED (reverted to per-service durations): kinukuha na rin ang
+ * service types (apiService.getServiceTypes) sa loadDashboardData, at
+ * ginagawang lookup map na { [serviceName]: { washer, dryer } } na
+ * ipinapasa sa <MachineGrid> — dito na kinukuha ang cycle duration ng
+ * bawat Busy machine, hindi na sa tinanggal nang per-machine
+ * `configured_duration_minutes`.
  */
 const Dashboard = () => {
-  // State Management
   const [stats, setStats] = useState(null);
   const [forecast, setForecast] = useState([]);
   const [modelTier, setModelTier] = useState(null);
   const [machines, setMachines] = useState([]);
+  const [serviceDurations, setServiceDurations] = useState({});
   const [insightData, setInsightData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -49,23 +42,26 @@ const Dashboard = () => {
   const [isInsightApplied, setIsInsightApplied] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(new Date());
 
-  /**
-   * DATA SYNCHRONIZATION ENGINE
-   * Fetches dashboard statistics, telemetry streams, and structural updates concurrently.
-   */
+  const [now, setNow] = useState(new Date());
+
+  useEffect(() => {
+    const tick = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(tick);
+  }, []);
+
   const loadDashboardData = useCallback(async (isRefresh = false) => {
     try {
       if (isRefresh) setRefreshing(true);
       else setLoading(true);
 
-      const [statsResult, machinesResult, forecastResult, insightResult] = await Promise.allSettled([
+      const [statsResult, machinesResult, forecastResult, insightResult, servicesResult] = await Promise.allSettled([
         apiService.getDashboardStats(),
         apiService.getMachines(),
         apiService.getForecastData(),
         apiService.getOperationalInsights(),
+        apiService.getServiceTypes(),
       ]);
 
-      // 1. Process KPIs
       if (statsResult.status === 'fulfilled' && statsResult.value) {
         const rawData = statsResult.value;
         setStats({
@@ -76,15 +72,10 @@ const Dashboard = () => {
         });
       }
 
-      // 2. Process Machine Telemetry
       if (machinesResult.status === 'fulfilled') {
         setMachines(machinesResult.value || []);
       }
 
-      // 3. Process AI Forecast Graph
-      // UPDATED: rain_mm now carried through per-day, and model_tier
-      // (same value on every row of a given response) is lifted into
-      // its own piece of state so ForecastCharts can badge/adapt to it.
       if (forecastResult.status === 'fulfilled' && forecastResult.value?.forecast) {
         const rawForecast = forecastResult.value.forecast;
         const mappedForecast = rawForecast.map(item => ({
@@ -97,12 +88,24 @@ const Dashboard = () => {
         setModelTier(rawForecast[0]?.model_tier || null);
       }
 
-      // 4. Process Operational Insights (DSS)
       if (insightResult.status === 'fulfilled') {
         setInsightData(insightResult.value);
         if (insightResult.value?.hasIssue) {
           setIsInsightApplied(false);
         }
+      }
+
+      // NEW — build the service name → durations lookup map used by
+      // the live countdown timers in MachineGrid/MachineCard.
+      if (servicesResult.status === 'fulfilled') {
+        const map = {};
+        (servicesResult.value || []).forEach((s) => {
+          map[s.name] = {
+            washer: s.washer_duration_minutes,
+            dryer: s.dryer_duration_minutes,
+          };
+        });
+        setServiceDurations(map);
       }
       
       setLastUpdated(new Date());
@@ -114,7 +117,6 @@ const Dashboard = () => {
     }
   }, []);
 
-  // System Heartbeat — automated polling every 60 seconds
   useEffect(() => {
     loadDashboardData();
     const heartbeat = setInterval(() => loadDashboardData(true), 60000);
@@ -130,7 +132,6 @@ const Dashboard = () => {
     setIsInsightApplied(true);
   };
 
-  // Initial load screen while data has not yet arrived
   if (loading && !stats && machines.length === 0) {
     return (
       <div className="flex h-screen items-center justify-center bg-slate-50">
@@ -150,7 +151,6 @@ const Dashboard = () => {
   return (
     <div className="p-8 bg-slate-50 min-h-screen space-y-10 font-sans">
 
-      {/* HEADER SECTION */}
       <div className="flex flex-col lg:flex-row justify-between items-start gap-6">
         <div>
           <div className="flex items-center gap-3 mb-1">
@@ -197,7 +197,6 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* KPI GRID */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard title="Today Revenue"    value={stats?.today_revenue || 0}             trend={`${stats?.income_growth || 0}%`} type="revenue" />
         <StatCard title="Active Machines"  value={stats?.active_machines || "0"}         trend="In Use"   type="utilization" />
@@ -205,15 +204,8 @@ const Dashboard = () => {
         <StatCard title="Expected Bookings" value={stats?.predicted_bookings_today || "0"} trend="Forecast" type="bookings" />
       </div>
 
-      {/* ANALYTICS ROW */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
-        {/* 
-          FORECAST CHARTS PANEL
-          Fixed height wrapper removed — ForecastCharts now renders the
-          weather strip, tier badge, and two stacked charts (or the
-          insufficient-data notice) and needs to grow vertically to fit.
-        */}
         <div className="lg:col-span-2 bg-white p-10 rounded-[56px] border border-slate-100 shadow-sm flex flex-col min-w-0">
           <div className="flex justify-between items-start mb-8">
             <div>
@@ -229,10 +221,6 @@ const Dashboard = () => {
             </div>
           </div>
 
-          {/* 
-            Chart area: no fixed height set here — ForecastCharts grows
-            naturally to fit the weather strip + badge + two charts.
-          */}
           <div className="w-full mb-2 relative" style={{ minWidth: '0' }}>
             {forecast.length > 0 ? (
               <ForecastCharts data={forecast} modelTier={modelTier} />
@@ -245,7 +233,6 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* OPTIMIZATION INSIGHT PANEL */}
         <div className="lg:col-span-1">
           <OptimizationTip
             data={insightData}
@@ -255,7 +242,6 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* HARDWARE TELEMETRY */}
       <div className="bg-white p-10 rounded-[56px] border border-slate-100 shadow-sm">
         <div className="flex justify-between items-center mb-10">
           <div>
@@ -279,6 +265,8 @@ const Dashboard = () => {
           machines={machines}
           loading={loading && machines.length === 0}
           onUpdate={() => loadDashboardData(true)}
+          now={now}
+          serviceDurations={serviceDurations}
         />
       </div>
 

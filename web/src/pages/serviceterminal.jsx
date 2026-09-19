@@ -12,12 +12,16 @@ import {
   Bell,
   X,
   ChevronDown,
+  Banknote,
+  Weight,
 } from 'lucide-react';
 import apiService from '../services/APIservices';
 import BookingModal from '../components/modals/bookingmodal';
 import AssignMachineModal from '../components/modals/assignmachinemodal';
 import MoveToDryerModal from '../components/modals/movetodryermodal';
 import BookingRequestModal from '../components/modals/bookingrequestmodal';
+import PaymentVerificationModal from '../components/modals/paymentverificationmodal';
+import WeighingPricingModal from '../components/modals/weighingpricingmodal';
 import { useNotifications } from '../context/notificationcontext';
 import { formatTime, formatCurrency } from '../utils/formatters';
 
@@ -25,63 +29,32 @@ import { formatTime, formatCurrency } from '../utils/formatters';
  * SERVICE TERMINAL COMPONENT
  * Main operational dashboard for managing the laundry queue.
  *
- * Status is an editable dropdown instead of a static badge, letting staff
- * manually move a booking through its lifecycle
- * (Pending → In Progress → Ready → Claimed / Cancelled) directly from
- * the table.
+ * ... (walang binago sa dating docstring — see previous version for
+ * full context on status dropdown, machine assignment, etc.) ...
  *
- * A booking still CANNOT move to "In Progress" until a machine is
- * assigned. Selecting that option while unassigned shows a blocking
- * message instead of allowing the change. In practice, this rarely
- * fires for NEW bookings anymore — assign_machines_to_booking() on the
- * backend already flips the booking to "In Progress" the moment
- * machines are assigned, so this guard mostly protects against staff
- * manually forcing the dropdown before that's happened.
+ * NEW (Online Payment feature — GCash/PayMaya QR + Proof of Payment):
+ * Bell/panel para sa "Pending Payment Verification" — mga GCash/PayMaya
+ * bookings na naka-upload na ng proof of payment pero hindi pa
+ * na-approve/na-reject ng staff. Pag-click sa isang item ay binubuksan
+ * ang PaymentVerificationModal (Approve/Reject).
  *
- * The status dropdown menu is rendered through a React Portal into
- * document.body with `position: fixed`, computed from the trigger
- * button's on-screen coordinates, escaping the table's overflow clipping.
+ * NEW (Weighing / Finalize Pricing feature) — bagong bell/panel para sa
+ * "Awaiting Weighing": mobile bookings na na-accept na ng shop
+ * (BookingRequestModal → Accept) pero hindi pa na-timbang/na-finalize
+ * ang aktwal na presyo. Pag-click sa isang customer sa panel na ito ay
+ * binubuksan ang WeighingPricingModal, kung saan ilalagay ng staff ang
+ * Final Weight + Add-ons, tapos "Confirm & Finalize Price" — awtomatiko
+ * itong lilipat sa "Pending" (cash/cod, pwede nang i-Assign sa machine
+ * dito rin sa parehong table) o "Awaiting Payment" (gcash/paymaya,
+ * hihintayin muna ang customer magbayad — makikita sa Pending Payment
+ * Verification bell/Record Sales pagka-upload ng proof).
  *
- * MOBILE APP BOOKING REQUESTS:
- * The WebSocket connection and "Awaiting Approval" list live in
- * NotificationContext (app/layout level, see App.jsx), which stays
- * connected regardless of which page the user is on. This component
- * just CONSUMES that shared state via useNotifications().
- *
- * MACHINE ASSIGNMENT (UPDATED — multi-machine assignment feature):
- * - `booking.washer_id` / `booking.dryer_id` are now LEGACY — they're
- *   only ever populated for bookings assigned through the old
- *   single-machine path (PATCH /{id}/assign-machine, no longer called
- *   from this file). New bookings carry their machine assignment(s) in
- *   `booking.machine_assignments`, one row per load (see
- *   BookingMachineAssignment in models.py).
- * - `needsMachineAssign()` / `bookingHasMachine()` below check BOTH the
- *   legacy fields and `machine_assignments`, so old bookings created
- *   before this feature still render correctly.
- * - `getMachineDisplay()` renders a per-load breakdown ("Load 1: W2 •
- *   Load 2: W5") when `machine_assignments` is present, falling back to
- *   the old single-machine display otherwise.
- * - A NEW per-load "Move to Dryer" button appears in Operations for any
- *   load still in the "washing" phase — but only when that booking's
- *   service is NOT "wash_only" (wash_only loads never get a dryer step;
- *   see serviceRequiredPhases below, fetched from the shop's service
- *   catalog since Booking itself doesn't carry required_phases).
- * - The "Assign" button (opens AssignMachineModal) now handles N
- *   machines per booking (N = booking.loads), not just one.
- * - BookingModal itself now chains straight into its OWN
- *   AssignMachineModal step right after creating a booking — so
- *   `handleBookingSuccess` below must NOT close the modal; only
- *   `onClose` (fired once that chained step finishes or is skipped)
- *   does that. Closing on `onSubmit` would hide the modal before staff
- *   ever sees the chained assign step.
+ * Ang "Awaiting Weighing" at "Awaiting Payment" statuses ay HINDI
+ * lumalabas sa normal na bookings table — sadyang in-eexclude ito ng
+ * backend sa get_active_bookings(), gaya rin ng "Awaiting Approval".
  */
 
 const STATUS_OPTIONS = ['Pending', 'In Progress', 'Ready', 'Claimed', 'Cancelled'];
-
-// NEW (multi-machine assignment feature) — module-level helpers so they
-// have no dependency on component render order/closures. Both check the
-// LEGACY washer_id/dryer_id fields AND the new machine_assignments list,
-// so bookings from either path are handled correctly.
 
 const needsMachineAssign = (booking) =>
   booking.status === 'Pending' &&
@@ -103,48 +76,45 @@ const ServiceTerminal = () => {
   const [isModalOpen, setIsModalOpen]         = useState(false);
   const [successMessage, setSuccessMessage]   = useState('');
 
-  // Assign Machine Modal state (manual trigger from the table's
-  // "Assign" button — separate from BookingModal's own chained step)
   const [assignModalOpen, setAssignModalOpen]               = useState(false);
   const [selectedBookingForAssign, setSelectedBookingForAssign] = useState(null);
 
-  // NEW (multi-machine assignment feature) — Move to Dryer modal state,
-  // scoped to one specific load of one specific booking.
   const [moveToDryerModalOpen, setMoveToDryerModalOpen] = useState(false);
-  const [moveToDryerTarget, setMoveToDryerTarget]       = useState(null); // { booking, loadNumber }
+  const [moveToDryerTarget, setMoveToDryerTarget]       = useState(null);
 
-  // Available machines list (used to decide whether to show Assign button)
   const [availableMachines, setAvailableMachines] = useState([]);
-
-  // NEW (multi-machine assignment feature) — { [serviceName]: required_phases }
-  // lookup, fetched from the shop's service catalog. Booking itself
-  // doesn't carry required_phases, so this is how we know whether a
-  // "washing" load should show a "Move to Dryer" button (skipped for
-  // "wash_only" services).
   const [serviceRequiredPhases, setServiceRequiredPhases] = useState({});
-
-  // Tracks previous busy count to detect when a machine frees up
   const [prevBusyCount, setPrevBusyCount] = useState(null);
-
-  // Live clock
   const [currentTime, setCurrentTime] = useState(new Date());
 
-  // Tracks which booking's status dropdown is currently open, and where
-  // (in fixed-viewport coordinates) to render it via portal.
   const [openStatusDropdownId, setOpenStatusDropdownId] = useState(null);
-  const [dropdownPosition, setDropdownPosition] = useState(null); // { top, left }
+  const [dropdownPosition, setDropdownPosition] = useState(null);
   const statusButtonRefs = useRef({});
 
-  // ── Notification / Booking Request state — now from shared context ───
   const {
     awaitingApproval,
     refreshAwaitingApproval,
     acceptBooking,
     declineBooking,
+    // NEW (Weighing / Finalize Pricing feature)
+    awaitingWeighing,
+    refreshAwaitingWeighing,
+    finalizePricing,
   } = useNotifications();
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState(null);
   const notifBellRef = useRef(null);
+
+  // --- PAYMENT VERIFICATION STATE (Online Payment feature) ---
+  const [pendingVerification, setPendingVerification] = useState([]);
+  const [isPaymentNotifOpen, setIsPaymentNotifOpen] = useState(false);
+  const [selectedVerificationBooking, setSelectedVerificationBooking] = useState(null);
+  const paymentBellRef = useRef(null);
+
+  // --- AWAITING WEIGHING STATE (NEW — Weighing / Finalize Pricing feature) ---
+  const [isWeighingNotifOpen, setIsWeighingNotifOpen] = useState(false);
+  const [selectedWeighingBooking, setSelectedWeighingBooking] = useState(null);
+  const weighingBellRef = useRef(null);
 
   // ── Live Clock ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -174,6 +144,30 @@ const ServiceTerminal = () => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isNotifOpen]);
+
+  // ── Close payment verification dropdown on outside click ────────────
+  useEffect(() => {
+    if (!isPaymentNotifOpen) return;
+    const handleClickOutside = (e) => {
+      if (paymentBellRef.current && !paymentBellRef.current.contains(e.target)) {
+        setIsPaymentNotifOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isPaymentNotifOpen]);
+
+  // ── Close awaiting weighing dropdown on outside click (NEW) ────────────
+  useEffect(() => {
+    if (!isWeighingNotifOpen) return;
+    const handleClickOutside = (e) => {
+      if (weighingBellRef.current && !weighingBellRef.current.contains(e.target)) {
+        setIsWeighingNotifOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isWeighingNotifOpen]);
 
   // ── Load Available Machines ────────────────────────────────────────────────
   const loadAvailableMachines = useCallback(async () => {
@@ -225,7 +219,7 @@ const ServiceTerminal = () => {
     }
   }, []);
 
-  // ── Load Service Required Phases (NEW — multi-machine assignment feature) ──
+  // ── Load Service Required Phases ──
   const loadServiceRequiredPhases = useCallback(async () => {
     try {
       const shopId = apiService.getShopId();
@@ -240,19 +234,31 @@ const ServiceTerminal = () => {
     }
   }, []);
 
-  // ── Polling (bookings + machines only — awaiting-approval polling now
-  //     lives inside NotificationContext) ─────────────────────────────
+  // ── Load Pending Payment Verification (Online Payment feature) ──────
+  const loadPendingVerification = useCallback(async () => {
+    try {
+      const data = await apiService.getPendingVerificationBookings();
+      setPendingVerification(data || []);
+    } catch (err) {
+      console.error('Pending Verification fetch error:', err.message);
+    }
+  }, []);
+
+  // ── Polling ──────────────────────────────────────────────────
   useEffect(() => {
     loadBookings();
     loadAvailableMachines();
     loadServiceRequiredPhases();
+    loadPendingVerification();
     const bookingInterval = setInterval(() => loadBookings(true), 30000);
     const machineInterval = setInterval(() => loadAvailableMachines(), 15000);
+    const paymentInterval = setInterval(() => loadPendingVerification(), 20000);
     return () => {
       clearInterval(bookingInterval);
       clearInterval(machineInterval);
+      clearInterval(paymentInterval);
     };
-  }, [loadBookings, loadAvailableMachines, loadServiceRequiredPhases]);
+  }, [loadBookings, loadAvailableMachines, loadServiceRequiredPhases, loadPendingVerification]);
 
   // ── Status Lifecycle ───────────────────────────────────────────────────────
   const handleStatusUpdate = async (bookingId, newStatus) => {
@@ -276,11 +282,6 @@ const ServiceTerminal = () => {
     }
   };
 
-  /**
-   * Called when staff picks a new status from the dropdown.
-   * Blocks the "In Progress" transition if no machine is assigned yet —
-   * the booking stays a reservation until a washer/dryer is available.
-   */
   const handleStatusSelect = (booking, newStatus) => {
     closeStatusDropdown();
     if (newStatus === booking.status) return;
@@ -293,11 +294,6 @@ const ServiceTerminal = () => {
     handleStatusUpdate(booking.id, newStatus);
   };
 
-  /**
-   * Opens the status dropdown for a given booking, computing its
-   * fixed-viewport position from the trigger button's bounding box so
-   * the portal-rendered menu lines up directly beneath it.
-   */
   const toggleStatusDropdown = (bookingId) => {
     if (openStatusDropdownId === bookingId) {
       closeStatusDropdown();
@@ -327,7 +323,7 @@ const ServiceTerminal = () => {
     loadAvailableMachines();
   };
 
-  // ── Assign Machine (manual trigger from the table's "Assign" button) ──────
+  // ── Assign Machine ──────────
   const handleOpenAssignModal = (booking) => {
     setSelectedBookingForAssign(booking);
     setAssignModalOpen(true);
@@ -339,17 +335,11 @@ const ServiceTerminal = () => {
     refreshAfterAssign(message);
   };
 
-  /**
-   * NEW (multi-machine assignment feature) — success callback for
-   * BookingModal's OWN internal chained AssignMachineModal step.
-   * BookingModal manages closing/resetting itself; this only needs to
-   * refresh the terminal's data and show the toast.
-   */
   const handleBookingModalAssignSuccess = (message) => {
     refreshAfterAssign(message);
   };
 
-  // ── Move to Dryer (NEW — multi-machine assignment feature) ────────────────
+  // ── Move to Dryer ────────────────────────────────────────
   const handleOpenMoveToDryerModal = (booking, loadNumber) => {
     setMoveToDryerTarget({ booking, loadNumber });
     setMoveToDryerModalOpen(true);
@@ -367,15 +357,6 @@ const ServiceTerminal = () => {
   };
 
   // ── Booking Created ────────────────────────────────────────────────────────
-  /**
-   * NEW (multi-machine assignment feature) — BookingModal no longer
-   * closes itself on submit; it stays open and immediately chains into
-   * its own AssignMachineModal step for the booking it just created.
-   * This handler ONLY refreshes data and shows a toast — closing the
-   * modal is entirely BookingModal's own responsibility now (via its
-   * `onClose` prop below, fired once the chained step finishes or is
-   * skipped).
-   */
   const handleBookingSuccess = (newBooking) => {
     showNotification(
       `🕐 Booking for ${newBooking?.customer_name || 'the customer'} created — assign machine(s) next.`
@@ -384,14 +365,12 @@ const ServiceTerminal = () => {
     loadAvailableMachines();
   };
 
-  // ── Accept / Decline Booking Request (now delegates to context) ────────
+  // ── Accept / Decline Booking Request ────────
   const handleAcceptRequest = async (bookingId) => {
     try {
       await acceptBooking(bookingId);
       setSelectedRequest(null);
-      showNotification('✓ Booking accepted — now showing in the queue as Pending.');
-      loadBookings(true);
-      loadAvailableMachines();
+      showNotification('✓ Booking accepted — now Awaiting Weighing.');
     } catch (err) {
       console.error('Accept Booking Error:', err.message);
       alert('Failed to accept booking. Please try again.');
@@ -407,6 +386,52 @@ const ServiceTerminal = () => {
       console.error('Decline Booking Error:', err.message);
       alert('Failed to decline booking. Please try again.');
     }
+  };
+
+  // ── Payment Verification Handlers (Online Payment feature) ──────────
+
+  const handleOpenPaymentVerification = (booking) => {
+    setSelectedVerificationBooking(booking);
+    setIsPaymentNotifOpen(false);
+  };
+
+  const handlePaymentVerificationSuccess = (message) => {
+    setSelectedVerificationBooking(null);
+    showNotification(message || '✅ Payment verification updated.');
+    loadPendingVerification();
+    loadBookings(true);
+  };
+
+  // ── Awaiting Weighing Handlers (NEW — Weighing / Finalize Pricing feature) ──
+
+  /**
+   * Buksan ang WeighingPricingModal para sa isang partikular na
+   * booking na naka-"Awaiting Weighing".
+   */
+  const handleOpenWeighingModal = (booking) => {
+    setSelectedWeighingBooking(booking);
+    setIsWeighingNotifOpen(false);
+  };
+
+  /**
+   * Tinatawag ng WeighingPricingModal's "Confirm & Finalize Price"
+   * button. Tumatawag sa context's finalizePricing() (na siyang
+   * tumatawag sa apiService.finalizeBookingPricing() at nag-a-alis sa
+   * booking sa awaitingWeighing list). Kapag cash/cod ang payment
+   * method, direktang lalabas na agad ito sa normal na bookings table
+   * (Pending) sa susunod na loadBookings() — kaya rine-refresh din
+   * natin ang table dito, hindi lang ang panel.
+   */
+  const handleConfirmWeighingPricing = async (bookingId, pricingData) => {
+    const updated = await finalizePricing(bookingId, pricingData);
+    setSelectedWeighingBooking(null);
+    showNotification(
+      updated.status === 'Pending'
+        ? `✓ Price finalized (₱${Number(updated.final_price || 0).toFixed(2)}) — now Pending, ready to assign a machine.`
+        : `✓ Price finalized (₱${Number(updated.final_price || 0).toFixed(2)}) — waiting for customer payment.`
+    );
+    loadBookings(true);
+    return updated;
   };
 
   // ── Toast ──────────────────────────────────────────────────────────────────
@@ -428,13 +453,6 @@ const ServiceTerminal = () => {
     }
   };
 
-  /**
-   * UPDATED (multi-machine assignment feature) — renders a per-load
-   * breakdown when `machine_assignments` is present (e.g.
-   * "L1: W2 • L2: W5", switching to "D#" once a load has moved into
-   * drying). Falls back to the old single-machine display for bookings
-   * assigned via the legacy path (no machine_assignments rows at all).
-   */
   const getMachineDisplay = (booking) => {
     const assignments = booking.machine_assignments || [];
 
@@ -460,8 +478,6 @@ const ServiceTerminal = () => {
       );
     }
 
-    // LEGACY fallback — bookings assigned via the old single-machine
-    // path (PATCH /{id}/assign-machine), no machine_assignments rows.
     const wNum = booking.washer?.machine_number || booking.washer_number;
     const dNum = booking.dryer?.machine_number  || booking.dryer_number;
     const parts = [];
@@ -493,12 +509,6 @@ const ServiceTerminal = () => {
     );
   };
 
-  /**
-   * NEW (multi-machine assignment feature) — loads of this booking that
-   * are still washing AND belong to a service that isn't "wash_only"
-   * (wash_only loads never get a dryer step — see backend
-   * assign_machines_to_booking()/move_load_to_dryer()).
-   */
   const getMovableToDryerLoads = (booking) => {
     const requiredPhases = serviceRequiredPhases[booking.service_type] || 'full_service';
     if (requiredPhases === 'wash_only') return [];
@@ -552,13 +562,14 @@ const ServiceTerminal = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-3 w-full lg:w-auto">
+        <div className="flex items-center gap-3 w-full lg:w-auto flex-wrap">
 
-          {/* Notification Bell — data now from useNotifications() */}
+          {/* Mobile App Requests Bell (existing) */}
           <div className="relative" ref={notifBellRef}>
             <button
               onClick={() => setIsNotifOpen(prev => !prev)}
               className="relative flex items-center justify-center w-[52px] h-[52px] bg-white rounded-2xl border border-slate-200 shadow-sm hover:border-sky-200 transition-all"
+              title="Mobile App Requests"
             >
               <Bell size={19} className={awaitingApproval.length > 0 ? 'text-sky-500' : 'text-slate-400'} />
               {awaitingApproval.length > 0 && (
@@ -609,6 +620,112 @@ const ServiceTerminal = () => {
             )}
           </div>
 
+          {/* Awaiting Weighing Bell (NEW — Weighing / Finalize Pricing feature) */}
+          <div className="relative" ref={weighingBellRef}>
+            <button
+              onClick={() => setIsWeighingNotifOpen(prev => !prev)}
+              className="relative flex items-center justify-center w-[52px] h-[52px] bg-white rounded-2xl border border-slate-200 shadow-sm hover:border-violet-200 transition-all"
+              title="Awaiting Weighing"
+            >
+              <Weight size={19} className={awaitingWeighing.length > 0 ? 'text-violet-500' : 'text-slate-400'} />
+              {awaitingWeighing.length > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 px-1 bg-violet-500 text-white text-[10px] font-black rounded-full flex items-center justify-center border-2 border-white">
+                  {awaitingWeighing.length}
+                </span>
+              )}
+            </button>
+
+            {isWeighingNotifOpen && (
+              <div className="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden z-[95]">
+                <div className="px-5 py-4 border-b border-slate-50">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    Awaiting Weighing
+                  </p>
+                </div>
+
+                {awaitingWeighing.length === 0 ? (
+                  <div className="px-5 py-8 text-center">
+                    <Weight size={24} className="text-slate-200 mx-auto mb-2" />
+                    <p className="text-slate-400 text-xs font-bold">Nothing to weigh right now</p>
+                  </div>
+                ) : (
+                  <div className="max-h-80 overflow-y-auto divide-y divide-slate-50">
+                    {awaitingWeighing.map((booking) => (
+                      <button
+                        key={booking.id}
+                        onClick={() => handleOpenWeighingModal(booking)}
+                        className="w-full text-left px-5 py-4 hover:bg-violet-50/50 transition-colors"
+                      >
+                        <p className="font-black text-sm text-slate-800">{booking.customer_name}</p>
+                        <div className="flex items-center justify-between mt-0.5">
+                          <p className="text-xs text-slate-400 font-bold">
+                            {booking.service_type} · Est. ₱{Number(booking.estimated_price ?? booking.total_price ?? 0).toFixed(0)}
+                          </p>
+                          <p className="text-[10px] text-slate-300 font-bold">
+                            {formatRelativeTime(booking.booking_timestamp || booking.created_at)}
+                          </p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Pending Payment Verification Bell (Online Payment feature) */}
+          <div className="relative" ref={paymentBellRef}>
+            <button
+              onClick={() => setIsPaymentNotifOpen(prev => !prev)}
+              className="relative flex items-center justify-center w-[52px] h-[52px] bg-white rounded-2xl border border-slate-200 shadow-sm hover:border-emerald-200 transition-all"
+              title="Pending Payment Verification"
+            >
+              <Banknote size={19} className={pendingVerification.length > 0 ? 'text-emerald-500' : 'text-slate-400'} />
+              {pendingVerification.length > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 px-1 bg-emerald-500 text-white text-[10px] font-black rounded-full flex items-center justify-center border-2 border-white">
+                  {pendingVerification.length}
+                </span>
+              )}
+            </button>
+
+            {isPaymentNotifOpen && (
+              <div className="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden z-[95]">
+                <div className="px-5 py-4 border-b border-slate-50">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    Pending Payment Verification
+                  </p>
+                </div>
+
+                {pendingVerification.length === 0 ? (
+                  <div className="px-5 py-8 text-center">
+                    <Banknote size={24} className="text-slate-200 mx-auto mb-2" />
+                    <p className="text-slate-400 text-xs font-bold">Nothing to verify right now</p>
+                  </div>
+                ) : (
+                  <div className="max-h-80 overflow-y-auto divide-y divide-slate-50">
+                    {pendingVerification.map((booking) => (
+                      <button
+                        key={booking.id}
+                        onClick={() => handleOpenPaymentVerification(booking)}
+                        className="w-full text-left px-5 py-4 hover:bg-emerald-50/50 transition-colors"
+                      >
+                        <p className="font-black text-sm text-slate-800">{booking.customer_name}</p>
+                        <div className="flex items-center justify-between mt-0.5">
+                          <p className="text-xs text-slate-400 font-bold">
+                            {booking.payment_method === 'gcash' ? 'GCash' : 'PayMaya'} · ₱{Number(booking.total_price || 0).toFixed(0)}
+                          </p>
+                          <p className="text-[10px] text-slate-300 font-bold">
+                            {formatRelativeTime(booking.booking_timestamp || booking.created_at)}
+                          </p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           <div className="flex items-center gap-3 bg-white px-5 py-4 rounded-2xl border border-slate-200 shadow-sm">
             <Clock size={18} className="text-sky-500" />
             <span className="text-sm font-black text-slate-700 tabular-nums">
@@ -618,7 +735,13 @@ const ServiceTerminal = () => {
             </span>
             <div className="h-4 w-[1px] bg-slate-200 mx-1" />
             <button
-              onClick={() => { loadBookings(true); loadAvailableMachines(); refreshAwaitingApproval(); }}
+              onClick={() => {
+                loadBookings(true);
+                loadAvailableMachines();
+                refreshAwaitingApproval();
+                refreshAwaitingWeighing();
+                loadPendingVerification();
+              }}
               className={`text-slate-300 hover:text-sky-500 transition-all ${refreshing ? 'animate-spin text-sky-500' : ''}`}
             >
               <RefreshCw size={18} />
@@ -739,7 +862,7 @@ const ServiceTerminal = () => {
                           </span>
                         </td>
 
-                        {/* Status — editable dropdown (button only; menu is portaled) */}
+                        {/* Status */}
                         <td className="px-8 py-7 relative">
                           <button
                             type="button"
@@ -776,10 +899,6 @@ const ServiceTerminal = () => {
                               </div>
                             )}
 
-                            {/* NEW (multi-machine assignment feature) —
-                                one "Move to Dryer" button per load still
-                                washing, skipped entirely for wash_only
-                                services. */}
                             {movableToDryerLoads.map((assignment) => (
                               <button
                                 key={assignment.id}
@@ -791,6 +910,20 @@ const ServiceTerminal = () => {
                                 {totalLoads ? `L${assignment.load_number}→Dryer` : 'To Dryer'}
                               </button>
                             ))}
+
+                            {/* Online Payment feature — quick-access verify
+                                button, shown right on the row when this
+                                booking is pending_verification. */}
+                            {booking.payment_status === 'pending_verification' && (
+                              <button
+                                onClick={() => handleOpenPaymentVerification(booking)}
+                                className="flex items-center gap-1.5 px-3 py-2.5 bg-emerald-500 text-white rounded-xl transition-all shadow-sm shadow-emerald-200 hover:bg-emerald-600 active:scale-90 text-[10px] font-black uppercase tracking-tight"
+                                title="Verify Online Payment"
+                              >
+                                <Banknote size={13} />
+                                Verify Payment
+                              </button>
+                            )}
 
                             {booking.status === 'Ready' && (
                               <button
@@ -813,9 +946,7 @@ const ServiceTerminal = () => {
         )}
       </div>
 
-      {/* PORTAL: Status dropdown menu — rendered into document.body with
-          fixed positioning so it is never clipped by the table's
-          overflow-x-auto wrapper. */}
+      {/* PORTAL: Status dropdown menu */}
       {openStatusDropdownId && dropdownPosition && openBooking && ReactDOM.createPortal(
         <>
           <div
@@ -858,11 +989,6 @@ const ServiceTerminal = () => {
         document.body
       )}
 
-      {/* NEW (multi-machine assignment feature) — BookingModal now
-          chains straight into its OWN AssignMachineModal step right
-          after a successful creation. onClose (not onSubmit) is what
-          actually closes it, once that chained step finishes/is
-          skipped — see handleBookingSuccess above. */}
       <BookingModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
@@ -871,8 +997,6 @@ const ServiceTerminal = () => {
         actualBookingTime={currentTime}
       />
 
-      {/* Manual "Assign" trigger from the table (for bookings that
-          skipped BookingModal's chained step, or older Pending bookings) */}
       {assignModalOpen && selectedBookingForAssign && (
         <AssignMachineModal
           isOpen={assignModalOpen}
@@ -886,7 +1010,6 @@ const ServiceTerminal = () => {
         />
       )}
 
-      {/* NEW (multi-machine assignment feature) — per-load Move to Dryer */}
       {moveToDryerModalOpen && moveToDryerTarget && (
         <MoveToDryerModal
           isOpen={moveToDryerModalOpen}
@@ -898,13 +1021,30 @@ const ServiceTerminal = () => {
         />
       )}
 
-      {/* Booking Request Modal — opened by clicking a notification item */}
       <BookingRequestModal
         isOpen={!!selectedRequest}
         booking={selectedRequest}
         onClose={() => setSelectedRequest(null)}
         onAccept={handleAcceptRequest}
         onDecline={handleDeclineRequest}
+      />
+
+      {/* Online Payment feature — Approve/Reject modal for a
+          pending_verification GCash/PayMaya booking */}
+      <PaymentVerificationModal
+        isOpen={!!selectedVerificationBooking}
+        booking={selectedVerificationBooking}
+        onClose={() => setSelectedVerificationBooking(null)}
+        onSuccess={handlePaymentVerificationSuccess}
+      />
+
+      {/* NEW (Weighing / Finalize Pricing feature) — staff weighing
+          modal for an "Awaiting Weighing" mobile booking */}
+      <WeighingPricingModal
+        isOpen={!!selectedWeighingBooking}
+        booking={selectedWeighingBooking}
+        onClose={() => setSelectedWeighingBooking(null)}
+        onConfirm={handleConfirmWeighingPricing}
       />
     </div>
   );
