@@ -9,10 +9,6 @@ const Login = () => {
   const navigate = useNavigate();
   const [mode, setMode] = useState('login'); // 'login' | 'register'
 
-  // NEW — pending shop details habang naghihintay ng OTP verification.
-  // Kailangan natin itong i-store dito (sa halip na sa RegisterForm
-  // mismo) dahil kailangan pa nating gamitin ito PAGKATAPOS ng
-  // successful verify — sa POST /auth/register-shop call.
   const [pendingSignup, setPendingSignup] = useState(null); // { email, shopName, address }
 
   const handleSignupSuccess = ({ email, shopName, address }) => {
@@ -61,7 +57,6 @@ const Login = () => {
         </div>
       </div>
 
-      {/* NEW — OTP verification modal, bukas lang kapag may pendingSignup */}
       <VerifyOtpModal
         isOpen={pendingSignup !== null}
         email={pendingSignup?.email}
@@ -77,6 +72,19 @@ const Login = () => {
   );
 };
 
+/* ------------------------------------------------------------------ */
+/*  SHARED: "OR" divider — dating plain border-t lang, ngayon may      */
+/*  visible na linya sa magkabilang gilid ng salitang "OR" sa gitna.   */
+/* ------------------------------------------------------------------ */
+
+const OrDivider = () => (
+  <div className="flex items-center gap-3 my-6">
+    <div className="flex-1 border-t border-slate-200" />
+    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Or</span>
+    <div className="flex-1 border-t border-slate-200" />
+  </div>
+);
+
 function LoginForm({ onSwitch, navigate }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -90,19 +98,9 @@ function LoginForm({ onSwitch, navigate }) {
     setErrorMessage('');
 
     try {
-      // UPDATED — Supabase Auth SDK na ang bahala dito (papalitan sa
-      // APIservices.js — see login() docstring doon). Hindi na
-      // ibinabalik ang { user: { role } } shape ng dati; direktang
-      // pumupunta na sa dashboard pagka-successful, dahil iisa lang
-      // naman ang landing page para sa lahat ng owner/staff roles
-      // (parehong ginawa na rin dati, kaya walang nawalang behavior).
       await authService.login(email, password);
       navigate('/dashboard');
     } catch (error) {
-      // UPDATED — Supabase AuthError shape (error.message) sa halip
-      // na FastAPI's { response: { data: { detail } } } shape, dahil
-      // si Supabase Auth SDK na mismo ang direktang gumagawa nito
-      // ngayon, hindi na dumadaan sa sariling backend.
       setErrorMessage(error.message || 'Invalid email or password.');
     } finally {
       setLoading(false);
@@ -119,15 +117,15 @@ function LoginForm({ onSwitch, navigate }) {
         </div>
       )}
 
-      <form onSubmit={handleLogin} className="space-y-3">
+      <form onSubmit={handleLogin} className="space-y-4">
         <div className="relative group">
-          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
+          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-sky-500 transition-colors">
             <Mail size={18} />
           </div>
           <input
             type="email"
             required
-            className="w-full bg-white border border-slate-300 rounded-lg py-3 pl-11 pr-4 text-[15px] focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all text-slate-700 placeholder:text-slate-400"
+            className="w-full bg-slate-50/60 border-2 border-slate-200 rounded-2xl py-3.5 pl-11 pr-4 text-[15px] focus:outline-none focus:ring-4 focus:ring-sky-500/10 focus:border-sky-400 focus:bg-white transition-all text-slate-700 placeholder:text-slate-400 shadow-sm"
             placeholder="Email address"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -135,13 +133,13 @@ function LoginForm({ onSwitch, navigate }) {
         </div>
 
         <div className="relative group">
-          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
+          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-sky-500 transition-colors">
             <Lock size={18} />
           </div>
           <input
             type={showPassword ? 'text' : 'password'}
             required
-            className="w-full bg-white border border-slate-300 rounded-lg py-3 pl-11 pr-11 text-[15px] focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all text-slate-700 placeholder:text-slate-400"
+            className="w-full bg-slate-50/60 border-2 border-slate-200 rounded-2xl py-3.5 pl-11 pr-11 text-[15px] focus:outline-none focus:ring-4 focus:ring-sky-500/10 focus:border-sky-400 focus:bg-white transition-all text-slate-700 placeholder:text-slate-400 shadow-sm"
             placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -158,7 +156,7 @@ function LoginForm({ onSwitch, navigate }) {
         <button
           type="submit"
           disabled={loading}
-          className={`w-full bg-sky-500 hover:bg-sky-600 text-white py-3 rounded-lg font-bold text-[15px] transition-all active:scale-[0.98] ${loading ? 'opacity-70 cursor-not-allowed' : ''}`}
+          className={`w-full bg-sky-500 hover:bg-sky-600 text-white py-3.5 rounded-2xl font-bold text-[15px] shadow-lg shadow-sky-100 transition-all active:scale-[0.98] ${loading ? 'opacity-70 cursor-not-allowed' : ''}`}
         >
           {loading ? 'Logging in...' : 'Log in'}
         </button>
@@ -170,13 +168,13 @@ function LoginForm({ onSwitch, navigate }) {
         </div>
       </form>
 
-      <div className="border-t border-slate-200 my-6" />
+      <OrDivider />
 
       <div className="flex justify-center">
         <button
           type="button"
           onClick={onSwitch}
-          className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-3 rounded-lg font-bold text-[15px] transition-all active:scale-[0.98]"
+          className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-3 rounded-2xl font-bold text-[15px] shadow-lg shadow-emerald-100 transition-all active:scale-[0.98]"
         >
           Create new shop account
         </button>
@@ -211,14 +209,6 @@ function RegisterForm({ onSwitch, onSignupSuccess }) {
     setLoading(true);
 
     try {
-      // UPDATED — Supabase Auth SDK na ang bahala (signUp), hindi na
-      // direktang gumagawa ng account sa sariling backend. Ang
-      // shopName/address ay ipinapasa PA RIN, pero HINDI na dito
-      // ginagamit para gumawa ng Shop — nagsisilbi lang itong
-      // metadata (full_name) para sa webhook sync (see
-      // authService.signUp() docstring). Ang totoong Shop creation
-      // ay mangyayari sa POST /auth/register-shop, PAGKATAPOS ng
-      // successful OTP verify — see VerifyOtpModal.
       await authService.signUp({
         fullName: shopName,
         shopName,
@@ -227,14 +217,9 @@ function RegisterForm({ onSwitch, onSignupSuccess }) {
         password,
       });
 
-      // Buksan ang OTP modal sa halip na direktang bumalik sa Login —
-      // ipinapasa natin ang shopName/address papunta sa parent (Login
-      // component) para magamit sa POST /auth/register-shop mamaya.
       onSignupSuccess({ email, shopName, address });
     } catch (error) {
       console.error("Registration Error Object:", error);
-      // UPDATED — Supabase AuthError shape (error.message) sa halip
-      // na FastAPI's { response: { data: { detail } } } shape.
       setErrorMessage(error.message || 'Unable to create shop account.');
     } finally {
       setLoading(false);
@@ -252,15 +237,15 @@ function RegisterForm({ onSwitch, onSignupSuccess }) {
         </div>
       )}
 
-      <form onSubmit={handleRegister} className="space-y-3">
+      <form onSubmit={handleRegister} className="space-y-4">
         <div className="relative group">
-          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
+          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-emerald-500 transition-colors">
             <Store size={18} />
           </div>
           <input
             type="text"
             required
-            className="w-full bg-white border border-slate-300 rounded-lg py-3 pl-11 pr-4 text-[15px] focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all text-slate-700 placeholder:text-slate-400"
+            className="w-full bg-slate-50/60 border-2 border-slate-200 rounded-2xl py-3.5 pl-11 pr-4 text-[15px] focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-400 focus:bg-white transition-all text-slate-700 placeholder:text-slate-400 shadow-sm"
             placeholder="Shop name"
             value={shopName}
             onChange={(e) => setShopName(e.target.value)}
@@ -268,13 +253,13 @@ function RegisterForm({ onSwitch, onSignupSuccess }) {
         </div>
 
         <div className="relative group">
-          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
+          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-emerald-500 transition-colors">
             <MapPin size={18} />
           </div>
           <input
             type="text"
             required
-            className="w-full bg-white border border-slate-300 rounded-lg py-3 pl-11 pr-4 text-[15px] focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all text-slate-700 placeholder:text-slate-400"
+            className="w-full bg-slate-50/60 border-2 border-slate-200 rounded-2xl py-3.5 pl-11 pr-4 text-[15px] focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-400 focus:bg-white transition-all text-slate-700 placeholder:text-slate-400 shadow-sm"
             placeholder="Shop address"
             value={address}
             onChange={(e) => setAddress(e.target.value)}
@@ -282,13 +267,13 @@ function RegisterForm({ onSwitch, onSignupSuccess }) {
         </div>
 
         <div className="relative group">
-          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
+          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-emerald-500 transition-colors">
             <Mail size={18} />
           </div>
           <input
             type="email"
             required
-            className="w-full bg-white border border-slate-300 rounded-lg py-3 pl-11 pr-4 text-[15px] focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all text-slate-700 placeholder:text-slate-400"
+            className="w-full bg-slate-50/60 border-2 border-slate-200 rounded-2xl py-3.5 pl-11 pr-4 text-[15px] focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-400 focus:bg-white transition-all text-slate-700 placeholder:text-slate-400 shadow-sm"
             placeholder="Email address"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -296,13 +281,13 @@ function RegisterForm({ onSwitch, onSignupSuccess }) {
         </div>
 
         <div className="relative group">
-          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
+          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-emerald-500 transition-colors">
             <Lock size={18} />
           </div>
           <input
             type={showPassword ? 'text' : 'password'}
             required
-            className="w-full bg-white border border-slate-300 rounded-lg py-3 pl-11 pr-11 text-[15px] focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all text-slate-700 placeholder:text-slate-400"
+            className="w-full bg-slate-50/60 border-2 border-slate-200 rounded-2xl py-3.5 pl-11 pr-11 text-[15px] focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-400 focus:bg-white transition-all text-slate-700 placeholder:text-slate-400 shadow-sm"
             placeholder="New password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -319,19 +304,19 @@ function RegisterForm({ onSwitch, onSignupSuccess }) {
         <div>
           <div className="relative group">
             <div className={`absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none transition-colors ${
-              passwordsMismatch ? 'text-rose-400' : passwordsMatch ? 'text-emerald-500' : 'text-slate-400'
+              passwordsMismatch ? 'text-rose-400' : passwordsMatch ? 'text-emerald-500' : 'text-slate-400 group-focus-within:text-emerald-500'
             }`}>
               <Lock size={18} />
             </div>
             <input
               type={showConfirmPassword ? 'text' : 'password'}
               required
-              className={`w-full bg-white border rounded-lg py-3 pl-11 pr-11 text-[15px] focus:outline-none focus:ring-2 transition-all text-slate-700 placeholder:text-slate-400 ${
+              className={`w-full border-2 rounded-2xl py-3.5 pl-11 pr-11 text-[15px] focus:outline-none focus:ring-4 transition-all text-slate-700 placeholder:text-slate-400 shadow-sm ${
                 passwordsMismatch
-                  ? 'border-rose-300 focus:ring-rose-400/20 focus:border-rose-400'
+                  ? 'bg-rose-50/40 border-rose-300 focus:ring-rose-400/10 focus:border-rose-400'
                   : passwordsMatch
-                    ? 'border-emerald-300 focus:ring-emerald-400/20 focus:border-emerald-400'
-                    : 'border-slate-300 focus:ring-sky-500/20 focus:border-sky-500'
+                    ? 'bg-emerald-50/40 border-emerald-300 focus:ring-emerald-400/10 focus:border-emerald-400'
+                    : 'bg-slate-50/60 border-slate-200 focus:ring-emerald-500/10 focus:border-emerald-400 focus:bg-white'
               }`}
               placeholder="Confirm password"
               value={confirmPassword}
@@ -361,13 +346,13 @@ function RegisterForm({ onSwitch, onSignupSuccess }) {
         <button
           type="submit"
           disabled={loading}
-          className={`w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-lg font-bold text-[15px] transition-all active:scale-[0.98] mt-2 ${loading ? 'opacity-70 cursor-not-allowed' : ''}`}
+          className={`w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3.5 rounded-2xl font-bold text-[15px] shadow-lg shadow-emerald-100 transition-all active:scale-[0.98] mt-2 ${loading ? 'opacity-70 cursor-not-allowed' : ''}`}
         >
           {loading ? 'Creating account...' : 'Sign up'}
         </button>
       </form>
 
-      <div className="border-t border-slate-200 my-6" />
+      <OrDivider />
 
       <div className="text-center">
         <p className="text-sm text-slate-500">

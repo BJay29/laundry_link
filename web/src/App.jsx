@@ -6,6 +6,7 @@ import { AuthProvider, useAuth } from './context/authcontext';
 
 // Layout and Wrapper Components
 import Layout from './components/layout/layout';
+import LoadingScreen from './components/ui/loadingscreen';
 import { NotificationProvider } from './context/notificationcontext';
 
 // Page Components
@@ -23,18 +24,15 @@ import RecordSales from './pages/recordsales';
 
 /**
  * ProtectedRoute: gate para sa lahat ng authenticated-only pages.
+ *
+ * UPDATED (uniform loading screen): gumagamit na ng shared
+ * <LoadingScreen /> para pareho ang itsura sa lahat ng page.
  */
 function ProtectedRoute({ children }) {
   const { isAuthenticated, loading } = useAuth();
 
   if (loading) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-slate-50">
-        <p className="text-slate-400 font-bold text-sm uppercase tracking-widest">
-          Loading...
-        </p>
-      </div>
-    );
+    return <LoadingScreen message="Loading..." />;
   }
 
   if (!isAuthenticated) {

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Save, RefreshCcw, Info, Loader2, CheckCircle2, Settings2, Zap, Droplets, Banknote, Clock, Weight, Plus, Trash2, Pencil, X, Power, PackageOpen, AlertTriangle, XCircle, Truck, Ticket, QrCode, Upload, ImageOff, Wallet, HandCoins, Smartphone } from 'lucide-react';
 import apiService from '../services/APIservices';
+import LoadingScreen from '../components/ui/loadingscreen';
 
 
 const formatErrorDetail = (error, fallback = "Something went wrong.") => {
@@ -37,17 +38,9 @@ const REQUIRED_PHASES = [
 
 const getPhaseLabel = (phase) => REQUIRED_PHASES.find((p) => p.value === phase)?.label || 'Wash + Dry';
 
-// NEW — helpers na nagsasabi kung aling duration field ang dapat
-// lumabas/i-validate, base sa napiling required_phases.
 const needsWasherDuration = (phase) => phase === 'full_service' || phase === 'wash_only';
 const needsDryerDuration = (phase) => phase === 'full_service' || phase === 'dry_only';
 
-// NEW — maikling text summary ng duration ng isang service, para sa
-// listahan (hal. "30m wash · 40m dry", "30m wash", "40m dry").
-// UPDATED — tinanggal ang tahimik na `?? 45` fallback. Kung walang
-// value mula sa backend, "—" ang ipapakita sa halip na magpanggap
-// na 45 min — mas madaling mahalata kung hindi pa na-migrate ang
-// service_types table (washer_duration_minutes / dryer_duration_minutes).
 const getDurationSummary = (service) => {
   const parts = [];
   if (needsWasherDuration(service.required_phases)) {
@@ -196,7 +189,7 @@ const ConfirmDeleteModal = ({ item, itemLabel, isDeleting, onCancel, onConfirm }
 };
 
 /* ------------------------------------------------------------------ */
-/*  PAYMENT METHOD TOGGLE ROW (NEW — Payment Methods feature)          */
+/*  PAYMENT METHOD TOGGLE ROW (Payment Methods feature)                */
 /* ------------------------------------------------------------------ */
 
 const PaymentMethodToggleRow = ({ icon: Icon, label, description, enabled, onToggle, accentColor = 'emerald' }) => {
@@ -255,7 +248,6 @@ const QRUploadSlot = ({ label, provider, currentUrl, isUploading, onFileSelected
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
     if (file) onFileSelected(file, provider);
-    // Reset so selecting the same file again still fires onChange
     e.target.value = '';
   };
 
@@ -297,6 +289,12 @@ const QRUploadSlot = ({ label, provider, currentUrl, isUploading, onFileSelected
   );
 };
 
+/**
+ * OPTIMIZATION SETTINGS
+ *
+ * UPDATED (uniform loading screen): gumagamit na ng shared
+ * <LoadingScreen /> para pareho ang itsura sa lahat ng page.
+ */
 const OptimizationSettings = () => {
 
 /* ------------------------------------------------------------------ */
@@ -333,14 +331,10 @@ const OptimizationSettings = () => {
   });
   const [busyServiceId, setBusyServiceId] = useState(null);
 
-  // Delivery settings state
   const [deliverySettings, setDeliverySettings] = useState({ has_delivery: false, delivery_fee: '0' });
   const [isSavingDelivery, setIsSavingDelivery] = useState(false);
 
-  // --- PAYMENT METHODS STATE (NEW — replaces old "Payment QR Codes"
-  //     section). Three shop-level toggles: which payment methods this
-  //     shop accepts at all. GCash/PayMaya QR upload only matters (and
-  //     only renders) when accepts_online is true. ---
+  // --- PAYMENT METHODS STATE ---
   const [paymentMethods, setPaymentMethods] = useState({
     accepts_cash: true,
     accepts_cod: false,
@@ -350,7 +344,6 @@ const OptimizationSettings = () => {
   const [paymentQR, setPaymentQR] = useState({ gcash_qr_url: '', paymaya_qr_url: '' });
   const [uploadingQR, setUploadingQR] = useState({ gcash: false, paymaya: false });
 
-  // Add-Ons state
   const [addOns, setAddOns] = useState([]);
   const [newAddOn, setNewAddOn] = useState({ name: '', price: '' });
   const [isAddingAddOn, setIsAddingAddOn] = useState(false);
@@ -361,7 +354,6 @@ const OptimizationSettings = () => {
   const [addOnToDelete, setAddOnToDelete] = useState(null);
   const [isDeletingAddOn, setIsDeletingAddOn] = useState(false);
 
-  // Promo Codes state
   const [promoCodes, setPromoCodes] = useState([]);
   const [newPromo, setNewPromo] = useState({ discount_type: 'percent', discount_value: '', max_uses: '' });
   const [isAddingPromo, setIsAddingPromo] = useState(false);
@@ -435,8 +427,6 @@ const OptimizationSettings = () => {
           has_delivery: Boolean(shopProfileResult.value.has_delivery),
           delivery_fee: String(shopProfileResult.value.delivery_fee ?? 0),
         });
-        // NEW (Payment Methods feature) — pre-fill current toggles and
-        // QR previews, kung meron nang naka-configure dati.
         setPaymentMethods({
           accepts_cash: shopProfileResult.value.accepts_cash ?? true,
           accepts_cod: shopProfileResult.value.accepts_cod ?? false,
@@ -523,22 +513,12 @@ const OptimizationSettings = () => {
     }
   };
 
-  // --- PAYMENT METHODS HANDLERS (NEW) ---
+  // --- PAYMENT METHODS HANDLERS ---
 
-  /**
-   * Toggle ng isa sa tatlong accepts_* fields — staged lang sa local
-   * state, hindi pa naka-save hanggang i-click ang "Save Payment
-   * Methods" button (parehong pattern ng Delivery Settings section).
-   */
   const handlePaymentMethodToggle = (key) => {
     setPaymentMethods(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
-  /**
-   * Ise-save ang tatlong toggle papunta sa Shop profile. Blocked kung
-   * WALANG kahit isang paraan ng bayad na naka-ON — dapat may kahit
-   * isa, o walang paraan ang customer/staff para makapagbayad.
-   */
   const savePaymentMethods = async () => {
     const { accepts_cash, accepts_cod, accepts_online } = paymentMethods;
     if (!accepts_cash && !accepts_cod && !accepts_online) {
@@ -574,12 +554,25 @@ const OptimizationSettings = () => {
   };
 
   /**
-   * Ina-upload ang napiling image file papunta sa Supabase Storage
-   * (bucket "payment-qr-codes") via apiService.uploadPaymentQR(), tapos
-   * ise-save agad ang resulting public URL sa Shop profile via
-   * apiService.updateShopProfile() — hindi hinihintay ang "Save Payment
-   * Methods" button sa itaas, dahil sarili nitong independiyenteng
-   * na-se-save (parehong pattern ng Add-Ons / Promo Codes sections).
+   * BUG FIX (QR upload "reverting" the Online Payment toggle after
+   * refresh): dati, ang function na ito ay nagpapadala LANG ng
+   * `{ [fieldName]: publicUrl }` papunta sa updateShopProfile() —
+   * HINDI kasama ang `accepts_online`. Kung tine-toggle ng staff ang
+   * "Online Payment" ON (local state pa lang, hindi pa na-click ang
+   * "Save Payment Methods" button) tapos direktang nag-a-upload agad
+   * ng QR, ang na-save lang sa backend ay ang QR URL — ang
+   * `accepts_online` mismo ay NANATILING `false` doon. Sa susunod na
+   * refresh/fetchAll(), babalik ang toggle sa `false` mula sa backend
+   * — kaya parang "naka-off" siya kahit hindi naman talaga tina-toggle
+   * off ng user.
+   *
+   * FIX: kasabay na ngayong isinasave ang `accepts_online: true` sa
+   * PAREHONG request tuwing may na-upload na QR — dahil kung nag-a-
+   * upload ka ng QR, malinaw na balak mong i-enable ang Online
+   * Payment, kaya hindi na kailangang aasa pa sa hiwalay na "Save
+   * Payment Methods" click. I-update din ang local `paymentMethods`
+   * state kasabay nito, para makita agad ng UI na naka-ON at NA-SAVE
+   * na talaga ang toggle (hindi lang ito nag-a-appear na naka-ON).
    */
   const handleQRFileSelected = async (file, provider) => {
     if (!file.type.startsWith('image/')) {
@@ -593,9 +586,19 @@ const OptimizationSettings = () => {
       setUploadingQR(prev => ({ ...prev, [provider]: true }));
 
       const publicUrl = await apiService.uploadPaymentQR(file, shopId, provider);
-      await apiService.updateShopProfile(shopId, { [fieldName]: publicUrl });
+
+      // NEW — accepts_online: true isinasama na sa PAREHONG save,
+      // hindi na hiwalay na aasa sa "Save Payment Methods" button.
+      await apiService.updateShopProfile(shopId, {
+        [fieldName]: publicUrl,
+        accepts_online: true,
+      });
 
       setPaymentQR(prev => ({ ...prev, [fieldName]: publicUrl }));
+      // NEW — sinisigurong makikita rin agad ng toggle UI na naka-ON
+      // na TALAGA ito (hindi lang local/unsaved).
+      setPaymentMethods(prev => ({ ...prev, accepts_online: true }));
+
       showToast({
         type: 'success',
         title: 'QR Code Uploaded',
@@ -1016,14 +1019,7 @@ const OptimizationSettings = () => {
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50">
-        <Loader2 className="animate-spin text-sky-500 mb-4" size={48} />
-        <p className="text-slate-500 font-bold tracking-tight">Loading...</p>
-      </div>
-    );
-  }
+  if (isLoading) return <LoadingScreen message="Loading Settings..." />;
 
   return (
     <div className="p-8 bg-slate-50 min-h-screen custom-scrollbar">
@@ -1325,10 +1321,7 @@ const OptimizationSettings = () => {
           )}
         </div>
 
-        {/* SECTION 2: PAYMENT METHODS (UPDATED — replaces old "Payment
-            QR Codes" section). Toggle which payment methods this shop
-            accepts; GCash/PayMaya QR upload only shows up once "Online
-            Payment" is turned ON. */}
+        {/* SECTION 2: PAYMENT METHODS */}
         <div className="bg-white p-10 rounded-[48px] border-2 border-slate-100 shadow-xl shadow-slate-200/50">
           <div className="flex items-center gap-3 mb-2">
             <div className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl">
@@ -1742,7 +1735,7 @@ const OptimizationSettings = () => {
           <p className="text-sm text-slate-400 mb-8 font-bold italic">Critical for accurate Net Profit and AI efficiency telemetry.</p>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                      <div className="space-y-3">
+            <div className="space-y-3">
               <label className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
                 <Droplets size={14} className="text-emerald-500" /> Supplies (Per Load)
               </label>
@@ -1782,7 +1775,9 @@ const OptimizationSettings = () => {
           </div>
 
           <div className="space-y-3">
-            <label className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">🕒 Off-Peak Hours Schedule</label>
+            <label className="flex items-center gap-2 text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">
+              <Clock size={14} className="text-amber-500" /> Off-Peak Hours Schedule
+            </label>
             <input
               type="text" name="off_peak_hours" value={settings.off_peak_hours} onChange={handleInputChange}
               className="w-full bg-slate-50/50 border-2 border-slate-100 rounded-2xl px-6 py-4 font-black text-slate-700 focus:ring-4 ring-amber-50 focus:border-amber-200 outline-none transition-all"

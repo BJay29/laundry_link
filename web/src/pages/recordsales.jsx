@@ -8,6 +8,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import apiService from '../services/APIservices';
 import StatCard from '../components/ui/statcard';
+import LoadingScreen from '../components/ui/loadingscreen';
 
 /**
  * RECORD SALES PAGE
@@ -41,6 +42,9 @@ import StatCard from '../components/ui/statcard';
  * napiling service sa PDF export (parehong "Income by Service" table
  * pero naka-highlight ang napiling row, at ang buong bookings table sa
  * ibaba ay naka-filter na rin).
+ *
+ * UPDATED (uniform loading screen): gumagamit na ng shared
+ * <LoadingScreen /> para pareho ang itsura sa lahat ng page.
  */
 const RecordSales = () => {
   const [summary, setSummary] = useState({ today_income: 0, week_income: 0, month_income: 0 });
@@ -379,13 +383,7 @@ const RecordSales = () => {
     doc.save(`${filenameParts.join('-')}.pdf`);
   };
 
-  if (loading) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-slate-50">
-        <RefreshCw className="animate-spin text-sky-500" size={40} />
-      </div>
-    );
-  }
+  if (loading) return <LoadingScreen message="Loading Sales..." />;
 
   return (
     <div className="p-8 bg-slate-50 min-h-screen space-y-10 font-sans">

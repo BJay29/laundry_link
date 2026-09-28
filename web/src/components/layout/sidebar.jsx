@@ -7,14 +7,20 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import laundryLinkLogo from '../../assets/Untitled design.png';
 
 /**
- * SIDEBAR COMPONENT (Collapsible & Dark Theme with Categories - No Scroll)
+ * SIDEBAR COMPONENT (Collapsible & Dark Theme with Categories - Distinct Spacing)
  * 
  * Pwedeng i-toggle para maging icon-only mode o full-width sidebar.
- * Naka-categorize ang nav items na walang internal scrollbar.
+ * May mas malinaw at maluwag na pagitan ang bawat kategorya.
+ *
+ * FIXED: ang "Account Settings" button ay dating pumupunta sa
+ * /optimization-settings — ngayon ay /settings na (ang tunay na
+ * Account Settings page). Naka-highlight din ito kapag nasa /settings.
  */
 const Sidebar = ({ isCollapsed, setIsCollapsed }) => {
   const location = useLocation();
   const navigate = useNavigate();
+
+  const isAccountSettingsActive = location.pathname === '/settings';
 
   // Naka-categorize na nav items
   const navCategories = [
@@ -66,21 +72,21 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }) => {
         </Link>
       </div>
 
-      {/* Navigation Links with Categories (Walang Scroll) */}
-      <nav className="flex-grow px-3 py-3 overflow-hidden flex flex-col justify-around">
+      {/* Navigation Links with Categories (Distinct Spacing) */}
+      <nav className="flex-grow px-3 py-4 overflow-y-auto overflow-x-hidden custom-scrollbar space-y-6">
         {navCategories.map((cat, catIdx) => (
-          <div key={catIdx} className="space-y-1">
+          <div key={catIdx} className="space-y-2">
             {/* Category Header (Nawawala kapag naka-collapse) */}
             {!isCollapsed ? (
-              <div className="px-4 pb-1 text-[10px] font-black uppercase tracking-wider text-slate-500">
+              <div className="px-4 text-[10px] font-black uppercase tracking-wider text-slate-500">
                 {cat.categoryName}
               </div>
             ) : (
               // Subtle divider kapag naka-collapse para hindi magdikit-dikit ang icons
-              catIdx > 0 && <div className="my-1.5 border-t border-slate-800/80 mx-2" />
+              catIdx > 0 && <div className="my-3 border-t border-slate-800/80 mx-2" />
             )}
 
-            <ul className="space-y-0.5">
+            <ul className="space-y-1.5">
               {cat.items.map((item) => {
                 const isActive = location.pathname === item.path;
                 return (
@@ -88,7 +94,7 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }) => {
                     <Link
                       to={item.path}
                       title={isCollapsed ? item.name : ''} // Tooltip kapag naka-collapse
-                      className={`flex items-center gap-3.5 py-2 rounded-xl font-bold transition-all duration-200 group ${
+                      className={`flex items-center gap-3.5 py-2.5 rounded-xl font-bold transition-all duration-200 group ${
                         isCollapsed ? 'justify-center px-0' : 'px-4'
                       } ${
                         isActive 
@@ -134,13 +140,17 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }) => {
         {/* Action Buttons (Settings & Logout) */}
         <div className={`space-y-1 ${!isCollapsed ? 'px-0.5' : 'flex flex-col items-center'}`}>
           <button 
-            onClick={() => navigate('/optimization-settings')}
+            onClick={() => navigate('/settings')}
             title="Account Settings"
-            className={`w-full flex items-center rounded-xl text-xs font-bold text-slate-300 hover:bg-slate-800 transition ${
+            className={`w-full flex items-center rounded-xl text-xs font-bold transition ${
               isCollapsed ? 'justify-center p-2' : 'gap-3 px-3 py-2'
+            } ${
+              isAccountSettingsActive
+                ? 'bg-slate-800 text-white'
+                : 'text-slate-300 hover:bg-slate-800'
             }`}
           >
-            <Settings size={15} className="text-slate-400 shrink-0" />
+            <Settings size={15} className={`shrink-0 ${isAccountSettingsActive ? 'text-sky-400' : 'text-slate-400'}`} />
             {!isCollapsed && <span className="whitespace-nowrap">Account Settings</span>}
           </button>
           

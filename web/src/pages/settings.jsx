@@ -14,18 +14,22 @@ import {
 } from 'lucide-react';
 import ProfileSettings from '../components/ui/profilesettings';
 import SecuritySettings from '../components/ui/securitysettings';
+import LoadingScreen from '../components/ui/loadingscreen';
 import { apiService } from '../services/APIservices';
 
 /**
  * ACCOUNT SETTINGS PAGE
  * Central hub for Account, Security, and Staff management.
- * Accessible via /account-settings route from the sidebar.
+ * Accessible via the /settings route (Sidebar and Header "Account Settings").
  * Features:
  * - Profile tab: update shop name, address, and email
  * - Security tab: change account password
  * - Staff Management tab (NEW, Owner-only): create staff/manager accounts
  *   under the same shop via POST /auth/register/staff
  * - Shared status feedback toast for all tabs
+ *
+ * UPDATED (uniform loading screen): gumagamit na ng shared
+ * <LoadingScreen /> para pareho ang itsura sa lahat ng page.
  */
 const Settings = () => {
   // Tab navigation state — 'profile', 'security', or 'staff'
@@ -68,13 +72,7 @@ const Settings = () => {
     setTimeout(() => setMessage({ type: '', text: '' }), 5000);
   };
 
-  if (fetching) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-slate-50">
-        <Loader2 className="animate-spin text-sky-500" size={48} />
-      </div>
-    );
-  }
+  if (fetching) return <LoadingScreen message="Loading Account..." />;
 
   return (
     <div className="p-8 bg-slate-50 min-h-screen font-sans">

@@ -13,6 +13,7 @@ import {
   CheckCircle2 
 } from 'lucide-react';
 import ForecastCharts from '../components/charts/forecastcharts';
+import LoadingScreen from '../components/ui/loadingscreen';
 import apiService from '../services/APIservices';
 
 /**
@@ -49,6 +50,9 @@ const Typewriter = ({ text, speed = 20 }) => {
  * can show the weather outlook strip, the tier badge, and — for a
  * brand-new shop with no basis to predict yet — the insufficient-data
  * notice instead of a fabricated bookings/income chart.
+ *
+ * UPDATED (uniform loading screen): gumagamit na ng shared
+ * <LoadingScreen /> para pareho ang itsura sa lahat ng page.
  *
  * REMOVED: Service breakdown row (Full Service / Titan Wash / Regular
  * Wash / Comforter / Total Load) — no longer shown on this page.
@@ -164,14 +168,7 @@ const FinancialForecast = () => {
     return () => clearInterval(interval);
   }, [fetchData]);
 
-  if (loading) return (
-    <div className="h-screen flex items-center justify-center bg-slate-50">
-      <div className="flex flex-col items-center gap-4">
-        <RefreshCw className="animate-spin text-sky-500" size={40} />
-        <p className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-400">Syncing Projections...</p>
-      </div>
-    </div>
-  );
+  if (loading) return <LoadingScreen message="Syncing Projections..." />;
 
   return (
     <div className="p-4 md:p-8 bg-slate-50 min-h-screen font-sans">

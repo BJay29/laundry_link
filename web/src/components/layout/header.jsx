@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Bell, Settings, LogOut, Clock, Calendar, Search,
   LayoutDashboard, Monitor, Cpu, BarChart3, Package,
-  Users, History, Receipt, AlertTriangle, ClipboardList, X
+  Users, History, Receipt, AlertTriangle, ClipboardList, X, UserCog
 } from 'lucide-react';
 import apiService from '../../services/APIservices';
 import laundryLinkLogo from '../../assets/Untitled design.png';
@@ -13,6 +13,12 @@ import laundryLinkLogo from '../../assets/Untitled design.png';
  * 
  * UPDATED: Nagdagdag ng dynamic page title indicator sa tabi ng logo
  * para lumitaw ang pangalan ng kasalukuyang page batay sa active route.
+ *
+ * FIXED: ang "Account Settings" sa profile dropdown ay dating pumupunta
+ * sa /optimization-settings — ngayon ay /settings na (ang tunay na
+ * Account Settings page). Idinagdag din ito sa search "Pages" results,
+ * at ang dating "Settings" search item (Optimization Settings) ay
+ * pinalitan ng pangalang "Optimization" para hindi malito.
  */
 
 const NAV_ITEMS = [
@@ -23,7 +29,8 @@ const NAV_ITEMS = [
   { name: 'Customers', icon: <Users size={17} />, path: '/customer-hub' },
   { name: 'Sales', icon: <Receipt size={17} />, path: '/record-sales' },
   { name: 'Forecast', icon: <BarChart3 size={17} />, path: '/forecast' },
-  { name: 'Settings', icon: <Settings size={17} />, path: '/optimization-settings' },
+  { name: 'Optimization', icon: <Settings size={17} />, path: '/optimization-settings' },
+  { name: 'Account Settings', icon: <UserCog size={17} />, path: '/settings' },
   { name: 'Activity', icon: <History size={17} />, path: '/activity-logs' },
 ];
 
@@ -37,7 +44,7 @@ const PAGE_TITLES = {
   '/record-sales': 'Record Sales',
   '/forecast': 'Financial Forecast',
   '/optimization-settings': 'Optimization Settings',
-  '/settings': 'Settings',
+  '/settings': 'Account Settings',
   '/activity-logs': 'Activity Logs',
 };
 
@@ -437,7 +444,7 @@ const Header = () => {
             <div className="absolute right-0 mt-2 w-52 bg-white rounded-2xl shadow-xl border border-slate-100 py-2 z-50">
               <div className="py-1">
                 <button
-                  onClick={() => { navigate('/optimization-settings'); setShowProfileMenu(false); }}
+                  onClick={() => { navigate('/settings'); setShowProfileMenu(false); }}
                   className="w-full px-4 py-2 text-left text-xs font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition"
                 >
                   <Settings size={15} className="text-slate-400" /> Account Settings

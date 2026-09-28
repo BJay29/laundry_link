@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { apiService } from '../services/APIservices';
+import LoadingScreen from '../components/ui/loadingscreen';
 import {
   History,
   RefreshCw,
@@ -21,6 +22,10 @@ import {
  * ACTIVITY LOGS PAGE
  *
  * Recent-activity feed for the shop — shows who did what and when.
+ *
+ * UPDATED (uniform loading screen): gumagamit na ng shared
+ * <LoadingScreen /> (inline variant) para pareho ang itsura sa lahat
+ * ng page.
  */
 
 const FETCH_LIMIT = 100;
@@ -290,9 +295,8 @@ const ActivityLogs = () => {
 
         {/* Loading State */}
         {loading && (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 text-center">
-            <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-emerald-500 mx-auto mb-3"></div>
-            <p className="text-gray-400 text-sm">Loading activity...</p>
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm">
+            <LoadingScreen fullScreen={false} message="Loading Activity..." />
           </div>
         )}
 

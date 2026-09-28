@@ -4,7 +4,6 @@ import {
   Calendar, 
   RefreshCw, 
   Monitor, 
-  Activity, 
   TrendingUp, 
   CheckCircle, 
   History
@@ -17,6 +16,7 @@ import OptimizationTip from '../components/ui/optimizationtip';
 import MachineGrid from '../components/machines/machinegrid';
 import BookingModal from '../components/modals/bookingmodal';
 import HistoryModal from '../components/modals/historymodal'; 
+import LoadingScreen from '../components/ui/loadingscreen';
 
 /**
  * DASHBOARD COMPONENT
@@ -27,6 +27,9 @@ import HistoryModal from '../components/modals/historymodal';
  * ipinapasa sa <MachineGrid> — dito na kinukuha ang cycle duration ng
  * bawat Busy machine, hindi na sa tinanggal nang per-machine
  * `configured_duration_minutes`.
+ *
+ * UPDATED (uniform loading screen): gumagamit na ng shared
+ * <LoadingScreen /> para pareho ang itsura sa lahat ng page.
  */
 const Dashboard = () => {
   const [stats, setStats] = useState(null);
@@ -133,19 +136,7 @@ const Dashboard = () => {
   };
 
   if (loading && !stats && machines.length === 0) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-slate-50">
-        <div className="flex flex-col items-center">
-          <div className="relative">
-            <div className="animate-spin rounded-full h-20 w-20 border-t-4 border-sky-500 border-r-transparent shadow-2xl" />
-            <Activity className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-sky-500" size={24} />
-          </div>
-          <p className="text-slate-400 font-black text-[10px] uppercase tracking-[0.4em] mt-8 animate-pulse">
-            Syncing Command...
-          </p>
-        </div>
-      </div>
-    );
+    return <LoadingScreen message="Syncing Dashboard..." />;
   }
 
   return (

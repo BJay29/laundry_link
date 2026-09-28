@@ -22,6 +22,7 @@ import {
   Legend,
 } from 'recharts';
 import apiService from '../services/APIservices';
+import LoadingScreen from '../components/ui/loadingscreen';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SEGMENT CONFIG
@@ -213,16 +214,7 @@ const CustomerHub = () => {
   };
 
   // ── Loading Screen ───────────────────────────────────────────────────────
-  if (loading) return (
-    <div className="h-screen flex items-center justify-center bg-slate-50">
-      <div className="flex flex-col items-center gap-4">
-        <RefreshCw className="animate-spin text-sky-500" size={40} />
-        <p className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-400">
-          Analyzing Customers...
-        </p>
-      </div>
-    </div>
-  );
+  if (loading) return <LoadingScreen message="Analyzing Customers..." />;
 
   return (
     <div className="p-8 bg-slate-50 min-h-screen font-sans">

@@ -380,6 +380,56 @@ export const finalizeBookingPricing = async (bookingId, pricingData) => {
     }
 };
 
+// --- RIDER ASSIGNMENT METHODS (NEW — Pickup & Delivery feature) ---
+//
+// Manual text-entry only (rider_name + rider_contact) — matches the
+// backend's RiderAssignmentInput schema exactly. Two separate
+// endpoints because the pickup leg (rider fetches laundry from the
+// customer) and the delivery leg (rider brings it back) happen at
+// different points in a booking's lifecycle — see AssignRiderModal,
+// which calls whichever of these two matches its `mode` prop.
+
+/**
+ * riderData: { rider_name: string, rider_contact: string }
+ * Callable while the booking is anything other than 'Awaiting
+ * Approval' / 'Declined' / 'Claimed' / 'Cancelled' — typically used
+ * from the Mobile Requests > Weighing sub-tab, before the laundry has
+ * physically reached the shop.
+ */
+export const assignPickupRider = async (bookingId, riderData) => {
+    try {
+        const payload = {
+            rider_name: riderData.rider_name,
+            rider_contact: riderData.rider_contact,
+        };
+        const response = await apiClient.patch(`/bookings/${bookingId}/assign-pickup-rider`, payload);
+        return response.data;
+    } catch (error) {
+        console.error("Assign Pickup Rider Error:", error.response?.data?.detail || error.message);
+        throw error;
+    }
+};
+
+/**
+ * riderData: { rider_name: string, rider_contact: string }
+ * Callable while the booking is 'In Progress' or 'Ready' — typically
+ * used from the Active Terminal's 'Ready' rows, once the clean laundry
+ * needs to go back out to the customer.
+ */
+export const assignDeliveryRider = async (bookingId, riderData) => {
+    try {
+        const payload = {
+            rider_name: riderData.rider_name,
+            rider_contact: riderData.rider_contact,
+        };
+        const response = await apiClient.patch(`/bookings/${bookingId}/assign-delivery-rider`, payload);
+        return response.data;
+    } catch (error) {
+        console.error("Assign Delivery Rider Error:", error.response?.data?.detail || error.message);
+        throw error;
+    }
+};
+
 // --- ADD-ON METHODS ---
 
 export const getAddOns = async () => {
@@ -658,6 +708,10 @@ export const apiService = {
     // --- WEIGHING / FINALIZE PRICING METHODS (NEW) ---
     getAwaitingWeighingBookings,
     finalizeBookingPricing,
+
+    // --- RIDER ASSIGNMENT METHODS (NEW — Pickup & Delivery feature) ---
+    assignPickupRider,
+    assignDeliveryRider,
 
     // --- MACHINE HUB & TELEMETRY METHODS ---
 
