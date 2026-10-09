@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { 
   Plus, 
   Calendar, 
@@ -30,6 +31,12 @@ import LoadingScreen from '../components/ui/loadingscreen';
  *
  * UPDATED (uniform loading screen): gumagamit na ng shared
  * <LoadingScreen /> para pareho ang itsura sa lahat ng page.
+ *
+ * UPDATED (Rating after order): dagdag na "Customer Rating" card
+ * (average na bituin at bilang ng reviews) na kumukuha ng buod mula sa
+ * GET /reviews/shop. Clickable — pumupunta sa /reviews. Kung pumalya ang
+ * tawag (hal. wala pang naka-deploy na endpoint), "—" at "No ratings
+ * yet" ang ipapakita; hindi nito sinisira ang ibang bahagi ng dashboard.
  */
 const Dashboard = () => {
   const [stats, setStats] = useState(null);
@@ -38,6 +45,7 @@ const Dashboard = () => {
   const [machines, setMachines] = useState([]);
   const [serviceDurations, setServiceDurations] = useState({});
   const [insightData, setInsightData] = useState(null);
+  const [ratingSummary, setRatingSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -57,12 +65,14 @@ const Dashboard = () => {
       if (isRefresh) setRefreshing(true);
       else setLoading(true);
 
-      const [statsResult, machinesResult, forecastResult, insightResult, servicesResult] = await Promise.allSettled([
+      const [statsResult, machinesResult, forecastResult, insightResult, servicesResult, reviewsResult] = await Promise.allSettled([
         apiService.getDashboardStats(),
         apiService.getMachines(),
         apiService.getForecastData(),
         apiService.getOperationalInsights(),
         apiService.getServiceTypes(),
+        // limit=1: buod lang ang kailangan dito, hindi ang listahan
+        apiService.getShopReviews(1),
       ]);
 
       if (statsResult.status === 'fulfilled' && statsResult.value) {
@@ -110,6 +120,11 @@ const Dashboard = () => {
         });
         setServiceDurations(map);
       }
+
+      // NEW (Rating after order) — buod ng ratings ng shop.
+      if (reviewsResult.status === 'fulfilled' && reviewsResult.value?.summary) {
+        setRatingSummary(reviewsResult.value.summary);
+      }
       
       setLastUpdated(new Date());
     } catch (err) {
@@ -138,6 +153,9 @@ const Dashboard = () => {
   if (loading && !stats && machines.length === 0) {
     return <LoadingScreen message="Syncing Dashboard..." />;
   }
+
+  const ratingCount = ratingSummary?.rating_count || 0;
+  const hasRatings = ratingCount > 0 && ratingSummary?.average_rating != null;
 
   return (
     <div className="p-8 bg-slate-50 min-h-screen space-y-10 font-sans">
@@ -188,11 +206,22 @@ const Dashboard = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      {/* UPDATED (Rating after order): 5 cards na ngayon. Dahil may
+          fixed na sidebar (w-72) na kumakain ng espasyo, 3 hanay sa lg
+          at 5 hanay lang sa xl pataas para hindi sumikip ang mga card. */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
         <StatCard title="Today Revenue"    value={stats?.today_revenue || 0}             trend={`${stats?.income_growth || 0}%`} type="revenue" />
         <StatCard title="Active Machines"  value={stats?.active_machines || "0"}         trend="In Use"   type="utilization" />
         <StatCard title="Avg. Per Service" value={Number(stats?.avg_per_service || 0)}   trend="Stable"   type="avg_per_service" />
         <StatCard title="Expected Bookings" value={stats?.predicted_bookings_today || "0"} trend="Forecast" type="bookings" />
+        <Link to="/reviews" className="block" title="View customer reviews">
+          <StatCard
+            title="Customer Rating"
+            value={hasRatings ? ratingSummary.average_rating.toFixed(1) : '—'}
+            trend={hasRatings ? `${ratingCount} ${ratingCount === 1 ? 'review' : 'reviews'}` : 'No ratings yet'}
+            type="rating"
+          />
+        </Link>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

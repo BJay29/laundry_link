@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Mail, Lock, Eye, EyeOff, Store, MapPin, CheckCircle2 } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, Store, MapPin, CheckCircle2, Circle } from 'lucide-react';
 import authService from '../services/APIservices';
 import laundryLinkLogo from '../assets/Untitled design.png';
 import VerifyOtpModal from '../components/modals/verifyotpmodal';
+import ForgotPasswordModal from '../components/modals/forgotpasswordmodal';
+import { PASSWORD_MAX, getPasswordChecks, validatePassword } from '../utils/passwordrules';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -11,11 +13,30 @@ const Login = () => {
 
   const [pendingSignup, setPendingSignup] = useState(null); // { email, shopName, address }
 
+  // Forgot password
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [resetNotice, setResetNotice] = useState('');
+  const [prefilledEmail, setPrefilledEmail] = useState('');
+
   const handleSignupSuccess = ({ email, shopName, address }) => {
     setPendingSignup({ email, shopName, address });
   };
 
   const closeOtpModal = () => setPendingSignup(null);
+
+  const openForgot = (emailFromForm) => {
+    setForgotEmail(emailFromForm || '');
+    setResetNotice('');
+    setForgotOpen(true);
+  };
+
+  const handleForgotDone = (email) => {
+    setForgotOpen(false);
+    setPrefilledEmail(email);
+    setResetNotice('Password updated. Please log in with your new password.');
+    setMode('login');
+  };
 
   return (
     <div className="min-h-screen bg-white flex flex-col md:flex-row">
@@ -50,7 +71,13 @@ const Login = () => {
       <div className="flex-1 flex items-center justify-center px-6 py-12 bg-white">
         <div key={mode} className="w-full max-w-[400px] auth-transition">
           {mode === 'login' ? (
-            <LoginForm onSwitch={() => setMode('register')} navigate={navigate} />
+            <LoginForm
+              onSwitch={() => { setResetNotice(''); setMode('register'); }}
+              navigate={navigate}
+              onForgotPassword={openForgot}
+              notice={resetNotice}
+              prefilledEmail={prefilledEmail}
+            />
           ) : (
             <RegisterForm onSwitch={() => setMode('login')} onSignupSuccess={handleSignupSuccess} />
           )}
@@ -68,14 +95,16 @@ const Login = () => {
           navigate('/dashboard');
         }}
       />
+
+      <ForgotPasswordModal
+        isOpen={forgotOpen}
+        initialEmail={forgotEmail}
+        onClose={() => setForgotOpen(false)}
+        onDone={handleForgotDone}
+      />
     </div>
   );
 };
-
-/* ------------------------------------------------------------------ */
-/*  SHARED: "OR" divider — dating plain border-t lang, ngayon may      */
-/*  visible na linya sa magkabilang gilid ng salitang "OR" sa gitna.   */
-/* ------------------------------------------------------------------ */
 
 const OrDivider = () => (
   <div className="flex items-center gap-3 my-6">
@@ -85,12 +114,40 @@ const OrDivider = () => (
   </div>
 );
 
-function LoginForm({ onSwitch, navigate }) {
-  const [email, setEmail] = useState('');
+/**
+ * Live checklist ng password rules. Kulay abo habang walang laman,
+ * berde kapag pasado, pula kapag may laman pero hindi pasado.
+ */
+const PasswordRules = ({ password }) => {
+  const checks = getPasswordChecks(password);
+  return (
+    <ul className="mt-2 ml-1 space-y-1">
+      {checks.map((c) => {
+        const color = password.length === 0
+          ? 'text-slate-400'
+          : c.ok ? 'text-emerald-600' : 'text-rose-500';
+        return (
+          <li key={c.id} className={`flex items-center gap-1.5 text-xs font-medium ${color}`}>
+            {c.ok ? <CheckCircle2 size={13} /> : <Circle size={13} />}
+            {c.label}
+          </li>
+        );
+      })}
+    </ul>
+  );
+};
+
+function LoginForm({ onSwitch, navigate, onForgotPassword, notice, prefilledEmail }) {
+  const [email, setEmail] = useState(prefilledEmail || '');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+
+  // Ipasok ang email pagkatapos ng successful na password reset.
+  useEffect(() => {
+    if (prefilledEmail) setEmail(prefilledEmail);
+  }, [prefilledEmail]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -110,6 +167,12 @@ function LoginForm({ onSwitch, navigate }) {
   return (
     <div className="bg-white w-full rounded-2xl p-8 shadow-lg border border-slate-100">
       <h2 className="text-xl font-bold text-slate-800 mb-6">Log into LaundryLink</h2>
+
+      {notice && !errorMessage && (
+        <div className="mb-4 p-3 bg-emerald-50 border border-emerald-100 text-emerald-700 text-sm font-medium rounded-lg">
+          {notice}
+        </div>
+      )}
 
       {errorMessage && (
         <div className="mb-4 p-3 bg-red-50 border border-red-100 text-red-600 text-sm font-medium rounded-lg">
@@ -132,6 +195,7 @@ function LoginForm({ onSwitch, navigate }) {
           />
         </div>
 
+        {/* Walang length limit dito sa login, sinadya. */}
         <div className="relative group">
           <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-sky-500 transition-colors">
             <Lock size={18} />
@@ -162,7 +226,11 @@ function LoginForm({ onSwitch, navigate }) {
         </button>
 
         <div className="text-center pt-1">
-          <button type="button" className="text-sm text-sky-500 hover:underline font-medium">
+          <button
+            type="button"
+            onClick={() => onForgotPassword(email)}
+            className="text-sm text-sky-500 hover:underline font-medium"
+          >
             Forgotten password?
           </button>
         </div>
@@ -200,6 +268,12 @@ function RegisterForm({ onSwitch, onSignupSuccess }) {
   const handleRegister = async (e) => {
     e.preventDefault();
     setErrorMessage('');
+
+    const passwordError = validatePassword(password);
+    if (passwordError) {
+      setErrorMessage(passwordError);
+      return;
+    }
 
     if (password !== confirmPassword) {
       setErrorMessage('Passwords do not match. Please re-enter your password.');
@@ -280,25 +354,29 @@ function RegisterForm({ onSwitch, onSignupSuccess }) {
           />
         </div>
 
-        <div className="relative group">
-          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-emerald-500 transition-colors">
-            <Lock size={18} />
+        <div>
+          <div className="relative group">
+            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-emerald-500 transition-colors">
+              <Lock size={18} />
+            </div>
+            <input
+              type={showPassword ? 'text' : 'password'}
+              required
+              maxLength={PASSWORD_MAX}
+              className="w-full bg-slate-50/60 border-2 border-slate-200 rounded-2xl py-3.5 pl-11 pr-11 text-[15px] focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-400 focus:bg-white transition-all text-slate-700 placeholder:text-slate-400 shadow-sm"
+              placeholder="New password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-600 transition-colors"
+            >
+              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
           </div>
-          <input
-            type={showPassword ? 'text' : 'password'}
-            required
-            className="w-full bg-slate-50/60 border-2 border-slate-200 rounded-2xl py-3.5 pl-11 pr-11 text-[15px] focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-400 focus:bg-white transition-all text-slate-700 placeholder:text-slate-400 shadow-sm"
-            placeholder="New password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-          <button
-            type="button"
-            onClick={() => setShowPassword(!showPassword)}
-            className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-600 transition-colors"
-          >
-            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-          </button>
+          <PasswordRules password={password} />
         </div>
 
         <div>
@@ -311,6 +389,7 @@ function RegisterForm({ onSwitch, onSignupSuccess }) {
             <input
               type={showConfirmPassword ? 'text' : 'password'}
               required
+              maxLength={PASSWORD_MAX}
               className={`w-full border-2 rounded-2xl py-3.5 pl-11 pr-11 text-[15px] focus:outline-none focus:ring-4 transition-all text-slate-700 placeholder:text-slate-400 shadow-sm ${
                 passwordsMismatch
                   ? 'bg-rose-50/40 border-rose-300 focus:ring-rose-400/10 focus:border-rose-400'

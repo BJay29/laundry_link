@@ -1,13 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { User, Weight, Settings2, CheckCircle2, Hash, Calculator, Edit3, Cpu, HardDrive, Loader2, AlertTriangle, Ban, Droplets, ArrowRight, Receipt, Tag, Calendar, Wallet, RotateCcw } from 'lucide-react';
+import { User, Weight, Settings2, CheckCircle2, Hash, Calculator, Edit3, Cpu, HardDrive, Loader2, AlertTriangle, Ban, Droplets, ArrowRight, Receipt, Tag, Calendar, Wallet, RotateCcw, Banknote, QrCode, ImageOff } from 'lucide-react';
 import apiService from '../../services/APIservices';
 import { optimizationLogic } from '../../utils/optimizationlogic';
 
-const PAYMENT_METHODS = [
-  { value: 'cash', label: 'Cash' },
+/**
+ * Dalawang pangunahing payment type lang. Kapag "online", may
+ * sub-option (provider) na lalabas. Ang provider value ay ang
+ * ipinapadala sa backend bilang payment_method (BookingCreate ay
+ * tumatanggap ng: cash, cod, gcash, paymaya).
+ */
+const ONLINE_PROVIDERS = [
   { value: 'gcash', label: 'GCash' },
   { value: 'paymaya', label: 'PayMaya' },
 ];
+
+const PAYMENT_LABELS = {
+  cash: 'Cash',
+  cod: 'Cash on Delivery',
+  gcash: 'GCash',
+  paymaya: 'PayMaya',
+};
 
 // Shared class strings so every field in the compact layout stays consistent.
 const LABEL_CLASS = 'text-[10px] font-black text-slate-400 uppercase flex items-center gap-1.5 tracking-widest mb-1.5';
@@ -16,26 +28,16 @@ const INPUT_BASE = 'w-full border rounded-xl px-4 py-2.5 text-sm font-bold outli
 /**
  * WALK-IN FORM COMPONENT
  *
- * Embedded in the "Walk-In Entry" tab (always visible while that tab is
- * active) instead of a popup. There is no `isOpen` prop and no backdrop.
- *
- * LAYOUT (compact): header with title + Smart/Manual toggle + Clear, then a
- * two-column body on large screens —
- *   left  : customer, weight/loads, service, payment method, promo code
- *   right : inventory used, total payable, submit
- * On smaller screens it collapses to a single column.
- *
- * FLOW (three steps internally):
+ * Embedded in the "Walk-In Entry" tab. FLOW (three steps internally):
  *   'form'    — the embedded form.
  *   'assign'  — modal overlay right after the booking is created.
- *   'receipt' — modal overlay after assign (assigned OR skipped). "Done"
- *               resets everything to a blank form on the SAME tab.
+ *   'receipt' — modal overlay after assign (assigned OR skipped).
  *
- * onBookingSuccess fires right after the booking is created (Pending, no
- * machines yet). onAssignSuccess fires after a successful machine
- * assignment. Switching Tier-1 tabs unmounts this component.
- *
- * UI NOTE: icons are lucide-react only — no emojis.
+ * UPDATED (Payment Method UI): dalawang pagpipilian na lang — Cash at
+ * Online Payment. Kapag Online ang pinili, lalabas ang provider
+ * (GCash / PayMaya) at ang QR code ng shop (mula sa shop profile) para
+ * i-scan ng customer. Nananatiling "unpaid" ang online walk-in hanggang
+ * i-mark as paid ng staff sa Record Sales (may dual-check kung >= ₱5,000).
  */
 const WalkInForm = ({ onBookingSuccess, onAssignSuccess }) => {
   const [step, setStep] = useState('form'); // 'form' | 'assign' | 'receipt'
@@ -55,7 +57,20 @@ const WalkInForm = ({ onBookingSuccess, onAssignSuccess }) => {
   const [selectedInventory, setSelectedInventory] = useState({});
   const [touchedInventory, setTouchedInventory] = useState({});
 
-  const [paymentMethod, setPaymentMethod] = useState('cash');
+  // --- PAYMENT (NEW UI) ---
+  const [paymentType, setPaymentType] = useState('cash'); // 'cash' | 'online'
+  const [onlineProvider, setOnlineProvider] = useState('gcash'); // 'gcash' | 'paymaya'
+  const [qrImageFailed, setQrImageFailed] = useState(false);
+  const [shopPayment, setShopPayment] = useState({
+    acceptsCash: true,
+    acceptsOnline: true,
+    qrs: { gcash: null, paymaya: null },
+    genericQr: null,
+  });
+
+  // Ang aktwal na payment_method na ipapadala sa backend.
+  const paymentMethod = paymentType === 'cash' ? 'cash' : onlineProvider;
+
   const [promoCodeInput, setPromoCodeInput] = useState('');
 
   const [formData, setFormData] = useState({
@@ -75,8 +90,6 @@ const WalkInForm = ({ onBookingSuccess, onAssignSuccess }) => {
   const [isAssigning, setIsAssigning] = useState(false);
   const [assignServiceNotFound, setAssignServiceNotFound] = useState(false);
 
-  // Remembers which machines were actually assigned (or that the step
-  // was skipped), purely for the receipt step's display.
   const [assignedMachineLabels, setAssignedMachineLabels] = useState([]);
 
   const CAPACITY = {
@@ -100,11 +113,14 @@ const WalkInForm = ({ onBookingSuccess, onAssignSuccess }) => {
     return 'OK';
   };
 
+  // QR na ipapakita para sa napiling provider (may fallback sa generic QR).
+  const activeQrUrl =
+    paymentType === 'online'
+      ? (shopPayment.qrs[onlineProvider] || shopPayment.genericQr || null)
+      : null;
+
   /**
-   * SYNC: fetched once on mount. The component's presence in the DOM (the
-   * parent only renders it while the Walk-In Entry tab is active) already
-   * serves as the "isOpen" gate. Re-fetches fresh settings each time the
-   * tab is switched back to.
+   * SYNC: fetched once on mount.
    */
   useEffect(() => {
     const fetchData = async () => {
@@ -146,6 +162,23 @@ const WalkInForm = ({ onBookingSuccess, onAssignSuccess }) => {
         console.error("Error fetching Walk-In form data:", error);
       } finally {
         setIsLoadingSettings(false);
+      }
+
+      // Hiwalay na try: kung pumalya ang shop profile, hindi masisira
+      // ang buong form — default lang ang payment options.
+      try {
+        const profile = await apiService.getShopProfile();
+        setShopPayment({
+          acceptsCash: profile?.accepts_cash !== false,
+          acceptsOnline: profile?.accepts_online !== false,
+          qrs: {
+            gcash: profile?.gcash_qr_url || null,
+            paymaya: profile?.paymaya_qr_url || null,
+          },
+          genericQr: profile?.qr_code_url || null,
+        });
+      } catch (error) {
+        console.error("Error fetching shop payment settings:", error);
       }
     };
     fetchData();
@@ -207,11 +240,6 @@ const WalkInForm = ({ onBookingSuccess, onAssignSuccess }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData.calculatedLoads, inventoryData]);
 
-  /**
-   * Kept up here next to the other hooks (Rules of Hooks) — the same
-   * number of hooks must run on every render, so nothing hook-related
-   * should ever sit after an early return.
-   */
   const assignRequiredPhases = createdBooking
     ? (serviceRequiredPhases[normalizeName(createdBooking.service_type)] ?? null)
     : null;
@@ -242,6 +270,16 @@ const WalkInForm = ({ onBookingSuccess, onAssignSuccess }) => {
     }));
   };
 
+  const handleSelectPaymentType = (type) => {
+    setPaymentType(type);
+    setQrImageFailed(false);
+  };
+
+  const handleSelectProvider = (provider) => {
+    setOnlineProvider(provider);
+    setQrImageFailed(false);
+  };
+
   const toggleInventoryItem = (item) => {
     const itemId = String(item.id);
     setSelectedInventory(prev => {
@@ -269,16 +307,13 @@ const WalkInForm = ({ onBookingSuccess, onAssignSuccess }) => {
     setTouchedInventory(prev => ({ ...prev, [itemId]: true }));
   };
 
-  /**
-   * Manual "Clear" — the form is always visible (embedded), so staff need
-   * a way to wipe it without completing a booking first. Does NOT touch
-   * the assign/receipt step state.
-   */
   const handleClearForm = () => {
     setWeightTouched(false);
     setSelectedInventory({});
     setTouchedInventory({});
-    setPaymentMethod('cash');
+    setPaymentType('cash');
+    setOnlineProvider('gcash');
+    setQrImageFailed(false);
     setPromoCodeInput('');
     setBookingMode('smart');
     setFormData({
@@ -308,6 +343,10 @@ const WalkInForm = ({ onBookingSuccess, onAssignSuccess }) => {
     }
     if (isBlockedByInventory) {
       alert("One of the selected inventory items doesn't have enough stock for this booking. Please adjust the quantity.");
+      return;
+    }
+    if (paymentType === 'online' && !shopPayment.acceptsOnline) {
+      alert("Online Payment is turned off for this shop. Enable it in Optimization Settings, or choose Cash.");
       return;
     }
 
@@ -362,11 +401,6 @@ const WalkInForm = ({ onBookingSuccess, onAssignSuccess }) => {
     }
   };
 
-  /**
-   * FULL RESET — called from the RECEIPT step's "Done" button. Wipes
-   * everything and drops back to a blank 'form' step, still on the
-   * Walk-In Entry tab, ready for the next customer.
-   */
   const resetToBlankForm = () => {
     handleClearForm();
     setStep('form');
@@ -571,13 +605,131 @@ const WalkInForm = ({ onBookingSuccess, onAssignSuccess }) => {
   };
 
   /* ------------------------------------------------------------------ */
-  /*  OVERLAY — 'receipt' step (modal, floats above whichever tab)       */
+  /*  PAYMENT SECTION (Cash / Online → provider → QR)                    */
+  /* ------------------------------------------------------------------ */
+  const renderPaymentSection = () => (
+    <div className="space-y-3">
+      <label className={LABEL_CLASS}>
+        <Wallet size={13} className="text-sky-500" /> Payment Method
+      </label>
+
+      {/* Level 1: Cash / Online Payment */}
+      <div className="grid grid-cols-2 gap-3">
+        <button
+          type="button"
+          onClick={() => handleSelectPaymentType('cash')}
+          disabled={!shopPayment.acceptsCash}
+          className={`flex items-center justify-center gap-2 py-3 rounded-xl font-black text-xs border transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+            paymentType === 'cash'
+              ? 'bg-slate-900 border-slate-900 text-white shadow-md'
+              : 'bg-slate-50/50 border-slate-200 text-slate-500 hover:border-slate-300'
+          }`}
+        >
+          <Banknote size={15} /> Cash
+        </button>
+        <button
+          type="button"
+          onClick={() => handleSelectPaymentType('online')}
+          disabled={!shopPayment.acceptsOnline}
+          title={!shopPayment.acceptsOnline ? 'Online Payment is turned off in Optimization Settings.' : undefined}
+          className={`flex items-center justify-center gap-2 py-3 rounded-xl font-black text-xs border transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+            paymentType === 'online'
+              ? 'bg-slate-900 border-slate-900 text-white shadow-md'
+              : 'bg-slate-50/50 border-slate-200 text-slate-500 hover:border-slate-300'
+          }`}
+        >
+          <QrCode size={15} /> Online Payment
+        </button>
+      </div>
+
+      {!shopPayment.acceptsOnline && (
+        <p className="text-[10px] font-bold text-amber-600">
+          Online Payment is off for this shop. Turn it on in Optimization Settings.
+        </p>
+      )}
+
+      {/* Level 2: provider + QR (online lang) */}
+      {paymentType === 'online' && (
+        <div className="rounded-2xl border border-sky-100 bg-sky-50/40 p-4 space-y-4">
+          <div>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
+              Choose e-wallet
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              {ONLINE_PROVIDERS.map((p) => {
+                const hasQr = Boolean(shopPayment.qrs[p.value] || shopPayment.genericQr);
+                return (
+                  <button
+                    key={p.value}
+                    type="button"
+                    onClick={() => handleSelectProvider(p.value)}
+                    className={`py-2.5 rounded-xl font-black text-xs border transition-all flex flex-col items-center leading-tight ${
+                      onlineProvider === p.value
+                        ? 'bg-sky-500 border-sky-600 text-white shadow-md shadow-sky-200'
+                        : 'bg-white border-slate-200 text-slate-600 hover:border-sky-300'
+                    }`}
+                  >
+                    <span>{p.label}</span>
+                    {!hasQr && (
+                      <span className={`text-[8px] uppercase font-bold ${onlineProvider === p.value ? 'text-white/70' : 'text-amber-500'}`}>
+                        No QR uploaded
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex flex-col items-center gap-2">
+            {activeQrUrl && !qrImageFailed ? (
+              <>
+                <div className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm">
+                  <img
+                    src={activeQrUrl}
+                    alt={`${PAYMENT_LABELS[onlineProvider]} QR code`}
+                    className="w-44 h-44 object-contain"
+                    onError={() => setQrImageFailed(true)}
+                  />
+                </div>
+                <p className="text-[11px] font-black text-slate-600 uppercase tracking-widest">
+                  Scan to pay via {PAYMENT_LABELS[onlineProvider]}
+                </p>
+                <p className="text-sm font-black text-emerald-600">
+                  Amount: {optimizationLogic.formatCurrency(formData.totalPrice)}
+                </p>
+              </>
+            ) : (
+              <div className="w-full flex flex-col items-center gap-2 py-6 rounded-2xl border-2 border-dashed border-amber-200 bg-amber-50/50 text-amber-600">
+                <ImageOff size={26} />
+                <p className="text-[11px] font-black uppercase tracking-widest">
+                  {qrImageFailed ? 'QR image failed to load' : `No ${PAYMENT_LABELS[onlineProvider]} QR uploaded`}
+                </p>
+                <p className="text-[10px] font-bold text-center px-4">
+                  Upload it in Optimization Settings &gt; Payment Methods, or choose Cash.
+                </p>
+              </div>
+            )}
+          </div>
+
+          <p className="text-[10px] font-bold text-slate-400 text-center">
+            The booking stays <span className="text-amber-600">Unpaid</span> until you confirm the payment
+            in Record Sales.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+
+  /* ------------------------------------------------------------------ */
+  /*  OVERLAY — 'receipt' step                                           */
   /* ------------------------------------------------------------------ */
   const renderReceiptOverlay = () => {
     if (step !== 'receipt' || !createdBooking) return null;
 
-    const paymentLabel = PAYMENT_METHODS.find(p => p.value === (createdBooking.payment_method || paymentMethod))?.label
-      || (createdBooking.payment_method || paymentMethod);
+    const methodKey = createdBooking.payment_method || paymentMethod;
+    const paymentLabel = PAYMENT_LABELS[methodKey] || methodKey;
+    const isOnlineMethod = methodKey === 'gcash' || methodKey === 'paymaya';
     const hasDiscount = Number(createdBooking.discount_amount || 0) > 0;
     const subtotal = hasDiscount
       ? Number(createdBooking.total_price) + Number(createdBooking.discount_amount)
@@ -677,6 +829,16 @@ const WalkInForm = ({ onBookingSuccess, onAssignSuccess }) => {
                 </span>
               </div>
             </div>
+
+            {isOnlineMethod && (
+              <div className="flex items-start gap-2 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2.5">
+                <AlertTriangle size={14} className="text-amber-500 shrink-0 mt-0.5" />
+                <p className="text-[11px] font-bold text-amber-700">
+                  Payment not yet confirmed. Once you've verified it in your {paymentLabel} app, mark this
+                  booking as paid in Record Sales.
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="px-6 pb-6 pt-1">
@@ -694,7 +856,7 @@ const WalkInForm = ({ onBookingSuccess, onAssignSuccess }) => {
   };
 
   /* ------------------------------------------------------------------ */
-  /*  OVERLAY — 'assign' step (modal, floats above whichever tab)        */
+  /*  OVERLAY — 'assign' step                                            */
   /* ------------------------------------------------------------------ */
   const renderAssignOverlay = () => {
     if (step !== 'assign' || !createdBooking) return null;
@@ -821,7 +983,7 @@ const WalkInForm = ({ onBookingSuccess, onAssignSuccess }) => {
   };
 
   /* ------------------------------------------------------------------ */
-  /*  EMBEDDED — 'form' (always rendered as part of the page's layout)   */
+  /*  EMBEDDED — 'form'                                                  */
   /* ------------------------------------------------------------------ */
   return (
     <>
@@ -972,47 +1134,25 @@ const WalkInForm = ({ onBookingSuccess, onAssignSuccess }) => {
                 )}
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* PAYMENT METHOD */}
-                <div>
-                  <label className={LABEL_CLASS}>
-                    <Wallet size={13} className="text-sky-500" /> Payment Method
-                  </label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {PAYMENT_METHODS.map((pm) => (
-                      <button
-                        key={pm.value}
-                        type="button"
-                        onClick={() => setPaymentMethod(pm.value)}
-                        className={`py-2.5 rounded-xl font-black text-xs border transition-all ${
-                          paymentMethod === pm.value
-                            ? 'bg-slate-900 border-slate-900 text-white shadow-md'
-                            : 'bg-slate-50/50 border-slate-200 text-slate-500 hover:border-slate-300'
-                        }`}
-                      >
-                        {pm.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+              {/* PAYMENT METHOD (Cash / Online → provider → QR) */}
+              {renderPaymentSection()}
 
-                {/* PROMO CODE */}
-                <div>
-                  <label className={LABEL_CLASS}>
-                    <Tag size={13} className="text-sky-500" /> Promo Code
-                    <span className="normal-case text-slate-300 font-bold">(optional)</span>
-                  </label>
-                  <input
-                    value={promoCodeInput}
-                    onChange={(e) => setPromoCodeInput(e.target.value.toUpperCase())}
-                    placeholder="e.g. WELCOME10"
-                    className={`${INPUT_BASE} bg-slate-50/50 border-slate-200 text-slate-800 focus:ring-4 ring-emerald-50 focus:border-emerald-300 placeholder:text-slate-300`}
-                  />
-                </div>
+              {/* PROMO CODE */}
+              <div>
+                <label className={LABEL_CLASS}>
+                  <Tag size={13} className="text-sky-500" /> Promo Code
+                  <span className="normal-case text-slate-300 font-bold">(optional)</span>
+                </label>
+                <input
+                  value={promoCodeInput}
+                  onChange={(e) => setPromoCodeInput(e.target.value.toUpperCase())}
+                  placeholder="e.g. WELCOME10"
+                  className={`${INPUT_BASE} bg-slate-50/50 border-slate-200 text-slate-800 focus:ring-4 ring-emerald-50 focus:border-emerald-300 placeholder:text-slate-300`}
+                />
+                <p className="text-[10px] text-slate-400 font-medium mt-1.5">
+                  The promo discount is validated and applied automatically when you create this booking.
+                </p>
               </div>
-              <p className="text-[10px] text-slate-400 font-medium -mt-2">
-                The promo discount is validated and applied automatically when you create this booking.
-              </p>
 
               {/* Machine assignment happens in the NEXT step, after creation */}
               <div className="flex items-start gap-2.5 bg-sky-50 border border-sky-100 rounded-xl px-4 py-3">

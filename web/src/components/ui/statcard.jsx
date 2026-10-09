@@ -11,13 +11,21 @@ import {
   Zap,
   Coins,
   Package,
-  Calculator // Added for Average Per Service icon
+  Calculator, // Added for Average Per Service icon
+  Star        // NEW (Rating after order) — for the Customer Rating card
 } from 'lucide-react';
 
 /**
  * STATCARD COMPONENT
  * A high-density data visualization component for the LaundryLink dashboard.
  * Fixed: Updated value formatting to handle currency, decimal precision, and custom icon injections.
+ *
+ * UPDATED (Rating after order): bagong type="rating" — para sa
+ * "Customer Rating" card sa Dashboard. Iba ang itsura ng ibabang bahagi
+ * nito: sa halip na pataas/pababang arrow at "vs. Yesterday", may amber
+ * na chip na may bituin at ang `trend` text (hal. "23 reviews" o
+ * "No ratings yet"), at "All time" ang caption. Ang `value` ay string na
+ * (hal. "4.6" o "—"), kaya hindi ito dumadaan sa currency formatting.
  */
 const StatCard = ({ title, value, trend, type, isNegative, icon }) => {
   
@@ -61,17 +69,26 @@ const StatCard = ({ title, value, trend, type, isNegative, icon }) => {
       bgColor: 'bg-purple-50',
       textColor: 'text-purple-600',
       isCurrency: true,
+    },
+    rating: { // NEW — Customer Rating card
+      icon: <Star size={20} strokeWidth={2.5} className="fill-amber-400" />,
+      bgColor: 'bg-amber-50',
+      textColor: 'text-amber-600',
+      isCurrency: false,
     }
   };
 
   // Select theme based on type prop, defaulting to revenue
   const theme = config[type] || config.revenue;
 
+  const isRating = type === 'rating';
+
   /**
    * TREND EVALUATION
    * Checks if the trend is negative for semantic coloring (Red/Rose).
+   * Hindi ito applicable sa rating card.
    */
-  const effectiveIsNegative = isNegative || (typeof trend === 'string' && trend.includes('-'));
+  const effectiveIsNegative = !isRating && (isNegative || (typeof trend === 'string' && trend.includes('-')));
 
   /**
    * VALUE FORMATTING ENGINE
@@ -127,27 +144,36 @@ const StatCard = ({ title, value, trend, type, isNegative, icon }) => {
       
       {/* 3. TREND INDICATOR */}
       <div className="flex items-center gap-2 relative z-10">
-        <div className={`flex items-center gap-0.5 px-2.5 py-1.5 rounded-xl text-[10px] font-black tracking-wider transition-colors duration-300 ${
-          effectiveIsNegative 
-            ? 'bg-rose-50 text-rose-600' 
-            : 'bg-emerald-50 text-emerald-600'
-        }`}>
-          {effectiveIsNegative ? (
-            <ArrowDownRight size={14} strokeWidth={3} />
-          ) : (
-            <ArrowUpRight size={14} strokeWidth={3} />
-          )}
-          {trend || "0%"}
-        </div>
+        {isRating ? (
+          <div className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[10px] font-black tracking-wider bg-amber-50 text-amber-600">
+            <Star size={12} strokeWidth={3} className="fill-amber-400" />
+            {trend || 'No ratings yet'}
+          </div>
+        ) : (
+          <div className={`flex items-center gap-0.5 px-2.5 py-1.5 rounded-xl text-[10px] font-black tracking-wider transition-colors duration-300 ${
+            effectiveIsNegative 
+              ? 'bg-rose-50 text-rose-600' 
+              : 'bg-emerald-50 text-emerald-600'
+          }`}>
+            {effectiveIsNegative ? (
+              <ArrowDownRight size={14} strokeWidth={3} />
+            ) : (
+              <ArrowUpRight size={14} strokeWidth={3} />
+            )}
+            {trend || "0%"}
+          </div>
+        )}
         
         <span className="text-slate-300 text-[9px] font-black uppercase tracking-widest">
-          {type === 'utilization' || type === 'inventory' ? 'Currently' : 'vs. Yesterday'}
+          {isRating
+            ? 'All time'
+            : (type === 'utilization' || type === 'inventory' ? 'Currently' : 'vs. Yesterday')}
         </span>
       </div>
 
       {/* 4. ACTIVE HOVER BORDER */}
       <div className={`absolute bottom-0 left-0 h-1 transition-all duration-500 w-0 group-hover:w-full opacity-50 ${
-        effectiveIsNegative ? 'bg-rose-500' : 'bg-emerald-500'
+        isRating ? 'bg-amber-400' : (effectiveIsNegative ? 'bg-rose-500' : 'bg-emerald-500')
       }`} />
     </div>
   );
@@ -157,7 +183,7 @@ StatCard.propTypes = {
   title: PropTypes.string.isRequired,
   value: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
   trend: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
-  type: PropTypes.oneOf(['revenue', 'utilization', 'income', 'bookings', 'inventory', 'avg_per_service']), // Added avg_per_service
+  type: PropTypes.oneOf(['revenue', 'utilization', 'income', 'bookings', 'inventory', 'avg_per_service', 'rating']), // Added rating
   isNegative: PropTypes.bool,
   icon: PropTypes.element
 };

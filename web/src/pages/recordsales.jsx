@@ -1,64 +1,114 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   RefreshCw, Receipt, CalendarDays, CalendarRange, CalendarClock,
   CheckCircle2, CircleDollarSign, ChevronLeft, ChevronRight, FileDown,
-  PieChart, Wallet, X
+  PieChart, Wallet, X, ShieldCheck, Loader2, Hourglass,
+  Eye, ImageOff, Hash, BadgeCheck, AlertTriangle, History
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import apiService from '../services/APIservices';
+import { useAuth } from '../context/authcontext';
 import StatCard from '../components/ui/statcard';
 import LoadingScreen from '../components/ui/loadingscreen';
 
 /**
+ * Dapat tumugma sa DUAL_CHECK_THRESHOLD ng backend
+ * (booking_controller.py). Kapag binago ang isa, baguhin din ang isa.
+ */
+const DUAL_CHECK_THRESHOLD = 5000;
+const ALLOWED_ROLES = ['staff', 'manager', 'owner'];
+
+const escapeXml = (str) =>
+  String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+
+/** Paulit-ulit na diagonal watermark (SVG tile bilang background). */
+const Watermark = ({ email }) => {
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="360" height="180">` +
+    `<g transform="rotate(-25 180 90)" font-family="Arial, sans-serif" font-weight="700" ` +
+    `text-anchor="middle" fill="rgba(30,41,59,0.38)" stroke="rgba(255,255,255,0.55)" ` +
+    `stroke-width="0.6" paint-order="stroke">` +
+    `<text x="180" y="84" font-size="12">FOR SYSTEM VERIFICATION ONLY -</text>` +
+    `<text x="180" y="102" font-size="12">${escapeXml(email)}</text>` +
+    `</g></svg>`;
+
+  return (
+    <div
+      aria-hidden="true"
+      className="absolute inset-0 pointer-events-none select-none"
+      style={{
+        backgroundImage: `url("data:image/svg+xml;utf8,${encodeURIComponent(svg)}")`,
+        backgroundRepeat: 'repeat',
+      }}
+    />
+  );
+};
+
+const ACTION_STYLES = {
+  VIEW: 'bg-slate-100 text-slate-500',
+  APPROVE: 'bg-emerald-50 text-emerald-600',
+  REJECT: 'bg-rose-50 text-rose-600',
+};
+
+/**
  * RECORD SALES PAGE
  *
- * UPDATED (Income = paid only): dating pinagsama-sama ang total_price
- * ng LAHAT ng bookings sa napiling date range (kahit unpaid pa) papunta
- * sa rangeTotalIncome. Ito ay maling representasyon ng "income" — ang
- * totoong kinita ay ang AKTWAL na natanggap na bayad lang. Ngayon,
- * rangeTotalIncome (at ang bagong paidCount/unpaidCount breakdown) ay
- * kinukuha na lang mula sa mga bookings na ang payment_status ay
- * "paid" — hindi na basta't kasama sa date range.
+ * UPDATED (Income = paid only): rangeTotalIncome (at paidCount/
+ * unpaidCount breakdown) ay kinukuha lang mula sa mga bookings na ang
+ * payment_status ay "paid".
  *
- * UPDATED (Live KPI refresh — bug fix): tumatawag ulit ng
- * apiService.getSalesSummary() kaagad pagkatapos ng successful na
- * markBookingPaid(), para awtomatikong dumagdag ang "Today's Income"
- * (at Week/Month, kung applicable) sa parehong sandali.
+ * UPDATED (Live KPI refresh): tumatawag ulit ng getSalesSummary()
+ * pagkatapos ng successful na markBookingPaid().
  *
- * NEW (Service Breakdown + Payment Method Breakdown): dalawang summary
- * section, parehong naka-base sa paidBookingsInRange (parehong "paid
- * only" na filter ng buong page). Pareho itong makikita sa page AT
- * kasama sa PDF export.
+ * NEW (Service Breakdown + Payment Method Breakdown) at (Service Type
+ * Filter): tulad ng dati.
  *
- * NEW (Service Type Filter): bagong filter row, katabi ng existing
- * "all/paid/unpaid" — pinipili kung anong service_type lang ang
- * ipapakita sa table (hal. "Full Service" lang). Ang mga options ay
- * dynamic, base sa mga service_type na aktwal na lumabas sa
- * dateFilteredBookings ng kasalukuyang date range — hindi hardcoded,
- * kaya kahit anong custom service name ang gawa ng shop ay lalabas
- * dito. Pag-click sa isang row ng "Income by Service" card ay
- * direktang nagse-set din ng filter na ito (shortcut). Kasama rin ang
- * napiling service sa PDF export (parehong "Income by Service" table
- * pero naka-highlight ang napiling row, at ang buong bookings table sa
- * ibaba ay naka-filter na rin).
- *
- * UPDATED (uniform loading screen): gumagamit na ng shared
- * <LoadingScreen /> para pareho ang itsura sa lahat ng page.
+ * UPDATED (Secure Payment Verification System):
+ *  1. Dual-check (>= ₱5,000) sa Mark as Paid.
+ *  2. null ang payment_method sa markBookingPaid (hindi na pinipilit
+ *     ang 'cash').
+ *  3. Ang "pending_verification" ay sa Service Terminal dapat i-verify.
+ *  4. NEW — View Receipt: read-only na pagtingin ng resibo ng online
+ *     payment, may watermark, anti-copy, at nagla-log ng "VIEW" sa
+ *     audit trail (via getPaymentAuditTrail).
  */
 const RecordSales = () => {
+  const { user } = useAuth();
+
   const [summary, setSummary] = useState({ today_income: 0, week_income: 0, month_income: 0 });
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const [paymentFilter, setPaymentFilter] = useState('all');
-  // NEW (Service Type Filter) — 'all' o isang exact service_type string.
   const [serviceFilter, setServiceFilter] = useState('all');
-  const [markingInFlight, setMarkingInFlight] = useState(null); // holds booking id currently being marked
+  const [markingInFlight, setMarkingInFlight] = useState(null);
+
+  // Dual-check modal
+  const [confirmTarget, setConfirmTarget] = useState(null);
+  const [ledgerConfirmed, setLedgerConfirmed] = useState(false);
+  const [confirmError, setConfirmError] = useState('');
+
+  // NEW — View Receipt modal
+  const [receiptTarget, setReceiptTarget] = useState(null);
+  const [receiptImageFailed, setReceiptImageFailed] = useState(false);
+  const [auditLogs, setAuditLogs] = useState([]);
+  const [auditLoading, setAuditLoading] = useState(false);
+  const [auditError, setAuditError] = useState('');
+  const activeReceiptIdRef = useRef(null);
 
   const [reportPeriod, setReportPeriod] = useState('daily');
   const [anchorDate, setAnchorDate] = useState(new Date());
+
+  const staffEmail = user?.email || localStorage.getItem('user_email') || 'unknown-staff';
+  const role = (localStorage.getItem('role') || '').toLowerCase();
+  const canViewReceipts = ALLOWED_ROLES.includes(role);
 
   const loadData = useCallback(async (isRefresh = false) => {
     try {
@@ -80,11 +130,6 @@ const RecordSales = () => {
     loadData();
   }, [loadData]);
 
-  /**
-   * Hiwalay na maliit na helper para lang i-refresh ang KPI summary
-   * cards (Today/Week/Month Income), hindi na kailangang ulitin ang
-   * buong loadData().
-   */
   const refreshSummary = async () => {
     try {
       const data = await apiService.getSalesSummary();
@@ -100,6 +145,9 @@ const RecordSales = () => {
       month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit'
     });
   };
+
+  // Parehong rule ng backend: final_price muna, kung wala, total_price.
+  const getAmountDue = (b) => Number(b.final_price ?? b.total_price ?? 0);
 
   // --- DATE RANGE HELPERS ---
 
@@ -158,7 +206,7 @@ const RecordSales = () => {
 
   const goToToday = () => setAnchorDate(new Date());
 
-  // --- FILTERING: payment status + service type + date range combined ---
+  // --- FILTERING ---
 
   const dateFilteredBookings = bookings.filter((b) => {
     const ts = b.booking_timestamp || b.created_at;
@@ -167,23 +215,18 @@ const RecordSales = () => {
     return bookingDate >= rangeStart && bookingDate < rangeEnd;
   });
 
-  // NEW (Service Type Filter) — dynamic list ng lahat ng distinct
-  // service_type na lumabas sa kasalukuyang date range, sorted
-  // alphabetically. Kapag nag-navigate papunta sa ibang date range at
-  // may service na wala roon, hindi na ito lalabas sa dropdown —
-  // sinasadya, para hindi makapili ng option na walang laman.
   const availableServiceTypes = Array.from(
     new Set(dateFilteredBookings.map((b) => b.service_type).filter(Boolean))
   ).sort();
 
   const filteredBookings = dateFilteredBookings.filter((b) => {
-    if (paymentFilter !== 'all' && (b.payment_status || 'unpaid') !== paymentFilter) return false;
+    const status = b.payment_status || 'unpaid';
+    if (paymentFilter === 'paid' && status !== 'paid') return false;
+    if (paymentFilter === 'unpaid' && status === 'paid') return false;
     if (serviceFilter !== 'all' && b.service_type !== serviceFilter) return false;
     return true;
   });
 
-  // Hiwalay na listahan ng PAID lang na bookings sa loob ng date range
-  // — ito ang basehan ng totoong "income".
   const paidBookingsInRange = dateFilteredBookings.filter(
     (b) => (b.payment_status || 'unpaid') === 'paid'
   );
@@ -194,8 +237,6 @@ const RecordSales = () => {
 
   const unpaidCountInRange = dateFilteredBookings.length - paidBookingsInRange.length;
 
-  // Service Breakdown — group paidBookingsInRange by service_type,
-  // sorted by highest income first.
   const serviceBreakdown = (() => {
     const map = {};
     paidBookingsInRange.forEach((b) => {
@@ -207,9 +248,6 @@ const RecordSales = () => {
     return Object.values(map).sort((a, b) => b.total - a.total);
   })();
 
-  // Payment Method Breakdown — group paidBookingsInRange by
-  // payment_method (cash/cod/gcash/paymaya), sorted by highest income
-  // first.
   const paymentMethodBreakdown = (() => {
     const map = {};
     paidBookingsInRange.forEach((b) => {
@@ -222,44 +260,124 @@ const RecordSales = () => {
   })();
 
   const formatMethodLabel = (method) => {
-    const labels = { cash: 'Cash', cod: 'Cash on Delivery', gcash: 'GCash', paymaya: 'PayMaya' };
+    const labels = {
+      cash: 'Cash',
+      cod: 'Cash on Delivery',
+      gcash: 'GCash',
+      paymaya: 'PayMaya',
+      online_qr: 'Online (QR Ph)',
+    };
     return labels[method] || method;
   };
 
-  /**
-   * NEW (Service Type Filter) — pag-click sa isang row ng "Income by
-   * Service" card, direktang ise-set ang serviceFilter papunta doon
-   * (shortcut) sa halip na pumunta pa ang staff sa dropdown.
-   */
   const handleServiceCardClick = (serviceName) => {
     setServiceFilter((prev) => (prev === serviceName ? 'all' : serviceName));
   };
 
-  // --- MARK AS PAID: simplified, direct action, no method picker ---
+  // --- MARK AS PAID ---
 
-  const handleMarkAsPaid = async (bookingId) => {
+  const performMarkAsPaid = async (bookingId, manualConfirmed) => {
     setMarkingInFlight(bookingId);
     try {
-      const updatedBooking = await apiService.markBookingPaid(bookingId, 'cash');
+      const updatedBooking = await apiService.markBookingPaid(bookingId, null, manualConfirmed);
       setBookings((prev) =>
         prev.map((b) => (b.id === bookingId ? { ...b, ...updatedBooking } : b))
       );
       await refreshSummary();
+      return { ok: true };
     } catch (err) {
-      alert(err?.response?.data?.detail || err?.message || 'Failed to mark booking as paid.');
+      const detail = err?.response?.data?.detail;
+      return {
+        ok: false,
+        message: typeof detail === 'string' ? detail : (err?.message || 'Failed to mark booking as paid.'),
+      };
     } finally {
       setMarkingInFlight(null);
     }
   };
 
-  // --- PDF EXPORT: totoong .pdf file, hindi na browser print dialog ---
+  const handleMarkAsPaidClick = async (booking) => {
+    if (getAmountDue(booking) >= DUAL_CHECK_THRESHOLD) {
+      setConfirmTarget(booking);
+      setLedgerConfirmed(false);
+      setConfirmError('');
+      return;
+    }
+
+    const result = await performMarkAsPaid(booking.id, false);
+    if (!result.ok) alert(result.message);
+  };
+
+  const closeConfirmModal = () => {
+    if (markingInFlight) return;
+    setConfirmTarget(null);
+    setLedgerConfirmed(false);
+    setConfirmError('');
+  };
+
+  const handleConfirmDualCheck = async () => {
+    if (!confirmTarget || !ledgerConfirmed) return;
+    const result = await performMarkAsPaid(confirmTarget.id, true);
+    if (result.ok) {
+      setConfirmTarget(null);
+      setLedgerConfirmed(false);
+      setConfirmError('');
+    } else {
+      setConfirmError(result.message);
+    }
+  };
+
+  // --- VIEW RECEIPT (NEW) ---
+
+  /**
+   * Binubuksan ang read-only receipt modal. Ang tawag sa
+   * getPaymentAuditTrail ang nagla-log ng "VIEW" sa backend, kaya
+   * bawat pagbukas ay may bakas.
+   */
+  const openReceipt = (booking) => {
+    const bookingId = booking.id;
+    activeReceiptIdRef.current = bookingId;
+
+    setReceiptTarget(booking);
+    setReceiptImageFailed(false);
+    setAuditLogs([]);
+    setAuditError('');
+    setAuditLoading(true);
+
+    apiService
+      .getPaymentAuditTrail(bookingId)
+      .then((logs) => {
+        if (activeReceiptIdRef.current !== bookingId) return;
+        setAuditLogs(Array.isArray(logs) ? logs : []);
+      })
+      .catch((err) => {
+        if (activeReceiptIdRef.current !== bookingId) return;
+        console.error('Audit Trail Error:', err);
+        setAuditError('Could not load the audit history.');
+      })
+      .finally(() => {
+        if (activeReceiptIdRef.current !== bookingId) return;
+        setAuditLoading(false);
+      });
+  };
+
+  const closeReceipt = () => {
+    activeReceiptIdRef.current = null;
+    setReceiptTarget(null);
+    setAuditLogs([]);
+    setAuditError('');
+    setAuditLoading(false);
+  };
+
+  const blockEvent = (e) => e.preventDefault();
+
+  // --- PDF EXPORT ---
 
   const handleDownloadPdf = () => {
     const doc = new jsPDF();
     const shopName = localStorage.getItem('shop_name') || 'Laundry Shop';
     const periodLabel = reportPeriod.charAt(0).toUpperCase() + reportPeriod.slice(1);
 
-    // Header text
     doc.setFontSize(16);
     doc.setFont(undefined, 'bold');
     doc.text(`${shopName} — Sales Report`, 14, 18);
@@ -286,8 +404,6 @@ const RecordSales = () => {
 
     let cursorY = 50;
 
-    // Service Breakdown table — naka-highlight ang napiling service,
-    // kung may active na serviceFilter.
     if (serviceBreakdown.length > 0) {
       doc.setFontSize(11);
       doc.setFont(undefined, 'bold');
@@ -309,14 +425,13 @@ const RecordSales = () => {
             serviceFilter !== 'all' &&
             serviceBreakdown[data.row.index]?.service === serviceFilter
           ) {
-            data.cell.styles.fillColor = [224, 242, 254]; // sky-100
+            data.cell.styles.fillColor = [224, 242, 254];
           }
         },
       });
       cursorY = doc.lastAutoTable.finalY + 10;
     }
 
-    // Payment Method Breakdown table
     if (paymentMethodBreakdown.length > 0) {
       doc.setFontSize(11);
       doc.setFont(undefined, 'bold');
@@ -336,9 +451,6 @@ const RecordSales = () => {
       cursorY = doc.lastAutoTable.finalY + 10;
     }
 
-    // Bookings table — kasama LAHAT ng bookings na tumutugma sa
-    // kasalukuyang filters (service + payment status), hindi lang
-    // yung nasa paid subset, para makita ng owner ang buong picture.
     doc.setFontSize(11);
     doc.setFont(undefined, 'bold');
     doc.text(
@@ -349,24 +461,27 @@ const RecordSales = () => {
       startY: cursorY + 4,
       head: [['Date', 'Customer ID', 'Service', 'Amount', 'Status']],
       body: filteredBookings.map((b) => {
-        const isPaid = (b.payment_status || 'unpaid') === 'paid';
+        const status = b.payment_status || 'unpaid';
+        let statusLabel = 'Unpaid';
+        if (status === 'paid') statusLabel = `Paid${b.payment_method ? ` (${b.payment_method})` : ''}`;
+        else if (status === 'pending_verification') statusLabel = 'Unpaid (Under review)';
         return [
           formatDate(b.booking_timestamp),
           b.customer_id ?? `— (${b.customer_name})`,
           b.service_type,
           `P${Number(b.total_price || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
-          isPaid ? `Paid${b.payment_method ? ` (${b.payment_method})` : ''}` : 'Unpaid',
+          statusLabel,
         ];
       }),
       styles: { fontSize: 9 },
-      headStyles: { fillColor: [15, 23, 42] }, // slate-900
+      headStyles: { fillColor: [15, 23, 42] },
       margin: { left: 14, right: 14 },
       didParseCell: (data) => {
         if (data.section === 'body' && data.column.index === 4) {
           if (String(data.cell.raw).includes('Unpaid')) {
-            data.cell.styles.textColor = [180, 83, 9]; // amber-700
+            data.cell.styles.textColor = [180, 83, 9];
           } else {
-            data.cell.styles.textColor = [5, 150, 105]; // emerald-600
+            data.cell.styles.textColor = [5, 150, 105];
           }
         }
       },
@@ -384,6 +499,18 @@ const RecordSales = () => {
   };
 
   if (loading) return <LoadingScreen message="Loading Sales..." />;
+
+  const isConfirming = confirmTarget && markingInFlight === confirmTarget.id;
+
+  // Receipt modal derived values
+  const rt = receiptTarget;
+  const rtAmountDue = rt ? getAmountDue(rt) : 0;
+  const rtExtracted =
+    rt && rt.extracted_amount !== null && rt.extracted_amount !== undefined
+      ? Number(rt.extracted_amount)
+      : null;
+  const rtIsSandbox = rt ? (rt.reference_number || '').toUpperCase().startsWith('TEST-') : false;
+  const rtMismatch = rtExtracted !== null && Math.abs(rtExtracted - rtAmountDue) > 0.009;
 
   return (
     <div className="p-8 bg-slate-50 min-h-screen space-y-10 font-sans">
@@ -436,10 +563,6 @@ const RecordSales = () => {
             </div>
           </div>
 
-          {/* NEW (Service Type Filter) — dropdown, dynamic base sa
-              service_type na aktwal na lumabas sa kasalukuyang date
-              range. Ipinapakita lang kapag may 2+ distinct services,
-              para hindi nakakagulo kung isa lang naman ang meron. */}
           {availableServiceTypes.length > 1 && (
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Service:</span>
@@ -482,7 +605,6 @@ const RecordSales = () => {
               ))}
             </div>
 
-            {/* Date Navigation */}
             <div className="flex items-center gap-2">
               <button
                 onClick={() => navigatePeriod(-1)}
@@ -504,7 +626,6 @@ const RecordSales = () => {
               </button>
             </div>
 
-            {/* PDF Download Button */}
             <button
               onClick={handleDownloadPdf}
               className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-xl text-[11px] font-black uppercase tracking-widest hover:bg-slate-700 transition-all active:scale-95"
@@ -514,7 +635,7 @@ const RecordSales = () => {
             </button>
           </div>
 
-          {/* Range Total — malinaw na nakalagay na "paid only" */}
+          {/* Range Total — paid only */}
           <div className="flex flex-wrap items-center gap-2 px-2">
             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
               Paid income this {reportPeriod === 'daily' ? 'day' : reportPeriod === 'weekly' ? 'week' : reportPeriod === 'monthly' ? 'month' : 'year'}
@@ -534,8 +655,6 @@ const RecordSales = () => {
         {paidBookingsInRange.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
 
-            {/* Service Breakdown — bawat row ay klikable, gumagana
-                bilang shortcut papunta sa serviceFilter sa itaas. */}
             <div className="bg-slate-50/60 rounded-[32px] border border-slate-100 p-6">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
@@ -573,7 +692,6 @@ const RecordSales = () => {
               </div>
             </div>
 
-            {/* Payment Method Breakdown */}
             <div className="bg-slate-50/60 rounded-[32px] border border-slate-100 p-6">
               <div className="flex items-center gap-2 mb-4">
                 <div className="p-2 bg-violet-50 text-violet-600 rounded-xl">
@@ -619,7 +737,9 @@ const RecordSales = () => {
                 {filteredBookings.map((b) => {
                   const paymentStatus = b.payment_status || 'unpaid';
                   const isPaid = paymentStatus === 'paid';
+                  const isPendingVerification = paymentStatus === 'pending_verification';
                   const isMarking = markingInFlight === b.id;
+                  const hasReceipt = Boolean(b.proof_of_payment_url);
 
                   return (
                     <tr key={b.id} className="border-b border-slate-50 hover:bg-slate-50/60 transition-all">
@@ -633,25 +753,51 @@ const RecordSales = () => {
                       </td>
 
                       <td className="py-4 pr-4 text-center">
-                        <span
-                          className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
-                            isPaid
-                              ? 'bg-emerald-50 text-emerald-600'
-                              : 'bg-amber-50 text-amber-600'
-                          }`}
-                        >
-                          {isPaid ? <CheckCircle2 size={12} /> : <CircleDollarSign size={12} />}
-                          {isPaid ? `Paid${b.payment_method ? ` (${b.payment_method})` : ''}` : 'Unpaid'}
-                        </span>
+                        <div className="flex flex-col items-center gap-1.5">
+                          <span
+                            className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
+                              isPaid
+                                ? 'bg-emerald-50 text-emerald-600'
+                                : isPendingVerification
+                                  ? 'bg-sky-50 text-sky-600'
+                                  : 'bg-amber-50 text-amber-600'
+                            }`}
+                          >
+                            {isPaid ? <CheckCircle2 size={12} /> : isPendingVerification ? <Hourglass size={12} /> : <CircleDollarSign size={12} />}
+                            {isPaid
+                              ? `Paid${b.payment_method ? ` (${b.payment_method})` : ''}`
+                              : isPendingVerification
+                                ? 'Under review'
+                                : 'Unpaid'}
+                          </span>
+
+                          {/* NEW — View Receipt (online payments na may proof) */}
+                          {hasReceipt && canViewReceipts && (
+                            <button
+                              type="button"
+                              onClick={() => openReceipt(b)}
+                              className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-tight text-sky-500 hover:text-sky-700 transition-colors"
+                            >
+                              <Eye size={12} /> View Receipt
+                            </button>
+                          )}
+                        </div>
                       </td>
 
                       <td className="py-4 pl-4 text-right">
                         {isPaid ? (
                           <span className="text-[10px] text-slate-300 font-bold uppercase">—</span>
+                        ) : isPendingVerification ? (
+                          <span
+                            className="text-[10px] text-sky-500 font-black uppercase tracking-tight"
+                            title="Open Service Terminal > Mobile Requests > Payment to review the receipt."
+                          >
+                            Verify in Terminal
+                          </span>
                         ) : (
                           <button
                             disabled={isMarking}
-                            onClick={() => handleMarkAsPaid(b.id)}
+                            onClick={() => handleMarkAsPaidClick(b)}
                             className="px-4 py-1.5 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-700 disabled:opacity-50 transition-all"
                           >
                             {isMarking ? 'Marking...' : 'Mark as Paid'}
@@ -666,6 +812,270 @@ const RecordSales = () => {
           </div>
         )}
       </div>
+
+      {/* DUAL-CHECK CONFIRMATION MODAL (>= ₱5,000) */}
+      {confirmTarget && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4">
+          <div className="bg-white w-full max-w-md rounded-[32px] shadow-2xl overflow-hidden border border-white/20">
+            <div className="px-8 pt-8 pb-5 border-b border-slate-50 flex justify-between items-start">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-amber-50 flex items-center justify-center">
+                  <ShieldCheck size={20} className="text-amber-500" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-black text-slate-900 tracking-tight">High-Value Payment</h2>
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">
+                    Dual-check required
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={closeConfirmModal}
+                disabled={isConfirming}
+                className="p-2 hover:bg-rose-50 hover:text-rose-500 rounded-xl text-slate-300 transition-all disabled:opacity-50"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="px-8 py-6 space-y-5">
+              <div className="bg-slate-50/60 rounded-2xl border-2 border-slate-100 p-5 space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-400 font-bold">Customer</span>
+                  <span className="text-slate-800 font-black">{confirmTarget.customer_name}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-400 font-bold">Service</span>
+                  <span className="text-slate-800 font-black">{confirmTarget.service_type}</span>
+                </div>
+                <div className="flex justify-between items-center pt-2 border-t border-slate-100">
+                  <span className="text-slate-400 font-bold text-sm">Amount</span>
+                  <span className="text-emerald-600 font-black text-lg">
+                    ₱{getAmountDue(confirmTarget).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+              </div>
+
+              <label
+                className={`flex items-start gap-3 rounded-2xl border-2 px-4 py-3 cursor-pointer transition-all ${
+                  ledgerConfirmed ? 'border-emerald-200 bg-emerald-50/50' : 'border-amber-200 bg-amber-50/50'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={ledgerConfirmed}
+                  onChange={(e) => setLedgerConfirmed(e.target.checked)}
+                  disabled={isConfirming}
+                  className="mt-0.5 w-4 h-4 accent-emerald-500 shrink-0"
+                />
+                <span className="text-[11px] font-bold text-slate-600 leading-snug">
+                  I confirm I've verified this payment (cash received, or checked against our official
+                  bank / e-wallet app history).
+                </span>
+              </label>
+
+              {confirmError && (
+                <p className="text-[11px] font-bold text-rose-600">{confirmError}</p>
+              )}
+            </div>
+
+            <div className="px-8 pb-8 flex gap-3">
+              <button
+                type="button"
+                onClick={closeConfirmModal}
+                disabled={isConfirming}
+                className="flex-1 py-3.5 rounded-2xl font-black text-sm text-slate-500 bg-slate-50 hover:bg-slate-100 transition-all active:scale-95 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDualCheck}
+                disabled={!ledgerConfirmed || isConfirming}
+                className="flex-[1.5] flex items-center justify-center gap-2 py-3.5 rounded-2xl font-black text-sm text-white bg-emerald-500 hover:bg-emerald-600 shadow-lg shadow-emerald-100 transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
+              >
+                {isConfirming ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+                {isConfirming ? 'Marking...' : 'Confirm & Mark as Paid'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* VIEW RECEIPT MODAL (read-only, watermarked, logged) */}
+      {rt && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4">
+          <div className="bg-white w-full max-w-lg rounded-[40px] shadow-2xl overflow-hidden flex flex-col max-h-[92vh] border border-white/20">
+
+            <div className="px-8 pt-8 pb-5 border-b border-slate-50 shrink-0 flex justify-between items-start">
+              <div>
+                <h2 className="text-2xl font-black text-slate-900 tracking-tighter">Payment Receipt</h2>
+                <p className="text-slate-400 font-bold text-[11px] uppercase tracking-[0.2em] mt-1">
+                  {rt.customer_name} · {formatMethodLabel(rt.payment_method)}
+                </p>
+              </div>
+              <button
+                onClick={closeReceipt}
+                className="p-3 hover:bg-rose-50 hover:text-rose-500 rounded-2xl text-slate-300 transition-all active:scale-90"
+              >
+                <X size={22} />
+              </button>
+            </div>
+
+            <div className="px-8 py-6 space-y-5 overflow-y-auto flex-1">
+
+              {/* Summary */}
+              <div className="bg-slate-50/60 rounded-[28px] border-2 border-slate-100 p-6 space-y-3">
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-400 font-bold">Service</span>
+                  <span className="text-slate-800 font-black">{rt.service_type}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-400 font-bold">Amount Due</span>
+                  <span className="text-emerald-600 font-black">
+                    ₱{rtAmountDue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-400 font-bold">Status</span>
+                  <span className="text-slate-800 font-black uppercase text-xs">
+                    {(rt.payment_status || 'unpaid').replace('_', ' ')}
+                  </span>
+                </div>
+
+                <div className="pt-3 border-t border-slate-100 space-y-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="flex items-center gap-1.5 text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                      <Hash size={12} /> Reference No.
+                    </span>
+                    <span className="text-xs font-black text-slate-700 tracking-wide break-all text-right">
+                      {rt.reference_number || '—'}
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    {rt.is_verified_by_ocr && !rtIsSandbox && (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-600 text-[9px] font-black uppercase tracking-widest border border-emerald-100">
+                        <BadgeCheck size={12} /> OCR verified
+                      </span>
+                    )}
+                    {rtIsSandbox && (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-violet-50 text-violet-600 text-[9px] font-black uppercase tracking-widest border border-violet-100">
+                        Sandbox · OCR skipped
+                      </span>
+                    )}
+                    {!rt.is_verified_by_ocr && (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-50 text-amber-600 text-[9px] font-black uppercase tracking-widest border border-amber-100">
+                        Not OCR verified
+                      </span>
+                    )}
+                    {rtExtracted !== null && !rtIsSandbox && (
+                      <span className="text-[10px] font-bold text-slate-400">
+                        Receipt shows ₱{rtExtracted.toFixed(2)}
+                      </span>
+                    )}
+                  </div>
+
+                  {rtMismatch && !rtIsSandbox && (
+                    <div className="flex items-start gap-2 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2.5">
+                      <AlertTriangle size={14} className="text-amber-500 shrink-0 mt-0.5" />
+                      <p className="text-[11px] font-bold text-amber-700">
+                        The amount read from the receipt (₱{rtExtracted.toFixed(2)}) doesn't match the
+                        amount due (₱{rtAmountDue.toFixed(2)}).
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Receipt image (watermarked, copy-protected) */}
+              <div className="space-y-2">
+                <label className="text-[11px] font-black text-slate-400 uppercase ml-1 tracking-widest">Proof of Payment</label>
+                {rt.proof_of_payment_url && !receiptImageFailed ? (
+                  <div
+                    className="relative w-full rounded-[28px] overflow-hidden border-2 border-slate-100 bg-slate-50 select-none print:hidden"
+                    onContextMenu={blockEvent}
+                    style={{ WebkitUserSelect: 'none', userSelect: 'none', WebkitTouchCallout: 'none' }}
+                  >
+                    <img
+                      src={rt.proof_of_payment_url}
+                      alt="Proof of payment"
+                      draggable={false}
+                      onDragStart={blockEvent}
+                      onContextMenu={blockEvent}
+                      onError={() => setReceiptImageFailed(true)}
+                      className="w-full max-h-96 object-contain pointer-events-none select-none"
+                    />
+                    <Watermark email={staffEmail} />
+                  </div>
+                ) : (
+                  <div className="w-full h-48 rounded-[28px] border-2 border-dashed border-slate-200 bg-slate-50/50 flex flex-col items-center justify-center gap-2 text-slate-300">
+                    <ImageOff size={28} />
+                    <span className="text-[10px] font-black uppercase tracking-widest">
+                      {receiptImageFailed ? 'Image failed to load' : 'No proof uploaded'}
+                    </span>
+                  </div>
+                )}
+                <p className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 ml-1">
+                  <ShieldCheck size={12} /> For verification only. Your views are logged.
+                </p>
+              </div>
+
+              {/* Audit history */}
+              <div className="border-2 border-slate-100 rounded-[24px] p-5 space-y-2">
+                <div className="flex items-center gap-2 text-[11px] font-black text-slate-500 uppercase tracking-widest">
+                  <History size={14} className="text-sky-500" />
+                  Audit History
+                  {!auditLoading && !auditError && (
+                    <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 text-[9px]">
+                      {auditLogs.length}
+                    </span>
+                  )}
+                </div>
+                <div className="max-h-44 overflow-y-auto space-y-2">
+                  {auditLoading && (
+                    <div className="flex items-center gap-2 text-sky-500 text-xs font-bold py-2">
+                      <Loader2 size={14} className="animate-spin" /> Loading history...
+                    </div>
+                  )}
+                  {!auditLoading && auditError && (
+                    <p className="text-[11px] font-bold text-rose-500 py-2">{auditError}</p>
+                  )}
+                  {!auditLoading && !auditError && auditLogs.length === 0 && (
+                    <p className="text-[11px] font-bold text-slate-300 py-2">No activity recorded yet.</p>
+                  )}
+                  {!auditLoading && !auditError && auditLogs.map((log) => (
+                    <div key={log.id} className="flex items-start gap-3 py-2 border-t border-slate-50 first:border-t-0">
+                      <span className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest shrink-0 ${ACTION_STYLES[log.action_performed] || 'bg-slate-100 text-slate-500'}`}>
+                        {log.action_performed}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-black text-slate-700 truncate">{log.staff_email}</p>
+                        <p className="text-[10px] font-bold text-slate-400">{formatDate(log.timestamp)}</p>
+                        {log.rejection_reason && (
+                          <p className="text-[10px] font-bold text-rose-500 mt-0.5 break-words">
+                            Reason: {log.rejection_reason}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="px-8 py-6 border-t border-slate-50 shrink-0">
+              <button
+                type="button"
+                onClick={closeReceipt}
+                className="w-full py-4 rounded-[24px] font-black text-sm text-white bg-slate-900 hover:bg-slate-800 transition-all active:scale-95"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

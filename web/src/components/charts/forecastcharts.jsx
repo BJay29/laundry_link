@@ -21,7 +21,13 @@ import { Activity, TrendingUp, BarChart2, Sun, Cloud, CloudRain, Sparkles, Shiel
 // looking at a model trained on this shop's own history, a pooled/cold-start
 // estimate for a newer shop, or a weather-only outlook for a shop with no
 // bookings yet at all.
+//
+// UPDATED: ang "pooled_model" badge ay TEMPORARY na tinatago muna sa
+// Forecast page at Dashboard (pareho silang gumagamit ng component na
+// ito). Para ibalik, alisin lang ang 'pooled_model' sa HIDDEN_MODEL_TIERS.
 // ─────────────────────────────────────────────────────────────────────────────
+const HIDDEN_MODEL_TIERS = ['pooled_model'];
+
 const MODEL_TIER_CONFIG = {
   shop_model: {
     label: 'Your Shop\u2019s Own Model',
@@ -44,6 +50,7 @@ const MODEL_TIER_CONFIG = {
 };
 
 const ModelTierBadge = ({ modelTier }) => {
+  if (HIDDEN_MODEL_TIERS.includes(modelTier)) return null;
   const config = MODEL_TIER_CONFIG[modelTier];
   if (!config) return null;
   const Icon = config.icon;
@@ -97,7 +104,7 @@ const WeatherOutlookStrip = ({ data }) => (
       })}
     </div>
     <p className="text-[10px] text-slate-400 font-medium px-6 pb-4">
-      Rainier days tend to shift demand up in this forecast \u2014 more people send out laundry when it's harder to dry at home.
+      Rainier days tend to shift demand up in this forecast — more people send out laundry when it's harder to dry at home.
     </p>
   </div>
 );
@@ -207,7 +214,7 @@ const InsufficientDataNotice = () => (
     <ShieldQuestion className="text-amber-300 mb-3" size={36} />
     <p className="text-slate-600 font-bold text-sm mb-1">Not enough booking history yet for a revenue forecast.</p>
     <p className="text-slate-400 text-xs font-medium max-w-md">
-      The weather outlook above is real \u2014 booking and income predictions will appear here automatically
+      The weather outlook above is real — booking and income predictions will appear here automatically
       once this shop (or the platform as a whole) has enough data to calibrate against.
     </p>
   </div>
@@ -229,6 +236,10 @@ const ForecastCharts = ({ data, modelTier }) => {
 
   const isWeatherOnly = modelTier === 'weather_only';
 
+  // Huwag mag-render ng wrapper kapag nakatago ang badge ng tier na ito,
+  // para hindi mag-iwan ng blangkong espasyo (gap) sa taas ng charts.
+  const showTierBadge = modelTier && !HIDDEN_MODEL_TIERS.includes(modelTier);
+
   const avgBookings = Math.round(
     chartData.reduce((s, d) => s + (d.bookings || 0), 0) / chartData.length
   );
@@ -242,7 +253,7 @@ const ForecastCharts = ({ data, modelTier }) => {
   return (
     <div className="w-full flex flex-col gap-6">
 
-      {modelTier && (
+      {showTierBadge && (
         <div>
           <ModelTierBadge modelTier={modelTier} />
         </div>

@@ -21,12 +21,17 @@ import Settings from './pages/settings';
 import CustomerHub from './pages/customerhub';
 import ActivityLogs from './pages/activitylogs';
 import RecordSales from './pages/recordsales';
+import Reviews from './pages/reviews';
+
+/**
+ * Mga role na pinapayagang mag-verify ng online payments (Payment
+ * Verification ay nasa loob ng Service Terminal, kaya dito nilalagay
+ * ang guard). Walang hiwalay na "payment_verifier" role.
+ */
+const PAYMENT_VERIFIER_ROLES = ['staff', 'manager', 'owner'];
 
 /**
  * ProtectedRoute: gate para sa lahat ng authenticated-only pages.
- *
- * UPDATED (uniform loading screen): gumagamit na ng shared
- * <LoadingScreen /> para pareho ang itsura sa lahat ng page.
  */
 function ProtectedRoute({ children }) {
   const { isAuthenticated, loading } = useAuth();
@@ -37,6 +42,30 @@ function ProtectedRoute({ children }) {
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+
+  return children;
+}
+
+/**
+ * RoleRoute: RBAC guard na nakapatong sa ProtectedRoute. Ang role ay
+ * galing sa cached profile (localStorage 'role', itinakda ng
+ * cacheProfile() sa APIservices.js pagka-login).
+ *
+ * NOTE: UX guard lang ito — ang totoong proteksyon ay nasa backend
+ * (get_current_user + shop_id scoping). Mababasa/mababago ng sinuman
+ * ang localStorage sa browser nila.
+ */
+function RoleRoute({ allowedRoles, children }) {
+  const { loading } = useAuth();
+
+  if (loading) {
+    return <LoadingScreen message="Loading..." />;
+  }
+
+  const role = (localStorage.getItem('role') || '').toLowerCase();
+  if (!allowedRoles.includes(role)) {
+    return <Navigate to="/dashboard" replace />;
   }
 
   return children;
@@ -61,7 +90,14 @@ function App() {
             }
           >
             <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/terminal" element={<ServiceTerminal />} />
+            <Route
+              path="/terminal"
+              element={
+                <RoleRoute allowedRoles={PAYMENT_VERIFIER_ROLES}>
+                  <ServiceTerminal />
+                </RoleRoute>
+              }
+            />
             <Route path="/machines" element={<MachineHub />} />
             <Route path="/inventory" element={<InventoryPage />} />
             <Route path="/forecast" element={<FinancialForecast />} />
@@ -70,6 +106,8 @@ function App() {
             <Route path="/customer-hub" element={<CustomerHub />} />
             <Route path="/activity-logs" element={<ActivityLogs />} />
             <Route path="/record-sales" element={<RecordSales />} />
+            {/* NEW (Rating after order) — mga rating at komento ng customers */}
+            <Route path="/reviews" element={<Reviews />} />
           </Route>
 
           {/* 3. Global Fallbacks and Redirects */}

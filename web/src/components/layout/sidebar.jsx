@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { 
   LayoutDashboard, Monitor, Cpu, BarChart3, Settings, 
-  Package, Users, History, Receipt, LogOut, ChevronLeft, ChevronRight 
+  Package, Users, History, Receipt, LogOut, ChevronLeft, ChevronRight,
+  Star
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import laundryLinkLogo from '../../assets/Untitled design.png';
@@ -15,6 +16,10 @@ import laundryLinkLogo from '../../assets/Untitled design.png';
  * FIXED: ang "Account Settings" button ay dating pumupunta sa
  * /optimization-settings — ngayon ay /settings na (ang tunay na
  * Account Settings page). Naka-highlight din ito kapag nasa /settings.
+ *
+ * UPDATED (Rating after order): dagdag na "Reviews" link (/reviews)
+ * sa ilalim ng Operations, para makita ng may-ari ang mga rating at
+ * komento ng customers.
  */
 const Sidebar = ({ isCollapsed, setIsCollapsed }) => {
   const location = useLocation();
@@ -37,13 +42,14 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }) => {
         { name: 'Machine Hub', icon: <Cpu size={20} />, path: '/machines' },
         { name: 'Inventory', icon: <Package size={20} />, path: '/inventory' },
         { name: 'Customer Hub', icon: <Users size={20} />, path: '/customer-hub' },
+        { name: 'Reviews', icon: <Star size={20} />, path: '/reviews' },
         { name: 'Record Sales', icon: <Receipt size={20} />, path: '/record-sales' },
       ]
     },
     {
       categoryName: 'Analytics & Setup',
       items: [
-        { name: 'Financial Forecast', icon: <BarChart3 size={20} />, path: '/forecast' },
+        { name: 'Business Forecast', icon: <BarChart3 size={20} />, path: '/forecast' },
         { name: 'Optimization Settings', icon: <Settings size={20} />, path: '/optimization-settings' },
         { name: 'Activity Logs', icon: <History size={20} />, path: '/activity-logs' },
       ]

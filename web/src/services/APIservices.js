@@ -158,6 +158,31 @@ export const getSalesSummary = async () => {
     }
 };
 
+/**
+ * NEW (Rating after order) — mga rating at komento ng customers para sa
+ * SARILING shop ng naka-login (GET /reviews/shop; shop_id galing sa JWT).
+ *
+ * Ibinabalik:
+ *   {
+ *     summary: { average_rating, rating_count, distribution: { "5": n, ... "1": n } },
+ *     reviews: [{ id, booking_id, rating, comment, customer_first_name,
+ *                 service_type, created_at }, ...]   // pinakabago muna
+ *   }
+ *
+ * `limit` ay ang bilang ng reviews sa listahan (1-500). Ang `summary` ay
+ * laging para sa LAHAT ng reviews ng shop, kaya `getShopReviews(1)` ay
+ * sapat kung buod lang ang kailangan (hal. Dashboard card).
+ */
+export const getShopReviews = async (limit = 100) => {
+    try {
+        const response = await apiClient.get('/reviews/shop', { params: { limit } });
+        return response.data;
+    } catch (error) {
+        console.error("Fetch Shop Reviews Error:", error.response?.data?.detail || error.message);
+        throw error;
+    }
+};
+
 export const getAllBookings = async () => {
     try {
         const response = await apiClient.get('/bookings/all');
@@ -256,6 +281,40 @@ export const updatePassword = async (passwordData) => {
     }
 };
 
+// --- FORGOT PASSWORD (OTP flow) ---
+//
+// Hawak ng Supabase Auth ang buong flow, walang FastAPI endpoint.
+// Kailangang may {{ .Token }} ang "Reset Password" email template sa
+// Supabase dashboard para code ang matanggap ng user at hindi link.
+
+/** HAKBANG 1: nagpapadala ng email na may code. */
+export const requestPasswordReset = async (email) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email);
+    if (error) throw error;
+};
+
+/** HAKBANG 2: bine-verify ang code; kapag tama, may recovery session na. */
+export const verifyRecoveryOtp = async ({ email, code }) => {
+    const { error } = await supabase.auth.verifyOtp({
+        email,
+        token: code,
+        type: 'recovery',
+    });
+    if (error) throw error;
+};
+
+/** HAKBANG 3: nagse-set ng bagong password, tapos sine-sign out. */
+export const setNewPassword = async (newPassword) => {
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) throw error;
+    await supabase.auth.signOut();
+};
+
+/** Ginagamit kapag isinara ang modal pagkatapos ng verify pero bago matapos. */
+export const cancelPasswordRecovery = async () => {
+    await supabase.auth.signOut();
+};
+
 export const registerStaff = async (staffData) => {
     try {
         const payload = {
@@ -313,10 +372,19 @@ export const declineBooking = async (bookingId, reason) => {
     }
 };
 
-export const markBookingPaid = async (bookingId, paymentMethod = null) => {
+/**
+ * UPDATED (Secure Payment Verification System): 3rd argument na ang
+ * manualVerificationConfirmed. REQUIRED itong true ng backend kapag ang
+ * halaga ng transaction ay >= ₱5,000 (dual-check threshold).
+ *
+ * NOTE: ang paymentMethod ay dapat `null` kapag Approve ng online
+ * payment (gcash/paymaya) para hindi ma-overwrite ang payment_method.
+ */
+export const markBookingPaid = async (bookingId, paymentMethod = null, manualVerificationConfirmed = false) => {
     try {
         const response = await apiClient.patch(`/bookings/${bookingId}/mark-paid`, {
-            payment_method: paymentMethod
+            payment_method: paymentMethod,
+            manual_verification_confirmed: Boolean(manualVerificationConfirmed),
         });
         return response.data;
     } catch (error) {
@@ -343,6 +411,21 @@ export const rejectPayment = async (bookingId, reason) => {
         return response.data;
     } catch (error) {
         console.error("Reject Payment Error:", error.response?.data?.detail || error.message);
+        throw error;
+    }
+};
+
+/**
+ * NEW (Secure Payment Verification System) — kinukuha ang buong audit
+ * history (VIEW/APPROVE/REJECT) ng isang booking. Ang tawag mismo dito
+ * ay nagla-log ng bagong "VIEW" entry sa backend.
+ */
+export const getPaymentAuditTrail = async (bookingId) => {
+    try {
+        const response = await apiClient.get(`/bookings/${bookingId}/audit-trail`);
+        return response.data;
+    } catch (error) {
+        console.error("Fetch Payment Audit Trail Error:", error.response?.data?.detail || error.message);
         throw error;
     }
 };
@@ -584,6 +667,12 @@ export const apiService = {
         if (error) throw error;
     },
 
+    // --- FORGOT PASSWORD (OTP flow) ---
+    requestPasswordReset,
+    verifyRecoveryOtp,
+    setNewPassword,
+    cancelPasswordRecovery,
+
     registerShop: async ({ shopName, address }) => {
         await apiClient.post('/auth/register-shop', {
             shop_name: shopName,
@@ -704,6 +793,7 @@ export const apiService = {
     // --- ONLINE PAYMENT VERIFICATION METHODS (NEW) ---
     getPendingVerificationBookings,
     rejectPayment,
+    getPaymentAuditTrail,
 
     // --- WEIGHING / FINALIZE PRICING METHODS (NEW) ---
     getAwaitingWeighingBookings,
@@ -878,6 +968,9 @@ export const apiService = {
     getCustomerSegments,
     getSalesSummary,
     getAllBookings,
+
+    // --- REVIEWS / RATINGS (NEW — Rating after order) ---
+    getShopReviews,
 
     // --- OPTIMIZATION SETTINGS METHODS ---
 
