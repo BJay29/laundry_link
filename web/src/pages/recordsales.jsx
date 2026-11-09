@@ -57,6 +57,17 @@ const ACTION_STYLES = {
 };
 
 /**
+ * Parehong rule ng backend (submit_payment_proof): ang reference na
+ * may "TEST" (may dash man o wala, hal. "TEST-0001",
+ * "DP-TEST-20261103-0001", "DPTEST202611030001") ay sandbox
+ * submission. Kailangan ding naka-mark na verified (ang sandbox ay
+ * laging nagse-set ng is_verified_by_ocr = true).
+ */
+const isSandboxReference = (booking) =>
+  Boolean(booking?.is_verified_by_ocr) &&
+  (booking?.reference_number || '').toUpperCase().replace(/-/g, '').includes('TEST');
+
+/**
  * RECORD SALES PAGE
  *
  * UPDATED (Income = paid only): rangeTotalIncome (at paidCount/
@@ -77,6 +88,11 @@ const ACTION_STYLES = {
  *  4. NEW — View Receipt: read-only na pagtingin ng resibo ng online
  *     payment, may watermark, anti-copy, at nagla-log ng "VIEW" sa
  *     audit trail (via getPaymentAuditTrail).
+ *
+ * UPDATED (lenient OCR): hindi na hinaharang ng OCR ang pag-submit ng
+ * reference ng customer. Ang mga hindi nabasa ng OCR ay may dilaw na
+ * "Not OCR verified — check receipt manually" na babala para alam ng
+ * staff na sila mismo ang dapat mag-verify.
  */
 const RecordSales = () => {
   const { user } = useAuth();
@@ -509,7 +525,7 @@ const RecordSales = () => {
     rt && rt.extracted_amount !== null && rt.extracted_amount !== undefined
       ? Number(rt.extracted_amount)
       : null;
-  const rtIsSandbox = rt ? (rt.reference_number || '').toUpperCase().startsWith('TEST-') : false;
+  const rtIsSandbox = rt ? isSandboxReference(rt) : false;
   const rtMismatch = rtExtracted !== null && Math.abs(rtExtracted - rtAmountDue) > 0.009;
 
   return (
@@ -966,7 +982,7 @@ const RecordSales = () => {
                     )}
                     {!rt.is_verified_by_ocr && (
                       <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-50 text-amber-600 text-[9px] font-black uppercase tracking-widest border border-amber-100">
-                        Not OCR verified
+                        <AlertTriangle size={12} /> Not OCR verified — check receipt manually
                       </span>
                     )}
                     {rtExtracted !== null && !rtIsSandbox && (

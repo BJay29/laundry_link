@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Save, RefreshCcw, Info, Loader2, CheckCircle2, Settings2, Zap, Droplets, Banknote, Clock, Weight, Plus, Trash2, Pencil, X, Power, PackageOpen, AlertTriangle, XCircle, Truck, Ticket, QrCode, Upload, ImageOff, Wallet, HandCoins, Smartphone } from 'lucide-react';
+import { Save, RefreshCcw, Info, Loader2, CheckCircle2, Settings2, Zap, Droplets, Banknote, Clock, Weight, Plus, Trash2, Pencil, X, Power, PackageOpen, AlertTriangle, XCircle, Truck, Ticket, Wallet, HandCoins, Smartphone } from 'lucide-react';
 import apiService from '../services/APIservices';
 import LoadingScreen from '../components/ui/loadingscreen';
+import PaymentSettings from '../components/ui/paymentsettings';
+import BlockedDatesPanel from '../components/ui/blockeddatespanel';
 
 
 const formatErrorDetail = (error, fallback = "Something went wrong.") => {
@@ -223,84 +225,10 @@ const PaymentMethodToggleRow = ({ icon: Icon, label, description, enabled, onTog
 };
 
 /* ------------------------------------------------------------------ */
-/*  PAYMENT QR UPLOAD SLOT (Online Payment feature)                    */
-/* ------------------------------------------------------------------ */
-
-const QRUploadSlot = ({ label, provider, currentUrl, isUploading, onFileSelected, accentColor }) => {
-  const inputRef = useRef(null);
-
-  const colorClasses = {
-    sky: {
-      border: 'border-sky-200',
-      bg: 'bg-sky-50/50',
-      text: 'text-sky-600',
-      button: 'bg-sky-600 hover:bg-sky-500 shadow-sky-100',
-    },
-    violet: {
-      border: 'border-violet-200',
-      bg: 'bg-violet-50/50',
-      text: 'text-violet-600',
-      button: 'bg-violet-600 hover:bg-violet-500 shadow-violet-100',
-    },
-  };
-  const colors = colorClasses[accentColor] || colorClasses.sky;
-
-  const handleFileChange = (e) => {
-    const file = e.target.files?.[0];
-    if (file) onFileSelected(file, provider);
-    e.target.value = '';
-  };
-
-  return (
-    <div className={`flex-1 min-w-[220px] rounded-[32px] border-2 ${colors.border} ${colors.bg} p-6 flex flex-col items-center text-center gap-4`}>
-      <p className={`text-[11px] font-black uppercase tracking-[0.2em] ${colors.text}`}>{label}</p>
-
-      <div className="w-40 h-40 rounded-[24px] bg-white border-2 border-dashed border-slate-200 flex items-center justify-center overflow-hidden shrink-0">
-        {isUploading ? (
-          <Loader2 size={28} className={`animate-spin ${colors.text}`} />
-        ) : currentUrl ? (
-          <img src={currentUrl} alt={`${label} QR code`} className="w-full h-full object-contain" />
-        ) : (
-          <div className="flex flex-col items-center gap-2 text-slate-300">
-            <ImageOff size={28} />
-            <span className="text-[9px] font-black uppercase tracking-widest">No QR Yet</span>
-          </div>
-        )}
-      </div>
-
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={handleFileChange}
-      />
-
-      <button
-        type="button"
-        onClick={() => inputRef.current?.click()}
-        disabled={isUploading}
-        className={`flex items-center gap-2 px-5 py-3 rounded-2xl font-black text-[11px] text-white ${colors.button} shadow-lg transition-all active:scale-95 disabled:opacity-60`}
-      >
-        {isUploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
-        {currentUrl ? 'Replace QR Code' : 'Upload QR Code'}
-      </button>
-    </div>
-  );
-};
-
-/**
- * OPTIMIZATION SETTINGS
- *
- * UPDATED (uniform loading screen): gumagamit na ng shared
- * <LoadingScreen /> para pareho ang itsura sa lahat ng page.
- */
-const OptimizationSettings = () => {
-
-/* ------------------------------------------------------------------ */
 /*  MAIN COMPONENT                                                      */
 /* ------------------------------------------------------------------ */
 
+const OptimizationSettings = () => {
   const [settings, setSettings] = useState({
     electricity_rate: 0,
     water_rate: 0,
@@ -341,8 +269,12 @@ const OptimizationSettings = () => {
     accepts_online: false,
   });
   const [isSavingPaymentMethods, setIsSavingPaymentMethods] = useState(false);
-  const [paymentQR, setPaymentQR] = useState({ gcash_qr_url: '', paymaya_qr_url: '' });
-  const [uploadingQR, setUploadingQR] = useState({ gcash: false, paymaya: false });
+  const [paymentDetails, setPaymentDetails] = useState({
+    qr_code_url: '',
+    payment_channel: '',
+    payment_account_name: '',
+    payment_account_number: '',
+  });
 
   const [addOns, setAddOns] = useState([]);
   const [newAddOn, setNewAddOn] = useState({ name: '', price: '' });
@@ -432,9 +364,11 @@ const OptimizationSettings = () => {
           accepts_cod: shopProfileResult.value.accepts_cod ?? false,
           accepts_online: shopProfileResult.value.accepts_online ?? false,
         });
-        setPaymentQR({
-          gcash_qr_url: shopProfileResult.value.gcash_qr_url || '',
-          paymaya_qr_url: shopProfileResult.value.paymaya_qr_url || '',
+        setPaymentDetails({
+          qr_code_url: shopProfileResult.value.qr_code_url || '',
+          payment_channel: shopProfileResult.value.payment_channel || '',
+          payment_account_name: shopProfileResult.value.payment_account_name || '',
+          payment_account_number: shopProfileResult.value.payment_account_number || '',
         });
       } else if (shopProfileResult.status === 'rejected') {
         console.error("Failed to load shop profile / delivery settings:", formatErrorDetail(shopProfileResult.reason));
@@ -550,68 +484,6 @@ const OptimizationSettings = () => {
       });
     } finally {
       setIsSavingPaymentMethods(false);
-    }
-  };
-
-  /**
-   * BUG FIX (QR upload "reverting" the Online Payment toggle after
-   * refresh): dati, ang function na ito ay nagpapadala LANG ng
-   * `{ [fieldName]: publicUrl }` papunta sa updateShopProfile() —
-   * HINDI kasama ang `accepts_online`. Kung tine-toggle ng staff ang
-   * "Online Payment" ON (local state pa lang, hindi pa na-click ang
-   * "Save Payment Methods" button) tapos direktang nag-a-upload agad
-   * ng QR, ang na-save lang sa backend ay ang QR URL — ang
-   * `accepts_online` mismo ay NANATILING `false` doon. Sa susunod na
-   * refresh/fetchAll(), babalik ang toggle sa `false` mula sa backend
-   * — kaya parang "naka-off" siya kahit hindi naman talaga tina-toggle
-   * off ng user.
-   *
-   * FIX: kasabay na ngayong isinasave ang `accepts_online: true` sa
-   * PAREHONG request tuwing may na-upload na QR — dahil kung nag-a-
-   * upload ka ng QR, malinaw na balak mong i-enable ang Online
-   * Payment, kaya hindi na kailangang aasa pa sa hiwalay na "Save
-   * Payment Methods" click. I-update din ang local `paymentMethods`
-   * state kasabay nito, para makita agad ng UI na naka-ON at NA-SAVE
-   * na talaga ang toggle (hindi lang ito nag-a-appear na naka-ON).
-   */
-  const handleQRFileSelected = async (file, provider) => {
-    if (!file.type.startsWith('image/')) {
-      showToast({ type: 'error', title: 'Invalid File', message: 'Please select an image file (PNG/JPG).' });
-      return;
-    }
-
-    const fieldName = `${provider}_qr_url`; // "gcash_qr_url" | "paymaya_qr_url"
-
-    try {
-      setUploadingQR(prev => ({ ...prev, [provider]: true }));
-
-      const publicUrl = await apiService.uploadPaymentQR(file, shopId, provider);
-
-      // NEW — accepts_online: true isinasama na sa PAREHONG save,
-      // hindi na hiwalay na aasa sa "Save Payment Methods" button.
-      await apiService.updateShopProfile(shopId, {
-        [fieldName]: publicUrl,
-        accepts_online: true,
-      });
-
-      setPaymentQR(prev => ({ ...prev, [fieldName]: publicUrl }));
-      // NEW — sinisigurong makikita rin agad ng toggle UI na naka-ON
-      // na TALAGA ito (hindi lang local/unsaved).
-      setPaymentMethods(prev => ({ ...prev, accepts_online: true }));
-
-      showToast({
-        type: 'success',
-        title: 'QR Code Uploaded',
-        message: `Your ${provider === 'gcash' ? 'GCash' : 'PayMaya'} QR code is now live for customers.`,
-      });
-    } catch (error) {
-      showToast({
-        type: 'error',
-        title: 'Upload Failed',
-        message: formatErrorDetail(error, 'Could not upload QR code. Please try again.'),
-      });
-    } finally {
-      setUploadingQR(prev => ({ ...prev, [provider]: false }));
     }
   };
 
@@ -1360,34 +1232,18 @@ const OptimizationSettings = () => {
             />
           </div>
 
-          {/* GCash/PayMaya QR upload — ONLY shown when Online Payment is ON */}
+          {/* Payment Settings (QR + text fallback) — ONLY shown when Online Payment is ON */}
           {paymentMethods.accepts_online && (
-            <div className="mt-6 p-8 bg-sky-50/40 rounded-[36px] border-2 border-sky-100">
-              <div className="flex items-center gap-2 mb-1">
-                <QrCode size={16} className="text-sky-500" />
-                <p className="text-[11px] font-black text-sky-700 uppercase tracking-[0.2em]">QR Codes for Online Payment</p>
-              </div>
-              <p className="text-xs text-slate-400 font-bold mb-6">
-                Upload your shop's GCash and/or PayMaya QR code. Customers who choose online payment will scan this and upload their proof of payment for you to verify.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-6">
-                <QRUploadSlot
-                  label="GCash QR Code"
-                  provider="gcash"
-                  currentUrl={paymentQR.gcash_qr_url}
-                  isUploading={uploadingQR.gcash}
-                  onFileSelected={handleQRFileSelected}
-                  accentColor="sky"
-                />
-                <QRUploadSlot
-                  label="PayMaya QR Code"
-                  provider="paymaya"
-                  currentUrl={paymentQR.paymaya_qr_url}
-                  isUploading={uploadingQR.paymaya}
-                  onFileSelected={handleQRFileSelected}
-                  accentColor="violet"
-                />
-              </div>
+            <div className="mt-6">
+              <PaymentSettings
+                initial={paymentDetails}
+                shopId={shopId}
+                onSaved={(saved) => {
+                  setPaymentDetails(prev => ({ ...prev, ...saved }));
+                  setPaymentMethods(prev => ({ ...prev, accepts_online: true }));
+                }}
+                onNotify={showToast}
+              />
             </div>
           )}
 
@@ -1456,6 +1312,9 @@ const OptimizationSettings = () => {
             </button>
           </div>
         </div>
+
+        {/* SECTION 3.5: FULLY BOOKED DATES */}
+        <BlockedDatesPanel onNotify={showToast} />
 
         {/* SECTION 4: ADD-ONS */}
         <div className="bg-white p-10 rounded-[48px] border-2 border-slate-100 shadow-xl shadow-slate-200/50">

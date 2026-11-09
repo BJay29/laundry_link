@@ -18,6 +18,8 @@ import {
   Phone,
 } from 'lucide-react';
 import { formatTime, formatCurrency } from '../../utils/formatters';
+import { getQuantity } from '../../utils/quantity';
+import DeliveryAddress from '../ui/deliveryaddress';
 
 /**
  * ACTIVE TERMINAL TABLE COMPONENT
@@ -42,6 +44,18 @@ import { formatTime, formatCurrency } from '../../utils/formatters';
  * "Awaiting Weighing" / "Awaiting Payment" / "Awaiting Approval" never
  * appear in `bookings` — the backend's get_active_bookings() excludes
  * them (see the Mobile Requests tab instead).
+ *
+ * UPDATED (Quantity column fix): ang dating "Weight" column ay laging
+ * nagpapakita ng `booking.weight`, kaya "0 KG" ang lumalabas para sa
+ * mga service na per-LOAD ang presyo (ang backend ay nagse-save ng
+ * weight = 0 at loads = N para sa mga iyon). Ngayon, "Quantity" na ang
+ * column: kilo kung may kilo, at bilang ng loads kung wala
+ * (see utils/quantity.js).
+ *
+ * UPDATED (Delivery address): para sa delivery bookings, makikita na
+ * ang address (pinaikli) sa ilalim ng pangalan ng customer, kasama ang
+ * "Open in Maps" na link (see <DeliveryAddress />), kaya alam agad ni
+ * staff kung saan pupunta ang rider kahit nasa Ready na ang order.
  *
  * UPDATED (Rider Assignment feature — Pickup & Delivery): a 'Ready'
  * booking with fulfillment_mode === 'delivery' USED TO show a static,
@@ -213,7 +227,7 @@ const ActiveTerminalTable = ({
             <table className="w-full">
               <thead>
                 <tr className="border-b border-slate-50 bg-slate-50/50">
-                  {['Time', 'Customer Name', 'Service Type', 'Weight', 'Machines', 'Price', 'Status', 'Operations'].map(h => (
+                  {['Time', 'Customer Name', 'Service Type', 'Quantity', 'Machines', 'Price', 'Status', 'Operations'].map(h => (
                     <th
                       key={h}
                       className="text-left px-8 py-6 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400"
@@ -247,6 +261,7 @@ const ActiveTerminalTable = ({
                     const totalLoads = booking.machine_assignments?.length > 1;
                     const isDelivery = booking.fulfillment_mode === 'delivery';
                     const hasDeliveryRider = Boolean(booking.delivery_rider_name);
+                    const quantity = getQuantity(booking);
 
                     return (
                       <tr
@@ -269,9 +284,13 @@ const ActiveTerminalTable = ({
                             <div className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center text-white font-black text-[10px] shrink-0">
                               {booking.customer_name?.charAt(0).toUpperCase() || 'C'}
                             </div>
-                            <span className="text-slate-900 font-black text-sm truncate max-w-[150px]">
-                              {booking.customer_name}
-                            </span>
+                            <div className="min-w-0">
+                              <span className="block text-slate-900 font-black text-sm truncate max-w-[150px]">
+                                {booking.customer_name}
+                              </span>
+                              {/* UPDATED (Delivery address): address + Open in Maps (delivery lang) */}
+                              <DeliveryAddress booking={booking} variant="compact" />
+                            </div>
                           </div>
                         </td>
 
@@ -280,10 +299,10 @@ const ActiveTerminalTable = ({
                           {booking.service_type}
                         </td>
 
-                        {/* Weight */}
-                        <td className="px-8 py-7 text-slate-500 font-black text-sm tracking-tighter">
-                          {booking.weight}{' '}
-                          <span className="text-[10px] text-slate-300">KG</span>
+                        {/* Quantity (kg kung may timbang, loads kung wala) */}
+                        <td className="px-8 py-7 text-slate-500 font-black text-sm tracking-tighter whitespace-nowrap">
+                          {quantity.value}{' '}
+                          <span className="text-[10px] text-slate-300 uppercase">{quantity.unit}</span>
                         </td>
 
                         {/* Machine */}

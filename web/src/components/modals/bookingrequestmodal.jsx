@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, Package, Banknote, Clock, CheckCircle2, XCircle, Loader2, ChevronLeft } from 'lucide-react';
+import ScheduleInfo from '../ui/scheduleinfo';
 
 /**
  * BOOKING REQUEST MODAL
@@ -7,15 +8,17 @@ import { X, Package, Banknote, Clock, CheckCircle2, XCircle, Loader2, ChevronLef
  * Ipinapakita ang detalye ng isang mobile-app booking request na
  * "Awaiting Approval" pa. Dalawang aksyon: Accept o Decline.
  *
+ * UPDATED (Schedule visibility): may bagong "Schedule" section na
+ * nagpapakita ng drop-off date/time (drop-off bookings) o pickup at
+ * delivery date/time (delivery bookings), kasama ang fulfillment badge
+ * at address (kung meron), para alam ni staff ang schedule BAGO mag-Accept.
+ *
  * Pagka-Accept: status → "Pending", papasok na ito sa normal na
  * Service Terminal list (parehong flow ng manual bookings).
  *
- * Pagka-Decline: HINDI na basta't isang click lang — bubukas muna ang
- * isang "reason step" na may mga preset na dahilan (Fully booked,
- * Closed for the day, Service unavailable) plus custom text field.
- * Required ang reason (hindi pwedeng blangko) dahil ito ang makikita
- * ng customer sa kanilang end kung bakit hindi natuloy ang booking nila
- * — mas maganda ito kaysa sa basta "Declined" na walang paliwanag.
+ * Pagka-Decline: bubukas muna ang isang "reason step" na may mga preset
+ * na dahilan plus custom text field. Required ang reason dahil ito ang
+ * makikita ng customer.
  */
 
 const DECLINE_PRESETS = [
@@ -32,6 +35,8 @@ const BookingRequestModal = ({ isOpen, booking, onClose, onAccept, onDecline }) 
   const [customReason, setCustomReason] = useState('');
 
   if (!isOpen || !booking) return null;
+
+  const isDelivery = booking.fulfillment_mode === 'delivery';
 
   const resetDeclineState = () => {
     setShowDeclineStep(false);
@@ -54,9 +59,6 @@ const BookingRequestModal = ({ isOpen, booking, onClose, onAccept, onDecline }) 
     }
   };
 
-  // Isang finalReason lang ang ipapadala — kung "Other" ang preset,
-  // gagamitin ang laman ng customReason field; kung hindi, ang preset
-  // text mismo.
   const finalReason = selectedPreset === 'Other' ? customReason.trim() : selectedPreset;
   const canSubmitDecline = finalReason.length > 0;
 
@@ -73,7 +75,7 @@ const BookingRequestModal = ({ isOpen, booking, onClose, onAccept, onDecline }) 
 
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4">
-      <div className="bg-white w-full max-w-md rounded-[40px] shadow-2xl overflow-hidden border border-white/20">
+      <div className="bg-white w-full max-w-md max-h-[92vh] overflow-y-auto rounded-[40px] shadow-2xl border border-white/20">
 
         {/* HEADER */}
         <div className="px-8 pt-8 pb-6 border-b border-slate-50">
@@ -164,11 +166,21 @@ const BookingRequestModal = ({ isOpen, booking, onClose, onAccept, onDecline }) 
                 <div className="w-11 h-11 rounded-xl bg-slate-900 flex items-center justify-center text-white font-black text-sm shrink-0">
                   {booking.customer_name?.charAt(0).toUpperCase() || 'C'}
                 </div>
-                <div>
+                <div className="flex-1">
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Customer</p>
                   <p className="font-black text-slate-800">{booking.customer_name}</p>
                 </div>
+                <span
+                  className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest ${
+                    isDelivery ? 'bg-violet-50 text-violet-600' : 'bg-emerald-50 text-emerald-600'
+                  }`}
+                >
+                  {isDelivery ? 'Delivery' : 'Drop-off'}
+                </span>
               </div>
+
+              {/* SCHEDULE (NEW) */}
+              <ScheduleInfo booking={booking} variant="full" />
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="p-4 bg-slate-50/50 rounded-2xl border border-slate-100">

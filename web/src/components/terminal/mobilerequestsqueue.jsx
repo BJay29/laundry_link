@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Bell, Weight, Banknote, Inbox, Bike, PackageCheck, Lock } from 'lucide-react';
 import { formatCurrency } from '../../utils/formatters';
+import ScheduleInfo from '../ui/scheduleinfo';
+import DeliveryAddress from '../ui/deliveryaddress';
 
 /**
  * MOBILE REQUESTS QUEUE COMPONENT
@@ -19,16 +21,22 @@ import { formatCurrency } from '../../utils/formatters';
  * The lists and the "open modal" handlers come from the parent — this
  * component only displays the queues and reports which row was clicked.
  *
+ * UPDATED (Schedule visibility): may bagong "Schedule" column na
+ * gumagamit ng <ScheduleInfo />. Ipinapakita nito kung KAILAN ang
+ * drop-off (para sa drop-off bookings) o ang pickup date/time (para sa
+ * delivery bookings), para alam agad ni staff ang schedule
+ * pagka-receive ng booking — sa lahat ng tatlong sub-tab.
+ *
+ * UPDATED (Delivery address): para sa delivery bookings, makikita na
+ * rin ang address (pinaikli) sa ilalim ng pangalan ng customer, kasama
+ * ang "Open in Maps" na link (see <DeliveryAddress />). Lumalabas ito
+ * sa lahat ng tatlong sub-tab, kaya hindi na kailangang buksan pa ang
+ * review modal para malaman kung saan pupunta ang rider.
+ *
  * UPDATED (Rider Assignment feature — Pickup & Delivery, flow clarity
  * fix): the Weighing sub-tab is where a delivery booking sits while the
  * pickup rider is still en route to the customer's address (the
  * laundry hasn't reached the shop yet, so it can't be weighed).
- *
- * PREVIOUSLY both "Assign Rider" and "Weigh & Price" showed side by
- * side for every delivery row, regardless of whether a rider had been
- * assigned yet — this made the two-step sequence (assign rider FIRST,
- * weigh only once the laundry has actually reached the counter) look
- * like two equally-valid, unordered choices, which confused staff.
  *
  * NOW, for a delivery row with fulfillment_mode === 'delivery':
  *   - No rider assigned yet: "Assign Rider" is the ONLY active button.
@@ -42,11 +50,7 @@ import { formatCurrency } from '../../utils/formatters';
  * Drop-off rows are completely unaffected — they only ever show an
  * active "Weigh & Price", same as before.
  *
- * This is a UI-only clarity fix — no backend gating was added. Staff
- * could, in principle, still finalize pricing for a delivery booking
- * before a rider is picked up (the backend doesn't forbid it), but the
- * interface now visually guides them through the intended order
- * instead of presenting both actions as interchangeable.
+ * This is a UI-only clarity fix — no backend gating was added.
  *
  * The parent's Tier 1 badge count is
  *   awaitingApproval.length + awaitingWeighing.length + pendingVerification.length
@@ -88,6 +92,8 @@ const SECTIONS = [
     emptyHint: 'GCash / PayMaya proofs of payment will appear here for Approve / Reject.',
   },
 ];
+
+const TABLE_HEADERS = ['Customer Name', 'Service Type', 'Schedule', 'Amount', 'Received', 'Action'];
 
 const formatRelativeTime = (isoString) => {
   if (!isoString) return '';
@@ -181,7 +187,7 @@ const MobileRequestsQueue = ({
           <table className="w-full">
             <thead>
               <tr className="border-b border-slate-50 bg-slate-50/50">
-                {['Customer Name', 'Service Type', 'Amount', 'Received', 'Action'].map((h) => (
+                {TABLE_HEADERS.map((h) => (
                   <th
                     key={h}
                     className="text-left px-8 py-6 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400"
@@ -194,7 +200,7 @@ const MobileRequestsQueue = ({
             <tbody className="divide-y divide-slate-50">
               {items.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="text-center py-32">
+                  <td colSpan={TABLE_HEADERS.length} className="text-center py-32">
                     <div className="flex flex-col items-center gap-3">
                       <Inbox size={48} className="text-slate-100" />
                       <p className="text-slate-500 font-black text-base uppercase tracking-tight">
@@ -209,29 +215,36 @@ const MobileRequestsQueue = ({
                   const note = getAmountNote(item);
                   const isDeliveryWeighingRow = activeSection === 'weighing' && item.fulfillment_mode === 'delivery';
                   const hasPickupRider = Boolean(item.pickup_rider_name);
-                  // NEW (flow clarity fix) — Weigh & Price is only
-                  // meaningfully actionable for a delivery row once a
-                  // rider has actually been assigned to fetch the
-                  // laundry. Drop-off rows are never gated.
+                  // Weigh & Price is only meaningfully actionable for a
+                  // delivery row once a rider has been assigned.
+                  // Drop-off rows are never gated.
                   const weighingLocked = isDeliveryWeighingRow && !hasPickupRider;
 
                   return (
                     <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
-                      {/* Customer */}
+                      {/* Customer (+ delivery address, delivery lang) */}
                       <td className="px-8 py-7">
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center text-white font-black text-[10px] shrink-0">
                             {item.customer_name?.charAt(0).toUpperCase() || 'C'}
                           </div>
-                          <span className="text-slate-900 font-black text-sm truncate max-w-[180px]">
-                            {item.customer_name}
-                          </span>
+                          <div className="min-w-0">
+                            <span className="block text-slate-900 font-black text-sm truncate max-w-[180px]">
+                              {item.customer_name}
+                            </span>
+                            <DeliveryAddress booking={item} variant="compact" />
+                          </div>
                         </div>
                       </td>
 
                       {/* Service */}
                       <td className="px-8 py-7 text-slate-600 font-bold text-xs uppercase tracking-tight">
                         {item.service_type}
+                      </td>
+
+                      {/* Schedule */}
+                      <td className="px-8 py-7">
+                        <ScheduleInfo booking={item} variant="compact" />
                       </td>
 
                       {/* Amount */}
@@ -252,10 +265,6 @@ const MobileRequestsQueue = ({
                       {/* Action */}
                       <td className="px-8 py-7">
                         <div className="flex flex-col gap-1.5 items-start">
-                          {/* NEW (flow clarity fix) — small status chip
-                              above the buttons, only for delivery rows
-                              in the Weighing sub-tab, so staff see at a
-                              glance which step this booking is on. */}
                           {isDeliveryWeighingRow && (
                             <span
                               className={

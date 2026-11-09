@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Bike, User, Phone, Loader2, CheckCircle2, Truck, PackageCheck } from 'lucide-react';
 import apiService from '../../services/APIservices';
+import DeliveryAddress from '../ui/deliveryaddress';
 
 /**
  * ASSIGN RIDER MODAL (NEW — Pickup & Delivery feature)
@@ -18,6 +19,11 @@ import apiService from '../../services/APIservices';
  * Pre-fills the existing rider name/contact when the booking already
  * has one assigned for this leg — so re-assigning (e.g. rider changed)
  * is just an edit, not starting from a blank form.
+ *
+ * UPDATED (Delivery address): ang address ng customer ay ipinapakita na
+ * sa itaas ng form (buong address, naka-wrap) kasama ang "Open in Maps"
+ * na link, para makita ni staff kung saan ipapadala ang rider bago
+ * mag-assign. Para sa delivery bookings lang (see <DeliveryAddress />).
  *
  * onSuccess(message, updatedBooking) is called after a successful save
  * so the parent can refresh its lists and show a toast.
@@ -125,7 +131,7 @@ const AssignRiderModal = ({ isOpen, booking, mode, onClose, onSuccess }) => {
         </div>
 
         {/* Booking + address context */}
-        <div className="px-6 py-4 bg-slate-50/60 border-b border-slate-100 space-y-1.5">
+        <div className="px-6 py-4 bg-slate-50/60 border-b border-slate-100 space-y-3">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center text-white font-black text-[10px] shrink-0">
               {booking.customer_name?.charAt(0).toUpperCase() || 'C'}
@@ -135,11 +141,9 @@ const AssignRiderModal = ({ isOpen, booking, mode, onClose, onSuccess }) => {
               <p className="text-slate-500 text-[11px] font-bold">{booking.service_type}</p>
             </div>
           </div>
-          {booking.delivery_address_line && (
-            <p className="text-[11px] text-slate-500 font-medium pl-11">
-              {booking.delivery_address_line}
-            </p>
-          )}
+
+          {/* Address + Open in Maps (delivery bookings lang) */}
+          <DeliveryAddress booking={booking} variant="inline" />
         </div>
 
         {/* FORM */}

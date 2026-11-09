@@ -234,13 +234,28 @@ export const updateShopProfile = async (shopId, profileData) => {
  * methods (gcash, paymaya, or any custom provider id) each get their
  * own file without overwriting one another.
  */
-export const uploadPaymentQR = async (file, shopId, methodId) => {
+export const uploadPaymentQR = async (file, shopId, methodId = 'qr') => {
+    // Client-side validation (UX lang) — ang tunay na gate ay ang bucket
+    // settings sa Supabase (file_size_limit 2MB, image/jpeg + image/png).
+    const MAX_BYTES = 2 * 1024 * 1024;
+    const ALLOWED_EXT = ['jpg', 'jpeg', 'png'];
+    const ALLOWED_MIME = ['image/jpeg', 'image/png'];
+
+    if (!file) throw new Error('No file selected.');
+    const fileExt = (file.name.split('.').pop() || '').toLowerCase();
+    if (!ALLOWED_EXT.includes(fileExt) || !ALLOWED_MIME.includes(file.type)) {
+        throw new Error('Invalid file type. Only .jpg, .jpeg, and .png images are allowed.');
+    }
+    if (file.size > MAX_BYTES) {
+        const mb = (file.size / (1024 * 1024)).toFixed(2);
+        throw new Error(`File is too large (${mb}MB). Maximum allowed size is 2MB.`);
+    }
+
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
         throw new Error("You're not logged in. Please refresh the page and log in again.");
     }
 
-    const fileExt = file.name.split('.').pop();
     const filePath = `${shopId}/${methodId}-${Date.now()}.${fileExt}`;
 
     const { error: uploadError } = await supabase.storage
@@ -254,6 +269,41 @@ export const uploadPaymentQR = async (file, shopId, methodId) => {
 
     const { data } = supabase.storage.from('payment-qr-codes').getPublicUrl(filePath);
     return data.publicUrl;
+};
+
+// --- FULLY BOOKED (BLOCKED) DATES ---
+
+export const getBlockedDates = async () => {
+    try {
+        const response = await apiClient.get('/blocked-dates/');
+        return response.data;
+    } catch (error) {
+        console.error("Fetch Blocked Dates Error:", error.response?.data?.detail || error.message);
+        throw error;
+    }
+};
+
+export const addBlockedDate = async ({ blocked_date, reason }) => {
+    try {
+        const response = await apiClient.post('/blocked-dates/', {
+            blocked_date,
+            reason: reason || null,
+        });
+        return response.data;
+    } catch (error) {
+        console.error("Add Blocked Date Error:", error.response?.data?.detail || error.message);
+        throw error;
+    }
+};
+
+export const deleteBlockedDate = async (blockedId) => {
+    try {
+        const response = await apiClient.delete(`/blocked-dates/${blockedId}`);
+        return response.data;
+    } catch (error) {
+        console.error("Delete Blocked Date Error:", error.response?.data?.detail || error.message);
+        throw error;
+    }
 };
 
 export const updatePassword = async (passwordData) => {
@@ -1120,6 +1170,12 @@ export const apiService = {
     getShopProfile,
     updateShopProfile,
     uploadPaymentQR,
+
+    // --- FULLY BOOKED DATES METHODS ---
+
+    getBlockedDates,
+    addBlockedDate,
+    deleteBlockedDate,
 
     // --- ACTIVITY LOG METHODS ---
 

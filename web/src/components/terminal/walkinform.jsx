@@ -66,6 +66,7 @@ const WalkInForm = ({ onBookingSuccess, onAssignSuccess }) => {
     acceptsOnline: true,
     qrs: { gcash: null, paymaya: null },
     genericQr: null,
+    details: { channel: '', accountName: '', accountNumber: '' },
   });
 
   // Ang aktwal na payment_method na ipapadala sa backend.
@@ -113,10 +114,14 @@ const WalkInForm = ({ onBookingSuccess, onAssignSuccess }) => {
     return 'OK';
   };
 
-  // QR na ipapakita para sa napiling provider (may fallback sa generic QR).
+  // QR na ipapakita: UNA ang bagong iisang QR (Payment Settings), tapos
+  // legacy per-provider QR bilang fallback.
+  const hasPaymentDetails = Boolean(
+    shopPayment.details.accountNumber || shopPayment.details.accountName
+  );
   const activeQrUrl =
     paymentType === 'online'
-      ? (shopPayment.qrs[onlineProvider] || shopPayment.genericQr || null)
+      ? (shopPayment.genericQr || shopPayment.qrs[onlineProvider] || null)
       : null;
 
   /**
@@ -176,6 +181,11 @@ const WalkInForm = ({ onBookingSuccess, onAssignSuccess }) => {
             paymaya: profile?.paymaya_qr_url || null,
           },
           genericQr: profile?.qr_code_url || null,
+          details: {
+            channel: profile?.payment_channel || '',
+            accountName: profile?.payment_account_name || '',
+            accountNumber: profile?.payment_account_number || '',
+          },
         });
       } catch (error) {
         console.error("Error fetching shop payment settings:", error);
@@ -657,7 +667,7 @@ const WalkInForm = ({ onBookingSuccess, onAssignSuccess }) => {
             </p>
             <div className="grid grid-cols-2 gap-3">
               {ONLINE_PROVIDERS.map((p) => {
-                const hasQr = Boolean(shopPayment.qrs[p.value] || shopPayment.genericQr);
+                const hasQr = Boolean(shopPayment.qrs[p.value] || shopPayment.genericQr || hasPaymentDetails);
                 return (
                   <button
                     key={p.value}
@@ -687,28 +697,52 @@ const WalkInForm = ({ onBookingSuccess, onAssignSuccess }) => {
                 <div className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm">
                   <img
                     src={activeQrUrl}
-                    alt={`${PAYMENT_LABELS[onlineProvider]} QR code`}
+                    alt="Payment QR code"
                     className="w-44 h-44 object-contain"
                     onError={() => setQrImageFailed(true)}
                   />
                 </div>
                 <p className="text-[11px] font-black text-slate-600 uppercase tracking-widest">
-                  Scan to pay via {PAYMENT_LABELS[onlineProvider]}
-                </p>
-                <p className="text-sm font-black text-emerald-600">
-                  Amount: {optimizationLogic.formatCurrency(formData.totalPrice)}
+                  Scan to pay via {shopPayment.details.channel || PAYMENT_LABELS[onlineProvider]}
                 </p>
               </>
-            ) : (
+            ) : !hasPaymentDetails ? (
               <div className="w-full flex flex-col items-center gap-2 py-6 rounded-2xl border-2 border-dashed border-amber-200 bg-amber-50/50 text-amber-600">
                 <ImageOff size={26} />
                 <p className="text-[11px] font-black uppercase tracking-widest">
-                  {qrImageFailed ? 'QR image failed to load' : `No ${PAYMENT_LABELS[onlineProvider]} QR uploaded`}
+                  {qrImageFailed ? 'QR image failed to load' : 'No payment QR uploaded'}
                 </p>
                 <p className="text-[10px] font-bold text-center px-4">
-                  Upload it in Optimization Settings &gt; Payment Methods, or choose Cash.
+                  Set it up in Optimization Settings &gt; Payment Methods, or choose Cash.
                 </p>
               </div>
+            ) : (
+              qrImageFailed && (
+                <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest">
+                  QR image failed to load — use the details below
+                </p>
+              )
+            )}
+
+            {/* Text fallback — laging nakikita kapag may naka-save na details */}
+            {hasPaymentDetails && (
+              <div className="w-full rounded-2xl bg-white border border-slate-200 p-3 space-y-1">
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                  Or send manually{shopPayment.details.channel ? ` via ${shopPayment.details.channel}` : ''}
+                </p>
+                {shopPayment.details.accountName && (
+                  <p className="text-sm font-black text-slate-800">{shopPayment.details.accountName}</p>
+                )}
+                {shopPayment.details.accountNumber && (
+                  <p className="text-sm font-black text-sky-600 tracking-wider">{shopPayment.details.accountNumber}</p>
+                )}
+              </div>
+            )}
+
+            {(activeQrUrl || hasPaymentDetails) && (
+              <p className="text-sm font-black text-emerald-600">
+                Amount: {optimizationLogic.formatCurrency(formData.totalPrice)}
+              </p>
             )}
           </div>
 

@@ -1,11 +1,17 @@
 import React from 'react';
 import { CheckCircle2, Clock, User, HardDrive, PhilippinePeso, Activity, Loader2 } from 'lucide-react';
 import { formatTime } from '../../utils/formatters';
+import { formatQuantity } from '../../utils/quantity';
 
 /**
  * BookingTable Component
  * Displays the list of active laundry orders with real-time data.
  * Optimized to handle joined machine data from the FastAPI backend.
+ *
+ * UPDATED (Quantity column fix): ang dating "Weight" column ay laging
+ * nagpapakita ng `booking.weight`, kaya "0 kg" ang lumalabas para sa
+ * mga service na per-LOAD ang presyo. Ngayon ay "Quantity" na: kilo
+ * kung may kilo, bilang ng loads kung wala (see utils/quantity.js).
  */
 const BookingTable = ({ bookings = [], onComplete }) => {
   
@@ -62,7 +68,7 @@ const BookingTable = ({ bookings = [], onComplete }) => {
               <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Time</th>
               <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Customer</th>
               <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Service</th>
-              <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Weight</th>
+              <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Quantity</th>
               <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Machine</th>
               <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Price</th>
               <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Status</th>
@@ -101,10 +107,10 @@ const BookingTable = ({ bookings = [], onComplete }) => {
                     </span>
                   </td>
 
-                  {/* Weight Metric */}
+                  {/* Quantity Metric (kg kung may timbang, loads kung wala) */}
                   <td className="px-8 py-6">
-                    <span className="text-slate-500 font-bold text-sm">
-                      {booking.weight} kg
+                    <span className="text-slate-500 font-bold text-sm whitespace-nowrap">
+                      {formatQuantity(booking)}
                     </span>
                   </td>
 
