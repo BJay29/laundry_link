@@ -1,7 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { X, Bike, User, Phone, Loader2, CheckCircle2, Truck, PackageCheck } from 'lucide-react';
+import { X, Bike, User, Phone, Loader2, CheckCircle2, Truck, PackageCheck, Banknote, History } from 'lucide-react';
 import apiService from '../../services/APIservices';
 import DeliveryAddress from '../ui/deliveryaddress';
+import { formatCurrency } from '../../utils/formatters';
+import { getCollectInfo } from '../../utils/collect';
+import {
+  PH_MOBILE_HINT,
+  normalizePhMobile,
+  sanitizePhoneInput,
+  formatPhMobile,
+} from '../../utils/phone';
 
 /**
  * ASSIGN RIDER MODAL (NEW — Pickup & Delivery feature)
@@ -25,14 +33,57 @@ import DeliveryAddress from '../ui/deliveryaddress';
  * na link, para makita ni staff kung saan ipapadala ang rider bago
  * mag-assign. Para sa delivery bookings lang (see <DeliveryAddress />).
  *
+ * UPDATED (Collect + Recent riders): para sa delivery leg, may banner na
+ * "Collect ₱X" (see utils/collect.js) para alam ni staff/rider kung
+ * magkano ang sisingilin sa pinto. May "Recent riders" na chips din
+ * (hanggang 5, naka-save sa browser ng shop — localStorage, walang
+ * bagong backend) — isang tap lang para ma-fill ang pangalan at numero.
+ *
+ * UPDATED (PH number only): tunay na PH mobile number lang ang tinatanggap
+ * (11 digits, 09XXXXXXXXX o +639XXXXXXXXX — see utils/phone.js). Mga
+ * letra at sobrang haba ay hindi na maita-type; hindi pwedeng i-confirm
+ * hangga't hindi valid, at laging normalized (09XXXXXXXXX) ang ipinapadala.
+ * Pareho ring validation sa backend (RiderAssignmentInput).
+ *
  * onSuccess(message, updatedBooking) is called after a successful save
  * so the parent can refresh its lists and show a toast.
  */
+const MAX_RECENT_RIDERS = 5;
+
+const recentRidersKey = () => `recent_riders_${apiService.getShopId?.() || 'shop'}`;
+
+const loadRecentRiders = () => {
+  try {
+    const raw = localStorage.getItem(recentRidersKey());
+    const list = raw ? JSON.parse(raw) : [];
+    return Array.isArray(list)
+      ? list.filter((r) => r?.name && normalizePhMobile(r?.contact))
+      : [];
+  } catch {
+    return [];
+  }
+};
+
+const saveRecentRider = (name, contact) => {
+  try {
+    const rest = loadRecentRiders().filter(
+      (r) => !(r.name.toLowerCase() === name.toLowerCase() && r.contact === contact)
+    );
+    localStorage.setItem(
+      recentRidersKey(),
+      JSON.stringify([{ name, contact }, ...rest].slice(0, MAX_RECENT_RIDERS))
+    );
+  } catch {
+    // Optional convenience lang — hindi dapat mag-fail ang assignment dahil dito.
+  }
+};
+
 const AssignRiderModal = ({ isOpen, booking, mode, onClose, onSuccess }) => {
   const [riderName, setRiderName] = useState('');
   const [riderContact, setRiderContact] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [recentRiders, setRecentRiders] = useState([]);
 
   const isDelivery = mode === 'delivery';
 
@@ -44,8 +95,11 @@ const AssignRiderModal = ({ isOpen, booking, mode, onClose, onSuccess }) => {
   useEffect(() => {
     if (isOpen) {
       setRiderName(existingName || '');
-      setRiderContact(existingContact || '');
+      setRiderContact(
+        existingContact ? normalizePhMobile(existingContact) || existingContact : ''
+      );
       setErrorMsg('');
+      setRecentRiders(loadRecentRiders());
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, booking?.id, mode]);
@@ -54,7 +108,9 @@ const AssignRiderModal = ({ isOpen, booking, mode, onClose, onSuccess }) => {
 
   const trimmedName = riderName.trim();
   const trimmedContact = riderContact.trim();
-  const canSubmit = trimmedName.length > 0 && trimmedContact.length > 0;
+  const normalizedContact = normalizePhMobile(trimmedContact);
+  const contactInvalid = trimmedContact.length > 0 && !normalizedContact;
+  const canSubmit = trimmedName.length > 0 && Boolean(normalizedContact);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -64,10 +120,12 @@ const AssignRiderModal = ({ isOpen, booking, mode, onClose, onSuccess }) => {
     setErrorMsg('');
 
     try {
-      const payload = { rider_name: trimmedName, rider_contact: trimmedContact };
+      const payload = { rider_name: trimmedName, rider_contact: normalizedContact };
       const updated = isDelivery
         ? await apiService.assignDeliveryRider(booking.id, payload)
         : await apiService.assignPickupRider(booking.id, payload);
+
+      saveRecentRider(trimmedName, normalizedContact);
 
       const message = isDelivery
         ? `${trimmedName} assigned for delivery to ${booking.customer_name}.`
@@ -84,6 +142,7 @@ const AssignRiderModal = ({ isOpen, booking, mode, onClose, onSuccess }) => {
   };
 
   const Icon = isDelivery ? Truck : PackageCheck;
+  const collect = isDelivery ? getCollectInfo(booking) : { amount: 0, label: '' };
 
   // NOTE: Tailwind's JIT compiler only picks up class names it can see as
   // full static strings in the source — `bg-${accentColor}-500` would be
@@ -144,10 +203,60 @@ const AssignRiderModal = ({ isOpen, booking, mode, onClose, onSuccess }) => {
 
           {/* Address + Open in Maps (delivery bookings lang) */}
           <DeliveryAddress booking={booking} variant="inline" />
+
+          {/* Collect ₱X — delivery leg lang */}
+          {isDelivery && (
+            collect.amount > 0 ? (
+              <div className="flex items-center gap-2 bg-amber-50 border border-amber-100 text-amber-700 rounded-xl px-3 py-2.5">
+                <Banknote size={15} className="shrink-0" />
+                <p className="text-[11px] font-black uppercase tracking-tight">
+                  Collect {formatCurrency(collect.amount)}
+                  <span className="font-bold normal-case tracking-normal text-amber-600"> · {collect.label}</span>
+                </p>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-100 text-emerald-700 rounded-xl px-3 py-2.5">
+                <CheckCircle2 size={15} className="shrink-0" />
+                <p className="text-[11px] font-black uppercase tracking-tight">Fully paid — nothing to collect</p>
+              </div>
+            )
+          )}
         </div>
 
         {/* FORM */}
         <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
+          {/* Recent riders — isang tap para ma-fill */}
+          {recentRiders.length > 0 && (
+            <div>
+              <p className="text-[10px] font-black text-slate-400 uppercase flex items-center gap-1.5 tracking-widest mb-1.5">
+                <History size={13} className={labelIconColor} /> Recent Riders
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {recentRiders.map((r) => {
+                  const active = r.name === trimmedName && r.contact === normalizedContact;
+                  return (
+                    <button
+                      key={`${r.name}-${r.contact}`}
+                      type="button"
+                      onClick={() => {
+                        setRiderName(r.name);
+                        setRiderContact(r.contact);
+                      }}
+                      className={`px-3 py-1.5 rounded-xl border text-[11px] font-black transition-all active:scale-95 ${
+                        active
+                          ? 'bg-slate-900 text-white border-slate-900'
+                          : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+                      }`}
+                      title={formatPhMobile(r.contact)}
+                    >
+                      {r.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           <div>
             <label className="text-[10px] font-black text-slate-400 uppercase flex items-center gap-1.5 tracking-widest mb-1.5">
               <User size={13} className={labelIconColor} /> Rider Name
@@ -167,10 +276,20 @@ const AssignRiderModal = ({ isOpen, booking, mode, onClose, onSuccess }) => {
             </label>
             <input
               value={riderContact}
-              onChange={(e) => setRiderContact(e.target.value)}
-              placeholder="e.g. 0917 123 4567"
-              className="w-full border rounded-xl px-4 py-2.5 text-sm font-bold outline-none transition-all bg-slate-50/50 border-slate-200 text-slate-800 focus:ring-4 ring-sky-50 focus:border-sky-300 placeholder:text-slate-300"
+              onChange={(e) => setRiderContact(sanitizePhoneInput(e.target.value))}
+              placeholder="e.g. 09171234567"
+              inputMode="tel"
+              maxLength={17}
+              aria-invalid={contactInvalid}
+              className={`w-full border rounded-xl px-4 py-2.5 text-sm font-bold outline-none transition-all bg-slate-50/50 text-slate-800 placeholder:text-slate-300 ${
+                contactInvalid
+                  ? 'border-rose-300 focus:ring-4 ring-rose-50 focus:border-rose-400'
+                  : 'border-slate-200 focus:ring-4 ring-sky-50 focus:border-sky-300'
+              }`}
             />
+            {contactInvalid && (
+              <p className="text-[11px] font-bold text-rose-500 mt-1.5">{PH_MOBILE_HINT}</p>
+            )}
           </div>
 
           {errorMsg && (

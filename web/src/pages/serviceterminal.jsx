@@ -46,6 +46,13 @@ import { useNotifications } from '../context/notificationcontext';
  * leg (opened from ActiveTerminalTable's 'Ready' rows). Which leg it's
  * assigning is controlled by `riderModalMode` ('pickup' | 'delivery').
  *
+ * UPDATED (Switch to Delivery): kapag may bagong booking na ginawang
+ * delivery ng customer (switched_to_delivery_at), may toast na agad
+ * sa susunod na refresh. 15 segundo na ang polling ng bookings (dati
+ * 30) at ang error ng backend sa status update ay ipinapakita na.
+ * (Magiging instant ito kapag naikonekta sa WebSocket event na
+ * 'booking_switched_to_delivery' na ipinapadala ng backend.)
+ *
  * UI NOTE: all icons come from lucide-react — no emojis anywhere in the
  * tabs, buttons, or toast messages.
  *
@@ -93,6 +100,10 @@ const ServiceTerminal = () => {
   const [serviceRequiredPhases, setServiceRequiredPhases] = useState({});
   const [prevBusyCount, setPrevBusyCount] = useState(null);
   const [currentTime, setCurrentTime] = useState(new Date());
+
+  // Mga booking id na alam nang "switched" — para ma-detect ang bago.
+  // null = hindi pa nakakapag-load (huwag mag-toast sa unang load).
+  const knownSwitchedRef = useRef(null);
 
   // Status dropdown state — lives here because handleStatusSelect /
   // toggleStatusDropdown are parent handlers; the dropdown itself is
@@ -188,6 +199,20 @@ const ServiceTerminal = () => {
 
       const data = await apiService.getActiveBookings();
       setBookings(data || []);
+
+      const switched = (data || []).filter((b) => b.switched_to_delivery_at);
+      const switchedIds = new Set(switched.map((b) => b.id));
+      if (knownSwitchedRef.current !== null) {
+        const fresh = switched.filter((b) => !knownSwitchedRef.current.has(b.id));
+        if (fresh.length > 0) {
+          showNotification(
+            fresh.length === 1
+              ? `${fresh[0].customer_name || 'A customer'} switched to delivery — assign a rider.`
+              : `${fresh.length} bookings switched to delivery — assign riders.`
+          );
+        }
+      }
+      knownSwitchedRef.current = switchedIds;
     } catch (err) {
       console.error('Terminal Sync Error:', err.message);
       setBookings([]);
@@ -228,7 +253,7 @@ const ServiceTerminal = () => {
     loadAvailableMachines();
     loadServiceRequiredPhases();
     loadPendingVerification();
-    const bookingInterval = setInterval(() => loadBookings(true), 30000);
+    const bookingInterval = setInterval(() => loadBookings(true), 15000);
     const machineInterval = setInterval(() => loadAvailableMachines(), 15000);
     const paymentInterval = setInterval(() => loadPendingVerification(), 20000);
     return () => {
@@ -252,6 +277,8 @@ const ServiceTerminal = () => {
 
       if (newStatus === 'Claimed') {
         showNotification('Customer has claimed their laundry.');
+      } else if (newStatus === 'Out for Delivery') {
+        showNotification('Order is out for delivery — customer notified.');
       } else {
         showNotification(`Order moved to ${newStatus}.`);
       }
@@ -260,7 +287,12 @@ const ServiceTerminal = () => {
       await loadAvailableMachines();
     } catch (err) {
       console.error('Lifecycle Transition Error:', err.message);
-      alert('Status update failed. Please check backend connectivity.');
+      const detail = err.response?.data?.detail;
+      alert(
+        typeof detail === 'string'
+          ? detail
+          : 'Status update failed. Please check backend connectivity.'
+      );
     } finally {
       setRefreshing(false);
     }

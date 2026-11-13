@@ -8,10 +8,8 @@ import {
   Package, 
   Minus,
   Zap,
-  Cpu,
   Sparkles,
-  CheckCircle2,
-  Info
+  CheckCircle2
 } from 'lucide-react';
 import ForecastCharts from '../components/charts/forecastcharts';
 import LoadingScreen from '../components/ui/loadingscreen';
@@ -42,27 +40,12 @@ const Typewriter = ({ text, speed = 20 }) => {
 };
 
 /**
- * Nagko-convert ng halaga mula sa backend papunta sa number na 0..100,
- * o null kung walang tunay na halaga (hindi 0 — para hindi magmukhang
- * "0% accuracy" ang kakulangan ng data).
- */
-const toPercentOrNull = (value) => {
-  if (value === null || value === undefined) return null;
-  const n = Number(value);
-  if (!Number.isFinite(n)) return null;
-  return Math.max(0, Math.min(100, n));
-};
-
-/**
  * FINANCIAL FORECAST COMPONENT
  * Visualizes 7-day AI projections against historical database baselines.
  *
- * UPDATED (metrics fix): ang AI Calibration section ay hindi na
- * nagpapakita ng 0% o negatibong numero. Kapag walang tunay na metric
- * (null), "Not enough data yet" ang lalabas. May "Low reliability"
- * na label kapag kulang ang data ng shop para mapagkatiwalaan ang
- * numero. Ang pangalawang card ay "Model Fit (R²)" na (dati ay mali ang
- * pangalang "Utility Tracking Calibration").
+ * UPDATED (accuracy hidden): inalis na sa UI ang "AI Calibration
+ * Parameters" section (Confidence Index at Model Fit) — hindi dapat
+ * ipakita sa system ang accuracy ng AI prediction.
  *
  * UPDATED (uniform loading screen): gumagamit na ng shared
  * <LoadingScreen />.
@@ -70,7 +53,6 @@ const toPercentOrNull = (value) => {
 const FinancialForecast = () => {
   const [forecastData, setForecastData] = useState([]);
   const [modelTier, setModelTier] = useState(null);
-  const [accuracyMetrics, setAccuracyMetrics] = useState(null);
   const [aiInsight, setAiInsight] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -79,7 +61,6 @@ const FinancialForecast = () => {
     totalRevenue: 0,
     totalBookings: 0,
     avgDaily: 0,
-    accuracy: 0,
     revenueTrend: "0%",
     trendStatus: 'equal', 
     bookingTrend: "0%",
@@ -91,32 +72,10 @@ const FinancialForecast = () => {
    */
   const fetchData = useCallback(async () => {
     try {
-      const [forecastRes, summaryRes, accuracyRes] = await Promise.allSettled([
+      const [forecastRes, summaryRes] = await Promise.allSettled([
         apiService.getForecastData(),
-        apiService.getDashboardStats(),
-        apiService.getAiAccuracyMetrics()
+        apiService.getDashboardStats()
       ]);
-
-      if (accuracyRes.status === 'fulfilled' && accuracyRes.value) {
-        const raw = accuracyRes.value;
-        setAccuracyMetrics({
-          demand: toPercentOrNull(raw.demand_forecasting_model),
-          modelFit: toPercentOrNull(raw.utility_telemetry_model),
-          reliability: raw.reliability || 'unknown',
-          beatsBaseline: raw.beats_baseline ?? null,
-          validationDays: raw.validation_days ?? null,
-        });
-      } else {
-        // Hindi nakuha ang metrics: ipakita pa rin ang section na may
-        // "Not enough data yet" sa halip na itago o ipakita ang 0%.
-        setAccuracyMetrics({
-          demand: null,
-          modelFit: null,
-          reliability: 'none',
-          beatsBaseline: null,
-          validationDays: null,
-        });
-      }
 
       if (forecastRes.status === 'fulfilled' && forecastRes.value?.forecast) {
         const rawForecast = forecastRes.value.forecast;
@@ -159,7 +118,6 @@ const FinancialForecast = () => {
           totalRevenue: totalProjectedRev,
           totalBookings: totalProjectedBook,
           avgDaily: Math.round(totalProjectedRev / 7),
-          accuracy: 0, // Placeholder
           revenueTrend: revTrend.percent,
           trendStatus: revTrend.status,
           bookingTrend: bookTrend.percent,
@@ -284,120 +242,6 @@ const FinancialForecast = () => {
         </div>
       </div>
 
-      {/* AI CALIBRATION PARAMETERS */}
-      {accuracyMetrics && (
-        <div className="bg-white p-6 md:p-10 rounded-[40px] md:rounded-[56px] border border-slate-100 shadow-sm">
-          <div className="mb-8 flex items-center gap-2.5">
-            <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl">
-              <Cpu size={22} className="animate-pulse" />
-            </div>
-            <div>
-              <h2 className="text-xl md:text-2xl font-black text-slate-900 uppercase tracking-tight">
-                AI Calibration Parameters
-              </h2>
-              <p className="text-slate-400 text-xs font-bold italic">
-                Validation results of this shop&apos;s own forecasting model.
-              </p>
-            </div>
-          </div>
-
-          {accuracyMetrics.reliability === 'low' && (
-            <div className="mb-6 flex items-start gap-3 bg-amber-50 border border-amber-100 text-amber-700 rounded-2xl px-5 py-4">
-              <Info size={18} className="shrink-0 mt-0.5" />
-              <p className="text-xs font-bold leading-relaxed">
-                Low reliability: this shop doesn&apos;t have enough booking history yet
-                {accuracyRes_days(accuracyMetrics.validationDays)}. These numbers will become more
-                trustworthy as more daily data is collected (30+ days recommended).
-              </p>
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <MetricCard
-              subsystem="Predictive Subsystem"
-              title="Demand Forecasting Accuracy"
-              badge="Stochastic"
-              badgeClass="bg-indigo-50 text-indigo-600"
-              label="Confidence Index"
-              value={accuracyMetrics.demand}
-              valueClass="text-indigo-600"
-              barClass="bg-indigo-600 shadow-[0_0_8px_rgba(79,70,229,0.4)]"
-              footnote={
-                accuracyMetrics.beatsBaseline === true
-                  ? 'Beats the simple-average baseline.'
-                  : accuracyMetrics.beatsBaseline === false
-                    ? 'Does not yet beat the simple-average baseline.'
-                    : null
-              }
-              footnoteGood={accuracyMetrics.beatsBaseline === true}
-            />
-            <MetricCard
-              subsystem="Model Subsystem"
-              title="Model Fit (R²)"
-              badge="Regression"
-              badgeClass="bg-cyan-50 text-cyan-600"
-              label="Variance Explained"
-              value={accuracyMetrics.modelFit}
-              valueClass="text-cyan-600"
-              barClass="bg-cyan-500 shadow-[0_0_8px_rgba(6,182,212,0.4)]"
-              footnote="How much of the day-to-day change in bookings the model explains."
-            />
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-/** Maliit na helper para sa pangungusap tungkol sa validation days. */
-const accuracyRes_days = (days) =>
-  days ? ` (validated on only ${days} days)` : '';
-
-/**
- * Isang metric card. Kapag null ang value, "Not enough data yet" ang
- * ipinapakita at walang bar, sa halip na 0%.
- */
-const MetricCard = ({
-  subsystem, title, badge, badgeClass, label, value, valueClass, barClass, footnote, footnoteGood,
-}) => {
-  const hasValue = value !== null && value !== undefined;
-
-  return (
-    <div className="border border-slate-100 p-6 md:p-8 rounded-[32px] bg-slate-50/50">
-      <div className="flex justify-between items-start border-b border-slate-100 pb-4 mb-4">
-        <div>
-          <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider">{subsystem}</h4>
-          <h3 className="text-md font-black text-slate-800 mt-0.5">{title}</h3>
-        </div>
-        <span className={`px-2.5 py-1 text-[9px] font-black tracking-wider uppercase rounded-md ${badgeClass}`}>
-          {badge}
-        </span>
-      </div>
-      <div className="space-y-4">
-        <div className="flex justify-between items-end">
-          <span className="text-xs font-extrabold text-slate-500 uppercase tracking-wide">{label}</span>
-          {hasValue ? (
-            <span className={`text-xl font-black ${valueClass}`}>{value}%</span>
-          ) : (
-            <span className="text-sm font-black text-slate-300 uppercase tracking-wide">
-              Not enough data yet
-            </span>
-          )}
-        </div>
-        <div className="w-full bg-slate-200/70 h-2.5 rounded-full overflow-hidden">
-          {hasValue && (
-            <div
-              className={`${barClass} h-full rounded-full transition-all duration-500`}
-              style={{ width: `${Math.max(0, Math.min(100, value))}%` }}
-            />
-          )}
-        </div>
-        {footnote && (
-          <p className={`text-[11px] font-bold ${footnoteGood ? 'text-emerald-600' : 'text-slate-400'}`}>
-            {footnote}
-          </p>
-        )}
-      </div>
     </div>
   );
 };

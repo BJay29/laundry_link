@@ -1,5 +1,5 @@
 import React from 'react';
-import { CalendarDays, Clock, Bike, Store } from 'lucide-react';
+import { CalendarDays, Clock, Bike, Store, Truck } from 'lucide-react';
 import DeliveryAddress from './deliveryaddress';
 
 /**
@@ -13,6 +13,13 @@ import DeliveryAddress from './deliveryaddress';
  *   dropoff_datetime, dropoff_window   -> drop-off bookings (OPTIONAL)
  *   pickup_datetime,  pickup_window    -> delivery bookings (REQUIRED ang datetime)
  *   window: 'morning' | 'afternoon' | 'evening' | 'anytime' | null
+ *
+ * UPDATED (Switch to Delivery): para sa booking na ginawang delivery ng
+ * customer mula sa drop-off (switched_to_delivery_at), walang pickup leg
+ * (nasa shop na ang laundry) — kaya ang ipinapakita ay ang "Delivery"
+ * row: ang preferred na petsa ng hatid (delivery_datetime, optional).
+ * Ang orihinal na delivery bookings ay pickup row pa rin, at kung may
+ * delivery_datetime, may dagdag na Delivery row.
  *
  * UPDATED (Delivery address): ang address block sa 'full' variant ay
  * galing na sa shared <DeliveryAddress /> component, kaya may
@@ -56,9 +63,27 @@ const buildRows = (booking) => {
   const isDelivery = booking?.fulfillment_mode === 'delivery';
 
   if (isDelivery) {
+    const deliveryDate = parse(booking.delivery_datetime);
+    const deliveryRow = {
+      key: 'delivery',
+      label: 'Delivery',
+      hint: booking.switched_to_delivery_at ? 'Switched from drop-off' : 'Rider maghahatid',
+      icon: Truck,
+      tone: 'text-sky-500',
+      date: deliveryDate ? fmtDate(deliveryDate) : null,
+      // Petsa lang ang pinipili ng customer (naka-save bilang 12:00 PM),
+      // kaya hindi ipinapakita ang oras.
+      time: null,
+      windowLabel: null,
+      emptyText: 'No preferred delivery date',
+      emptyIsWarning: false,
+    };
+
+    // Na-switch mula drop-off: walang pickup leg.
+    if (booking.switched_to_delivery_at) return [deliveryRow];
+
     const d = parse(booking.pickup_datetime);
-    return [
-      {
+    const pickupRow = {
         key: 'pickup',
         label: 'Pickup',
         hint: 'Rider kukuha ng labada',
@@ -69,8 +94,8 @@ const buildRows = (booking) => {
         windowLabel: WINDOW_LABELS[booking.pickup_window] || null,
         emptyText: 'Pickup schedule not set',
         emptyIsWarning: true,
-      },
-    ];
+    };
+    return deliveryDate ? [pickupRow, deliveryRow] : [pickupRow];
   }
 
   const d = parse(booking?.dropoff_datetime);
@@ -133,10 +158,12 @@ const ScheduleInfo = ({ booking, variant = 'compact' }) => {
                         <CalendarDays size={14} className="text-slate-400" />
                         <span className="font-black text-slate-800 text-sm">{row.date}</span>
                       </div>
-                      <div className="flex items-center gap-1.5">
-                        <Clock size={14} className="text-slate-400" />
-                        <span className="font-black text-slate-800 text-sm">{row.time}</span>
-                      </div>
+                      {row.time && (
+                        <div className="flex items-center gap-1.5">
+                          <Clock size={14} className="text-slate-400" />
+                          <span className="font-black text-slate-800 text-sm">{row.time}</span>
+                        </div>
+                      )}
                     </>
                   )}
                   {row.windowLabel && <WindowChip label={row.windowLabel} />}
@@ -180,7 +207,7 @@ const ScheduleInfo = ({ booking, variant = 'compact' }) => {
                 <>
                   {row.date && (
                     <p className="text-[11px] font-black text-slate-700 whitespace-nowrap">
-                      {row.date} · {row.time}
+                      {row.date}{row.time ? ` · ${row.time}` : ''}
                     </p>
                   )}
                   {row.windowLabel && (

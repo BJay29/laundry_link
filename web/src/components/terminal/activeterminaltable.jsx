@@ -16,8 +16,11 @@ import {
   Truck,
   Bike,
   Phone,
+  Navigation,
+  Repeat,
 } from 'lucide-react';
 import { formatTime, formatCurrency } from '../../utils/formatters';
+import { getCollectInfo } from '../../utils/collect';
 import { getQuantity } from '../../utils/quantity';
 import DeliveryAddress from '../ui/deliveryaddress';
 
@@ -75,16 +78,44 @@ import DeliveryAddress from '../ui/deliveryaddress';
  * action (handleStatusUpdate -> 'Claimed') unchanged — riders don't
  * apply to them.
  *
+ * UPDATED (Switch to Delivery): ang customer ay puwede nang gawing
+ * delivery ang drop-off booking habang Pending / In Progress / Ready
+ * (see backend request_delivery). Kaya ang delivery row na hindi pa
+ * 'Ready' ay may "For Delivery" chip na ngayon (alam agad ni staff na
+ * ihahatid, hindi iaabot sa counter), at habang 'In Progress' ay puwede
+ * nang mag-assign ng rider (pinapayagan na ito ng backend). Ang
+ * 'Ready' branch ay hindi nagbago.
+ *
+ * UPDATED (Out for Delivery): bagong status na "Out for Delivery" (delivery
+ * lang). Sa 'Ready' na delivery row na may rider, ang pangunahing button
+ * ay "Out for Delivery" (hindi na diretsong Mark Delivered); sa 'Out for
+ * Delivery' row, rider badge (puwedeng i-reassign) + "Mark Delivered".
+ * Puwede pa ring piliin ang Claimed sa status dropdown.
+ *
+ * UPDATED (Switch to Delivery — polish): "Switched" badge (galing
+ * drop-off, may switched_to_delivery_at), "Collect ₱X" para sa rider
+ * (see utils/collect.js), at ang preferred na petsa ng hatid.
+ *
  * UI NOTE: icons are lucide-react only — no emojis.
  */
 
-const STATUS_OPTIONS = ['Pending', 'In Progress', 'Ready', 'Claimed', 'Cancelled'];
+const STATUS_OPTIONS = ['Pending', 'In Progress', 'Ready', 'Out for Delivery', 'Claimed', 'Cancelled'];
+
+const fmtDeliveryDate = (value) => {
+  if (!value) return null;
+  let text = String(value).trim();
+  if (!/(Z|[+-]\d{2}:?\d{2})$/.test(text)) text += 'Z';
+  const d = new Date(text);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString('en-PH', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric' });
+};
 
 const STATUS_FILTERS = [
   { value: 'all',         label: 'All Orders',                    icon: List },
   { value: 'Pending',     label: 'Pending Setup',                 icon: Clock },
   { value: 'In Progress', label: 'In Progress',                   icon: Loader },
   { value: 'Ready',       label: 'Ready for Pickup / Delivery',   icon: PackageCheck },
+  { value: 'Out for Delivery', label: 'Out for Delivery',         icon: Truck },
 ];
 
 const ActiveTerminalTable = ({
@@ -123,6 +154,7 @@ const ActiveTerminalTable = ({
       case 'in progress': return 'bg-blue-50 text-blue-500 border-blue-100';
       case 'pending':     return 'bg-amber-50 text-amber-600 border-amber-100';
       case 'ready':       return 'bg-emerald-50 text-emerald-600 border-emerald-100';
+      case 'out for delivery': return 'bg-sky-50 text-sky-600 border-sky-100';
       case 'claimed':     return 'bg-slate-100 text-slate-500 border-slate-200';
       case 'cancelled':   return 'bg-rose-50 text-rose-500 border-rose-100';
       default:            return 'bg-slate-50 text-slate-400 border-slate-100';
@@ -262,6 +294,9 @@ const ActiveTerminalTable = ({
                     const isDelivery = booking.fulfillment_mode === 'delivery';
                     const hasDeliveryRider = Boolean(booking.delivery_rider_name);
                     const quantity = getQuantity(booking);
+                    const isSwitched = Boolean(booking.switched_to_delivery_at);
+                    const collect = getCollectInfo(booking);
+                    const deliverOn = isDelivery ? fmtDeliveryDate(booking.delivery_datetime) : null;
 
                     return (
                       <tr
@@ -290,6 +325,34 @@ const ActiveTerminalTable = ({
                               </span>
                               {/* UPDATED (Delivery address): address + Open in Maps (delivery lang) */}
                               <DeliveryAddress booking={booking} variant="compact" />
+
+                              {isDelivery && (
+                                <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                                  {isSwitched && (
+                                    <span
+                                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-violet-50 text-violet-600 border border-violet-100 text-[9px] font-black uppercase tracking-wide"
+                                      title="Customer switched this from drop-off to delivery"
+                                    >
+                                      <Repeat size={9} />
+                                      Switched
+                                    </span>
+                                  )}
+                                  {deliverOn && (
+                                    <span className="text-[10px] font-bold text-slate-400 whitespace-nowrap">
+                                      Deliver {deliverOn}
+                                    </span>
+                                  )}
+                                  {collect.amount > 0 && (
+                                    <span
+                                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-100 text-[9px] font-black uppercase tracking-wide whitespace-nowrap"
+                                      title={collect.label}
+                                    >
+                                      <Banknote size={9} />
+                                      Collect {formatCurrency(collect.amount)}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           </div>
                         </td>
@@ -390,6 +453,65 @@ const ActiveTerminalTable = ({
                               </button>
                             )}
 
+                            {/* NEW (Switch to Delivery) — delivery row na
+                                hindi pa Ready: "For Delivery" chip, at
+                                (In Progress lang) rider assignment. */}
+                            {isDelivery && (booking.status === 'Pending' || booking.status === 'In Progress') && (
+                              <>
+                                <span
+                                  className="inline-flex items-center gap-1.5 px-3 py-2.5 bg-sky-50 text-sky-600 rounded-xl text-[10px] font-black uppercase tracking-tight border border-sky-100"
+                                  title="This order will be delivered to the customer"
+                                >
+                                  <Truck size={13} />
+                                  For Delivery
+                                </span>
+
+                                {booking.status === 'In Progress' && (
+                                  hasDeliveryRider ? (
+                                    <button
+                                      onClick={() => handleOpenDeliveryRiderModal(booking)}
+                                      className="flex items-center gap-1.5 px-3 py-2.5 bg-sky-50 text-sky-600 rounded-xl text-[10px] font-black uppercase tracking-tight border border-sky-100 hover:bg-sky-100 transition-all active:scale-90"
+                                      title="Tap to change rider"
+                                    >
+                                      <Bike size={13} />
+                                      {booking.delivery_rider_name}
+                                    </button>
+                                  ) : (
+                                    <button
+                                      onClick={() => handleOpenDeliveryRiderModal(booking)}
+                                      className="flex items-center gap-1.5 px-3 py-2.5 bg-sky-500 text-white rounded-xl transition-all shadow-sm shadow-sky-200 hover:bg-sky-600 active:scale-90 text-[10px] font-black uppercase tracking-tight"
+                                      title="Assign a rider for this delivery"
+                                    >
+                                      <Truck size={13} />
+                                      Assign Rider
+                                    </button>
+                                  )
+                                )}
+                              </>
+                            )}
+
+                            {/* NEW (Out for Delivery) — nasa daan na ang rider */}
+                            {booking.status === 'Out for Delivery' && (
+                              <>
+                                <button
+                                  onClick={() => handleOpenDeliveryRiderModal(booking)}
+                                  className="flex items-center gap-1.5 px-3 py-2.5 bg-sky-50 text-sky-600 rounded-xl text-[10px] font-black uppercase tracking-tight border border-sky-100 hover:bg-sky-100 transition-all active:scale-90"
+                                  title="Tap to change rider"
+                                >
+                                  <Bike size={13} />
+                                  {booking.delivery_rider_name || 'Rider'}
+                                </button>
+                                <button
+                                  onClick={() => handleStatusUpdate(booking.id, 'Claimed')}
+                                  className="flex items-center gap-1.5 px-3 py-2.5 bg-emerald-500 text-white rounded-xl transition-all shadow-sm shadow-emerald-200 hover:bg-emerald-600 active:scale-90 text-[10px] font-black uppercase tracking-tight"
+                                  title="Mark as delivered"
+                                >
+                                  <CheckCircle size={13} />
+                                  Mark Delivered
+                                </button>
+                              </>
+                            )}
+
                             {/* CASE 'Ready' — Release to Customer (drop-off /
                                 counter) vs rider assignment + Mark Delivered
                                 (delivery). UPDATED (Rider Assignment
@@ -420,12 +542,12 @@ const ActiveTerminalTable = ({
 
                                   {hasDeliveryRider && (
                                     <button
-                                      onClick={() => handleStatusUpdate(booking.id, 'Claimed')}
-                                      className="flex items-center gap-1.5 px-3 py-2.5 bg-emerald-500 text-white rounded-xl transition-all shadow-sm shadow-emerald-200 hover:bg-emerald-600 active:scale-90 text-[10px] font-black uppercase tracking-tight"
-                                      title="Mark as delivered / claimed"
+                                      onClick={() => handleStatusUpdate(booking.id, 'Out for Delivery')}
+                                      className="flex items-center gap-1.5 px-3 py-2.5 bg-sky-500 text-white rounded-xl transition-all shadow-sm shadow-sky-200 hover:bg-sky-600 active:scale-90 text-[10px] font-black uppercase tracking-tight"
+                                      title="Rider is leaving with the laundry"
                                     >
-                                      <CheckCircle size={13} />
-                                      Mark Delivered
+                                      <Navigation size={13} />
+                                      Out for Delivery
                                     </button>
                                   )}
                                 </>
