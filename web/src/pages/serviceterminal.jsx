@@ -9,6 +9,7 @@ import {
   LayoutDashboard,
   UserPlus,
   Smartphone,
+  Power,
 } from 'lucide-react';
 import apiService from '../services/APIservices';
 import AssignMachineModal from '../components/modals/assignmachinemodal';
@@ -50,6 +51,8 @@ import { useNotifications } from '../context/notificationcontext';
  * delivery ng customer (switched_to_delivery_at), may toast na agad
  * sa susunod na refresh. 15 segundo na ang polling ng bookings (dati
  * 30) at ang error ng backend sa status update ay ipinapakita na.
+ * Kapag ibinalik ng customer sa drop-off ang delivery booking, may toast
+ * din (nawawala ang rider at delivery fee sa order na iyon).
  * (Magiging instant ito kapag naikonekta sa WebSocket event na
  * 'booking_switched_to_delivery' na ipinapadala ng backend.)
  *
@@ -82,6 +85,11 @@ const bookingHasMachine = (booking) =>
   );
 
 const ServiceTerminal = () => {
+  // Heartbeat: nasa App.jsx na (ShopHeartbeat) — tumatakbo sa lahat ng page.
+
+  // Mabilis na toggle ng "Accepting bookings" (null = hindi pa na-load).
+  const [shopStatus, setShopStatus] = useState(null);
+  const [togglingAccepting, setTogglingAccepting] = useState(false);
   // --- TIER 1 NAVIGATION ---
   const [currentView, setCurrentView] = useState('active_terminal');
 
@@ -104,6 +112,10 @@ const ServiceTerminal = () => {
   // Mga booking id na alam nang "switched" — para ma-detect ang bago.
   // null = hindi pa nakakapag-load (huwag mag-toast sa unang load).
   const knownSwitchedRef = useRef(null);
+
+  // id -> fulfillment_mode noong huling load, para ma-detect ang pagbalik
+  // sa drop-off (null = hindi pa nakakapag-load).
+  const knownModesRef = useRef(null);
 
   // Status dropdown state — lives here because handleStatusSelect /
   // toggleStatusDropdown are parent handlers; the dropdown itself is
@@ -213,6 +225,22 @@ const ServiceTerminal = () => {
         }
       }
       knownSwitchedRef.current = switchedIds;
+
+      // Ibinalik ng customer sa drop-off ang dating delivery booking.
+      const modes = new Map((data || []).map((b) => [b.id, b.fulfillment_mode]));
+      if (knownModesRef.current !== null) {
+        const reverted = (data || []).filter(
+          (b) => b.fulfillment_mode === 'dropoff' && knownModesRef.current.get(b.id) === 'delivery'
+        );
+        if (reverted.length > 0) {
+          showNotification(
+            reverted.length === 1
+              ? `${reverted[0].customer_name || 'A customer'} changed to drop-off — they'll pick up at the shop.`
+              : `${reverted.length} bookings changed back to drop-off.`
+          );
+        }
+      }
+      knownModesRef.current = modes;
     } catch (err) {
       console.error('Terminal Sync Error:', err.message);
       setBookings([]);
@@ -237,6 +265,32 @@ const ServiceTerminal = () => {
     }
   }, []);
 
+  // ── Shop Status (Accepting bookings) ──────────────────────────────────
+  const loadShopStatus = useCallback(async () => {
+    try {
+      setShopStatus(await apiService.getShopStatus());
+    } catch (err) {
+      console.error('Shop status fetch error:', err.message);
+    }
+  }, []);
+
+  const handleToggleAccepting = async () => {
+    if (!shopStatus || togglingAccepting) return;
+    const next = !shopStatus.accepting_bookings;
+    try {
+      setTogglingAccepting(true);
+      setShopStatus(await apiService.updateShopStatus({ accepting_bookings: next }));
+      showNotification(
+        next ? 'Now accepting mobile bookings.' : 'Mobile bookings paused — customers can\'t book until you turn this back on.'
+      );
+    } catch (err) {
+      const detail = err.response?.data?.detail;
+      alert(typeof detail === 'string' ? detail : 'Failed to update. Please try again.');
+    } finally {
+      setTogglingAccepting(false);
+    }
+  };
+
   // ── Load Pending Payment Verification (Online Payment feature) ──────
   const loadPendingVerification = useCallback(async () => {
     try {
@@ -253,6 +307,7 @@ const ServiceTerminal = () => {
     loadAvailableMachines();
     loadServiceRequiredPhases();
     loadPendingVerification();
+    loadShopStatus();
     const bookingInterval = setInterval(() => loadBookings(true), 15000);
     const machineInterval = setInterval(() => loadAvailableMachines(), 15000);
     const paymentInterval = setInterval(() => loadPendingVerification(), 20000);
@@ -261,7 +316,7 @@ const ServiceTerminal = () => {
       clearInterval(machineInterval);
       clearInterval(paymentInterval);
     };
-  }, [loadBookings, loadAvailableMachines, loadServiceRequiredPhases, loadPendingVerification]);
+  }, [loadBookings, loadAvailableMachines, loadServiceRequiredPhases, loadPendingVerification, loadShopStatus]);
 
   // ── Tier 1 tab switch ──────────────────────────────────────────────────────
   const handleViewChange = (view) => {
@@ -533,6 +588,29 @@ const ServiceTerminal = () => {
               <RefreshCw size={18} />
             </button>
           </div>
+
+          {shopStatus && (
+            <button
+              type="button"
+              onClick={handleToggleAccepting}
+              disabled={togglingAccepting}
+              title={
+                shopStatus.is_open
+                  ? 'Customers can book. Click to pause new mobile bookings.'
+                  : shopStatus.accepting_bookings
+                    ? shopStatus.closed_reason || 'Shop is closed'
+                    : 'Bookings paused. Click to accept bookings again.'
+              }
+              className={`flex items-center gap-2 px-4 py-4 rounded-2xl border font-black text-xs uppercase tracking-tight shadow-sm transition-all active:scale-95 disabled:opacity-60 ${
+                shopStatus.accepting_bookings
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
+                  : 'bg-slate-100 border-slate-200 text-slate-500 hover:bg-slate-200'
+              }`}
+            >
+              <Power size={15} />
+              {shopStatus.accepting_bookings ? 'Accepting Bookings' : 'Bookings Paused'}
+            </button>
+          )}
 
           {pendingUnassignedCount > 0 && (
             <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-700 px-4 py-4 rounded-2xl font-black text-xs uppercase tracking-tight shadow-sm">

@@ -271,6 +271,36 @@ export const uploadPaymentQR = async (file, shopId, methodId = 'qr') => {
     return data.publicUrl;
 };
 
+// --- SHOP STATUS (Accepting bookings toggle, operating hours, heartbeat) ---
+
+export const getShopStatus = async () => {
+    try {
+        const response = await apiClient.get('/shop-status/');
+        return response.data;
+    } catch (error) {
+        console.error("Fetch Shop Status Error:", error.response?.data?.detail || error.message);
+        throw error;
+    }
+};
+
+// Tahimik ang error dito (heartbeat ito — hindi dapat mag-ingay ang console
+// o mag-toast kapag sandaling naputol ang network).
+export const sendShopHeartbeat = async () => {
+    const response = await apiClient.post('/shop-status/heartbeat');
+    return response.data;
+};
+
+// payload: { accepting_bookings?, opening_time?, closing_time? } ("HH:MM" | null)
+export const updateShopStatus = async (payload) => {
+    try {
+        const response = await apiClient.patch('/shop-status/', payload);
+        return response.data;
+    } catch (error) {
+        console.error("Update Shop Status Error:", error.response?.data?.detail || error.message);
+        throw error;
+    }
+};
+
 // --- FULLY BOOKED (BLOCKED) DATES ---
 
 export const getBlockedDates = async () => {
@@ -1170,6 +1200,12 @@ export const apiService = {
     getShopProfile,
     updateShopProfile,
     uploadPaymentQR,
+
+    // --- SHOP STATUS METHODS ---
+
+    getShopStatus,
+    sendShopHeartbeat,
+    updateShopStatus,
 
     // --- FULLY BOOKED DATES METHODS ---
 

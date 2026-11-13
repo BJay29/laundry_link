@@ -4,6 +4,7 @@ import apiService from '../services/APIservices';
 import LoadingScreen from '../components/ui/loadingscreen';
 import PaymentSettings from '../components/ui/paymentsettings';
 import BlockedDatesPanel from '../components/ui/blockeddatespanel';
+import ShopStatusPanel from '../components/ui/shopstatuspanel';
 
 
 const formatErrorDetail = (error, fallback = "Something went wrong.") => {
@@ -1312,6 +1313,9 @@ const OptimizationSettings = () => {
             </button>
           </div>
         </div>
+
+        {/* SECTION 3.4: SHOP STATUS (accepting toggle + operating hours) */}
+        <ShopStatusPanel onNotify={showToast} />
 
         {/* SECTION 3.5: FULLY BOOKED DATES */}
         <BlockedDatesPanel onNotify={showToast} />

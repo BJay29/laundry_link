@@ -8,6 +8,7 @@ import { AuthProvider, useAuth } from './context/authcontext';
 import Layout from './components/layout/layout';
 import LoadingScreen from './components/ui/loadingscreen';
 import { NotificationProvider } from './context/notificationcontext';
+import useShopHeartbeat from './hooks/useShopHeartbeat';
 
 // Page Components
 import Login from './pages/login';
@@ -71,6 +72,16 @@ function RoleRoute({ allowedRoles, children }) {
   return children;
 }
 
+/**
+ * ShopHeartbeat: walang nire-render — nagpapadala lang ng "buhay pa ang
+ * terminal" signal bawat 60s habang naka-login ang staff, sa ANUMANG page.
+ * Kaya hindi na kailangan ng heartbeat sa loob ng ServiceTerminal.
+ */
+function ShopHeartbeat() {
+  useShopHeartbeat();
+  return null;
+}
+
 function App() {
   return (
     <AuthProvider>
@@ -84,6 +95,7 @@ function App() {
             element={
               <ProtectedRoute>
                 <NotificationProvider>
+                  <ShopHeartbeat />
                   <Layout />
                 </NotificationProvider>
               </ProtectedRoute>
