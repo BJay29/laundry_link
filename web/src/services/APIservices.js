@@ -401,6 +401,8 @@ export const registerStaff = async (staffData) => {
             full_name: staffData.full_name,
             email: staffData.email,
             role: staffData.role || 'staff',
+            password: staffData.password,
+            mobile_number: staffData.mobile_number || null,
         };
         const response = await apiClient.post('/auth/register/staff', payload);
         return response.data;
@@ -409,6 +411,50 @@ export const registerStaff = async (staffData) => {
         throw error;
     }
 };
+
+export const getStaffList = async () => {
+    const response = await apiClient.get('/auth/staff');
+    return response.data;
+};
+
+export const deleteStaff = async (userId) => {
+    try {
+        const response = await apiClient.delete(`/auth/staff/${userId}`);
+        return response.data;
+    } catch (error) {
+        const detail = error.response?.data?.detail;
+        throw new Error(typeof detail === 'string' ? detail : 'Failed to delete account.');
+    }
+};
+
+// --- RIDER ACCOUNTS (NEW) ---
+
+/** Mga rider account ng shop — para sa dropdown sa Assign Rider modal. */
+export const getRiders = async () => {
+    const response = await apiClient.get('/auth/riders');
+    return response.data;
+};
+
+/** Para sa Rider page. scope: 'active' | 'done' */
+export const getRiderJobs = async (scope = 'active') => {
+    const response = await apiClient.get('/rider/jobs', { params: { scope } });
+    return response.data;
+};
+
+const riderAction = async (path, body) => {
+    try {
+        const response = await apiClient.post(path, body);
+        return response.data;
+    } catch (error) {
+        const detail = error.response?.data?.detail;
+        throw new Error(typeof detail === 'string' ? detail : 'Something went wrong. Please try again.');
+    }
+};
+
+export const riderMarkPickedUp = (bookingId) => riderAction(`/rider/jobs/${bookingId}/picked-up`);
+export const riderStartDelivery = (bookingId) => riderAction(`/rider/jobs/${bookingId}/start-delivery`);
+export const riderMarkDelivered = (bookingId, cashCollected = false) =>
+    riderAction(`/rider/jobs/${bookingId}/delivered`, { cash_collected: cashCollected });
 
 export const getActivityLogs = async (limit = 100) => {
     try {
@@ -562,6 +608,7 @@ export const finalizeBookingPricing = async (bookingId, pricingData) => {
 export const assignPickupRider = async (bookingId, riderData) => {
     try {
         const payload = {
+            rider_id: riderData.rider_id ?? null,
             rider_name: riderData.rider_name,
             rider_contact: riderData.rider_contact,
         };
@@ -582,6 +629,7 @@ export const assignPickupRider = async (bookingId, riderData) => {
 export const assignDeliveryRider = async (bookingId, riderData) => {
     try {
         const payload = {
+            rider_id: riderData.rider_id ?? null,
             rider_name: riderData.rider_name,
             rider_contact: riderData.rider_contact,
         };
@@ -770,6 +818,13 @@ export const apiService = {
     },
 
     registerStaff,
+    getStaffList,
+    getRiders,
+    getRiderJobs,
+    riderMarkPickedUp,
+    riderStartDelivery,
+    riderMarkDelivered,
+    deleteStaff,
 
     // Parang logout() pero HINDI nagre-redirect/nagre-reload ng page — ginagamit
     // pagkatapos ng signup/OTP para manatili ang Login form na may nakasulat na email.

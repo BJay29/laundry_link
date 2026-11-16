@@ -10,12 +10,14 @@ import {
   Eye,
   EyeOff,
   ShieldCheck,
-  Users
+  Users,
+  Trash2
 } from 'lucide-react';
 import ProfileSettings from '../components/ui/profilesettings';
 import SecuritySettings from '../components/ui/securitysettings';
 import LoadingScreen from '../components/ui/loadingscreen';
 import { apiService } from '../services/APIservices';
+import { sanitizePhoneInput, normalizePhMobile, PH_MOBILE_HINT, formatPhMobile } from '../utils/phone';
 
 /**
  * ACCOUNT SETTINGS PAGE
@@ -75,17 +77,17 @@ const Settings = () => {
   if (fetching) return <LoadingScreen message="Loading Account..." />;
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 bg-slate-50 min-h-screen font-sans">
+    <div className="p-8 bg-slate-50 min-h-screen font-sans">
       
       {/* PAGE HEADER */}
-      <div className="mb-6 sm:mb-10">
+      <div className="mb-10">
         <div className="flex items-center gap-3 mb-2">
           <div className="p-2.5 bg-slate-900 rounded-xl shadow-lg">
             <Store size={18} className="text-white" />
           </div>
           <h2 className="text-slate-900 font-black text-lg tracking-tight uppercase">Account Management</h2>
         </div>
-        <h1 className="text-4xl sm:text-6xl font-black text-slate-900 tracking-tighter italic uppercase">Account Settings</h1>
+        <h1 className="text-6xl font-black text-slate-900 tracking-tighter italic uppercase">Account Settings</h1>
       </div>
 
       {/* SHARED FEEDBACK ALERT — shown for profile, security, and staff actions */}
@@ -143,7 +145,7 @@ const Settings = () => {
         </div>
 
         {/* MAIN CONTENT PANEL */}
-        <div className="lg:col-span-3 bg-white p-5 sm:p-10 rounded-[32px] sm:rounded-[56px] border border-slate-100 shadow-sm">
+        <div className="lg:col-span-3 bg-white p-10 rounded-[56px] border border-slate-100 shadow-sm">
           
           {/* Tab header changes based on active tab */}
           {activeTab === 'profile' && (
@@ -153,7 +155,7 @@ const Settings = () => {
                   <Store size={24} />
                 </div>
                 <div>
-                  <h3 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">Shop Profile</h3>
+                  <h3 className="text-3xl font-black text-slate-900 tracking-tight">Shop Profile</h3>
                   <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">
                     Public identity and contact information
                   </p>
@@ -171,7 +173,7 @@ const Settings = () => {
                   <Shield size={24} />
                 </div>
                 <div>
-                  <h3 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">Security Credentials</h3>
+                  <h3 className="text-3xl font-black text-slate-900 tracking-tight">Security Credentials</h3>
                   <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">
                     Manage your access and system passwords
                   </p>
@@ -189,9 +191,9 @@ const Settings = () => {
                   <Users size={24} />
                 </div>
                 <div>
-                  <h3 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">Staff Management</h3>
+                  <h3 className="text-3xl font-black text-slate-900 tracking-tight">Staff Management</h3>
                   <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">
-                    Create login accounts for your staff and managers
+                    Create login accounts for your staff, managers and delivery riders
                   </p>
                 </div>
               </div>
@@ -221,11 +223,40 @@ function StaffManagement({ onStatusUpdate }) {
     full_name: '',
     email: '',
     password: '',
+    mobile_number: '',
     role: 'staff'
   });
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [createdStaff, setCreatedStaff] = useState([]);
+  const [team, setTeam] = useState([]);
+  const [loadingTeam, setLoadingTeam] = useState(true);
+  const [deletingId, setDeletingId] = useState(null);
+
+  const loadTeam = async () => {
+    try {
+      setTeam(await apiService.getStaffList());
+    } catch (e) {
+      onStatusUpdate('error', 'Failed to load team members.');
+    } finally {
+      setLoadingTeam(false);
+    }
+  };
+
+  useEffect(() => { loadTeam(); }, []);
+
+  const handleDelete = async (member) => {
+    if (!window.confirm(`Delete ${member.full_name || member.email}? They will no longer be able to log in.`)) return;
+    try {
+      setDeletingId(member.id);
+      await apiService.deleteStaff(member.id);
+      setTeam(prev => prev.filter(m => m.id !== member.id));
+      onStatusUpdate('success', 'Account deleted.');
+    } catch (error) {
+      onStatusUpdate('error', error.message || 'Failed to delete account.');
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -248,14 +279,24 @@ function StaffManagement({ onStatusUpdate }) {
       return;
     }
 
+    const isRider = formData.role === 'rider';
+    const normalizedMobile = normalizePhMobile(formData.mobile_number.trim());
+    if (isRider && !normalizedMobile) {
+      onStatusUpdate('error', PH_MOBILE_HINT);
+      return;
+    }
+
     try {
       setSubmitting(true);
-      const created = await apiService.registerStaff(formData);
+      const created = await apiService.registerStaff({
+        ...formData,
+        mobile_number: isRider ? normalizedMobile : null,
+      });
 
-      setCreatedStaff(prev => [created, ...prev]);
+      await loadTeam();
       onStatusUpdate('success', `Account created for ${formData.full_name}. They can now log in using this email and password.`);
 
-      setFormData({ full_name: '', email: '', password: '', role: 'staff' });
+      setFormData({ full_name: '', email: '', password: '', mobile_number: '', role: 'staff' });
     } catch (error) {
       const detail = error.response?.data?.detail || error.message || 'Failed to create staff account.';
       onStatusUpdate('error', typeof detail === 'string' ? detail : 'Failed to create staff account.');
@@ -291,9 +332,28 @@ function StaffManagement({ onStatusUpdate }) {
             >
               <option value="staff">Staff</option>
               <option value="manager">Manager</option>
+              <option value="rider">Delivery Rider</option>
             </select>
           </div>
         </div>
+
+        {formData.role === 'rider' && (
+          <div className="space-y-2">
+            <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest ml-2">Rider Contact Number</label>
+            <input
+              name="mobile_number"
+              value={formData.mobile_number}
+              onChange={(e) => setFormData(prev => ({ ...prev, mobile_number: sanitizePhoneInput(e.target.value) }))}
+              placeholder="09171234567"
+              inputMode="tel"
+              maxLength={17}
+              className="w-full bg-slate-50/50 border-2 border-slate-100 rounded-2xl px-6 py-4 font-bold text-slate-700 focus:ring-4 ring-sky-50 focus:border-sky-200 outline-none transition-all"
+            />
+            <p className="text-[10px] text-slate-400 font-medium ml-2">
+              Shown to customers and staff when this rider is assigned. Riders only see their own delivery page.
+            </p>
+          </div>
+        )}
 
         <div className="space-y-2">
           <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest ml-2">Email Address</label>
@@ -341,30 +401,45 @@ function StaffManagement({ onStatusUpdate }) {
         </button>
       </form>
 
-      {/* RECENTLY CREATED (this session only — not a full roster view) */}
-      {createdStaff.length > 0 && (
-        <div className="pt-8 border-t border-slate-100">
-          <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-4">
-            Created This Session
-          </h4>
+      {/* TEAM MEMBERS — galing sa database, hindi nawawala pag nag-refresh */}
+      <div className="pt-8 border-t border-slate-100">
+        <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-4">
+          Team Members ({team.length})
+        </h4>
+        {loadingTeam ? (
+          <p className="text-xs text-slate-400 font-bold">Loading...</p>
+        ) : team.length === 0 ? (
+          <p className="text-xs text-slate-400 font-bold">No staff, managers or riders yet.</p>
+        ) : (
           <div className="space-y-3">
-            {createdStaff.map((staff) => (
-              <div key={staff.id} className="flex items-center gap-4 px-6 py-4 bg-slate-50/50 rounded-2xl border border-slate-100">
+            {team.map((member) => (
+              <div key={member.id} className="flex items-center gap-4 px-6 py-4 bg-slate-50/50 rounded-2xl border border-slate-100">
                 <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl">
                   <ShieldCheck size={18} />
                 </div>
-                <div className="flex-1">
-                  <p className="font-black text-sm text-slate-800">{staff.full_name || staff.email}</p>
-                  <p className="text-xs text-slate-400 font-medium">{staff.email}</p>
+                <div className="flex-1 min-w-0">
+                  <p className="font-black text-sm text-slate-800 truncate">{member.full_name || member.email}</p>
+                  <p className="text-xs text-slate-400 font-medium truncate">
+                    {member.email}{member.mobile_number ? ` · ${formatPhMobile(member.mobile_number)}` : ''}
+                  </p>
                 </div>
                 <span className="text-[10px] font-black uppercase tracking-tight px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-500">
-                  {staff.role}
+                  {member.role === 'rider' ? 'Delivery Rider' : member.role}
                 </span>
+                <button
+                  type="button"
+                  onClick={() => handleDelete(member)}
+                  disabled={deletingId === member.id}
+                  title="Delete account"
+                  className="p-2.5 rounded-xl text-rose-400 hover:bg-rose-50 hover:text-rose-600 transition-colors disabled:opacity-50"
+                >
+                  {deletingId === member.id ? <Loader2 size={18} className="animate-spin" /> : <Trash2 size={18} />}
+                </button>
               </div>
             ))}
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

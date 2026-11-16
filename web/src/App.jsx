@@ -8,7 +8,6 @@ import { AuthProvider, useAuth } from './context/authcontext';
 import Layout from './components/layout/layout';
 import LoadingScreen from './components/ui/loadingscreen';
 import { NotificationProvider } from './context/notificationcontext';
-import useShopHeartbeat from './hooks/useShopHeartbeat';
 
 // Page Components
 import Login from './pages/login';
@@ -23,6 +22,7 @@ import CustomerHub from './pages/customerhub';
 import ActivityLogs from './pages/activitylogs';
 import RecordSales from './pages/recordsales';
 import Reviews from './pages/reviews';
+import RiderPage from './pages/riderpage';
 
 /**
  * Mga role na pinapayagang mag-verify ng online payments (Payment
@@ -73,13 +73,32 @@ function RoleRoute({ allowedRoles, children }) {
 }
 
 /**
- * ShopHeartbeat: walang nire-render — nagpapadala lang ng "buhay pa ang
- * terminal" signal bawat 60s habang naka-login ang staff, sa ANUMANG page.
- * Kaya hindi na kailangan ng heartbeat sa loob ng ServiceTerminal.
+ * StaffArea: gate para sa buong staff dashboard (Layout + lahat ng page).
+ * Ang RIDER ay awtomatikong dinadala sa /rider — wala siyang access sa
+ * dashboard. (UX guard lang; ang totoong harang ay nasa backend:
+ * security.get_current_user() ay 403 sa rider sa lahat ng ibang endpoint.)
  */
-function ShopHeartbeat() {
-  useShopHeartbeat();
-  return null;
+function StaffArea({ children }) {
+  const role = (localStorage.getItem('role') || '').toLowerCase();
+  if (role === 'rider') {
+    return <Navigate to="/rider" replace />;
+  }
+  return children;
+}
+
+/**
+ * RiderOnly: ang /rider page ay para sa role na "rider" lang.
+ */
+function RiderOnly({ children }) {
+  const { loading } = useAuth();
+  if (loading) {
+    return <LoadingScreen message="Loading..." />;
+  }
+  const role = (localStorage.getItem('role') || '').toLowerCase();
+  if (role !== 'rider') {
+    return <Navigate to="/dashboard" replace />;
+  }
+  return children;
 }
 
 function App() {
@@ -91,13 +110,26 @@ function App() {
           <Route path="/login" element={<Login />} />
 
           {/* 2. Protected/Private Routes */}
+          {/* NEW (Rider accounts) — sariling page ng rider, walang sidebar */}
+          <Route
+            path="/rider"
+            element={
+              <ProtectedRoute>
+                <RiderOnly>
+                  <RiderPage />
+                </RiderOnly>
+              </ProtectedRoute>
+            }
+          />
+
           <Route
             element={
               <ProtectedRoute>
-                <NotificationProvider>
-                  <ShopHeartbeat />
-                  <Layout />
-                </NotificationProvider>
+                <StaffArea>
+                  <NotificationProvider>
+                    <Layout />
+                  </NotificationProvider>
+                </StaffArea>
               </ProtectedRoute>
             }
           >

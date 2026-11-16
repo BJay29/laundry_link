@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Bike, User, Phone, Loader2, CheckCircle2, Truck, PackageCheck, Banknote, History } from 'lucide-react';
+import { X, Bike, User, Phone, Loader2, CheckCircle2, Truck, PackageCheck, Banknote, History, BadgeCheck } from 'lucide-react';
 import apiService from '../../services/APIservices';
 import DeliveryAddress from '../ui/deliveryaddress';
 import { formatCurrency } from '../../utils/formatters';
@@ -18,11 +18,13 @@ import {
  *   - mode="pickup"   -> PATCH /bookings/{id}/assign-pickup-rider
  *   - mode="delivery" -> PATCH /bookings/{id}/assign-delivery-rider
  *
- * Manual text-entry only (rider_name + rider_contact) — no rider
- * catalog, no rider accounts, matching the backend's RiderAssignmentInput
- * schema exactly. Both fields are required — the Confirm button stays
- * disabled until both are non-blank, mirroring the backend's own
- * "cannot be empty" validators so the person never sees a raw 422.
+ * UPDATED (Rider accounts): puwede nang pumili ng RIDER ACCOUNT mula sa
+ * listahan (GET /auth/riders) — nali-link ang booking sa account, kaya
+ * lumalabas ang job sa sarili niyang Rider page. Pangalan at contact ay
+ * kinukuha ng backend mula sa account. Nandiyan pa rin ang "Enter
+ * manually" para sa rider na walang account (pangalan + contact lang,
+ * gaya ng dati). Sa manual mode, kailangan pa rin ang dalawang field —
+ * disabled ang Confirm hanggang valid ang dalawa.
  *
  * Pre-fills the existing rider name/contact when the booking already
  * has one assigned for this leg — so re-assigning (e.g. rider changed)
@@ -84,11 +86,14 @@ const AssignRiderModal = ({ isOpen, booking, mode, onClose, onSuccess }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [recentRiders, setRecentRiders] = useState([]);
+  const [riders, setRiders] = useState([]);          // rider accounts
+  const [selectedRiderId, setSelectedRiderId] = useState(''); // '' = manual
 
   const isDelivery = mode === 'delivery';
 
   const existingName = isDelivery ? booking?.delivery_rider_name : booking?.pickup_rider_name;
   const existingContact = isDelivery ? booking?.delivery_rider_contact : booking?.pickup_rider_contact;
+  const existingRiderId = isDelivery ? booking?.delivery_rider_id : booking?.pickup_rider_id;
   const isReassign = Boolean(existingName);
 
   // Reset/pre-fill whenever a different booking or leg is opened.
@@ -100,6 +105,11 @@ const AssignRiderModal = ({ isOpen, booking, mode, onClose, onSuccess }) => {
       );
       setErrorMsg('');
       setRecentRiders(loadRecentRiders());
+      setSelectedRiderId(existingRiderId ? String(existingRiderId) : '');
+      apiService
+        .getRiders()
+        .then((list) => setRiders(Array.isArray(list) ? list : []))
+        .catch(() => setRiders([]));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, booking?.id, mode]);
@@ -110,7 +120,11 @@ const AssignRiderModal = ({ isOpen, booking, mode, onClose, onSuccess }) => {
   const trimmedContact = riderContact.trim();
   const normalizedContact = normalizePhMobile(trimmedContact);
   const contactInvalid = trimmedContact.length > 0 && !normalizedContact;
-  const canSubmit = trimmedName.length > 0 && Boolean(normalizedContact);
+  const useAccount = selectedRiderId !== '';
+  const selectedRider = riders.find((r) => String(r.id) === selectedRiderId);
+  const canSubmit = useAccount
+    ? Boolean(selectedRider)
+    : trimmedName.length > 0 && Boolean(normalizedContact);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -120,16 +134,23 @@ const AssignRiderModal = ({ isOpen, booking, mode, onClose, onSuccess }) => {
     setErrorMsg('');
 
     try {
-      const payload = { rider_name: trimmedName, rider_contact: normalizedContact };
+      const payload = useAccount
+        ? {
+            rider_id: selectedRider.id,
+            rider_name: selectedRider.full_name || selectedRider.email,
+            rider_contact: selectedRider.mobile_number || undefined,
+          }
+        : { rider_name: trimmedName, rider_contact: normalizedContact };
+      const finalName = useAccount ? (selectedRider.full_name || selectedRider.email) : trimmedName;
       const updated = isDelivery
         ? await apiService.assignDeliveryRider(booking.id, payload)
         : await apiService.assignPickupRider(booking.id, payload);
 
-      saveRecentRider(trimmedName, normalizedContact);
+      if (!useAccount) saveRecentRider(trimmedName, normalizedContact);
 
       const message = isDelivery
-        ? `${trimmedName} assigned for delivery to ${booking.customer_name}.`
-        : `${trimmedName} assigned to pick up ${booking.customer_name}'s laundry.`;
+        ? `${finalName} assigned for delivery to ${booking.customer_name}.`
+        : `${finalName} assigned to pick up ${booking.customer_name}'s laundry.`;
 
       if (onSuccess) onSuccess(message, updated);
     } catch (err) {
@@ -225,8 +246,35 @@ const AssignRiderModal = ({ isOpen, booking, mode, onClose, onSuccess }) => {
 
         {/* FORM */}
         <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
-          {/* Recent riders — isang tap para ma-fill */}
-          {recentRiders.length > 0 && (
+          {/* Rider accounts — pumili ng may account para makita nila ang job sa sarili nilang page */}
+          {riders.length > 0 && (
+            <div>
+              <label className="text-[10px] font-black text-slate-400 uppercase flex items-center gap-1.5 tracking-widest mb-1.5">
+                <BadgeCheck size={13} className={labelIconColor} /> Rider Account
+              </label>
+              <select
+                value={selectedRiderId}
+                onChange={(e) => setSelectedRiderId(e.target.value)}
+                className="w-full border rounded-xl px-4 py-2.5 text-sm font-bold outline-none cursor-pointer bg-slate-50/50 border-slate-200 text-slate-800 focus:ring-4 ring-sky-50 focus:border-sky-300"
+              >
+                <option value="">Enter manually (no account)</option>
+                {riders.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.full_name || r.email}
+                    {r.mobile_number ? ` · ${formatPhMobile(r.mobile_number)}` : ''}
+                  </option>
+                ))}
+              </select>
+              {useAccount && (
+                <p className="text-[11px] font-bold text-emerald-600 mt-1.5">
+                  This job will appear on the rider's own page.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Recent riders — isang tap para ma-fill (manual mode lang) */}
+          {!useAccount && recentRiders.length > 0 && (
             <div>
               <p className="text-[10px] font-black text-slate-400 uppercase flex items-center gap-1.5 tracking-widest mb-1.5">
                 <History size={13} className={labelIconColor} /> Recent Riders
@@ -257,6 +305,8 @@ const AssignRiderModal = ({ isOpen, booking, mode, onClose, onSuccess }) => {
             </div>
           )}
 
+          {!useAccount && (
+            <>
           <div>
             <label className="text-[10px] font-black text-slate-400 uppercase flex items-center gap-1.5 tracking-widest mb-1.5">
               <User size={13} className={labelIconColor} /> Rider Name
@@ -291,6 +341,9 @@ const AssignRiderModal = ({ isOpen, booking, mode, onClose, onSuccess }) => {
               <p className="text-[11px] font-bold text-rose-500 mt-1.5">{PH_MOBILE_HINT}</p>
             )}
           </div>
+
+            </>
+          )}
 
           {errorMsg && (
             <div className="flex items-start gap-2 text-rose-600 bg-rose-50 rounded-xl px-3 py-2.5">
