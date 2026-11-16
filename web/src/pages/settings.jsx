@@ -11,7 +11,8 @@ import {
   EyeOff,
   ShieldCheck,
   Users,
-  Trash2
+  Trash2,
+  X
 } from 'lucide-react';
 import ProfileSettings from '../components/ui/profilesettings';
 import SecuritySettings from '../components/ui/securitysettings';
@@ -231,6 +232,7 @@ function StaffManagement({ onStatusUpdate }) {
   const [team, setTeam] = useState([]);
   const [loadingTeam, setLoadingTeam] = useState(true);
   const [deletingId, setDeletingId] = useState(null);
+  const [memberToDelete, setMemberToDelete] = useState(null);
 
   const loadTeam = async () => {
     try {
@@ -244,14 +246,17 @@ function StaffManagement({ onStatusUpdate }) {
 
   useEffect(() => { loadTeam(); }, []);
 
-  const handleDelete = async (member) => {
-    if (!window.confirm(`Delete ${member.full_name || member.email}? They will no longer be able to log in.`)) return;
+  const handleDelete = async () => {
+    const member = memberToDelete;
+    if (!member) return;
     try {
       setDeletingId(member.id);
       await apiService.deleteStaff(member.id);
       setTeam(prev => prev.filter(m => m.id !== member.id));
-      onStatusUpdate('success', 'Account deleted.');
+      setMemberToDelete(null);
+      onStatusUpdate('success', `${member.full_name || member.email} was removed.`);
     } catch (error) {
+      setMemberToDelete(null);
       onStatusUpdate('error', error.message || 'Failed to delete account.');
     } finally {
       setDeletingId(null);
@@ -428,7 +433,7 @@ function StaffManagement({ onStatusUpdate }) {
                 </span>
                 <button
                   type="button"
-                  onClick={() => handleDelete(member)}
+                  onClick={() => setMemberToDelete(member)}
                   disabled={deletingId === member.id}
                   title="Delete account"
                   className="p-2.5 rounded-xl text-rose-400 hover:bg-rose-50 hover:text-rose-600 transition-colors disabled:opacity-50"
@@ -440,6 +445,66 @@ function StaffManagement({ onStatusUpdate }) {
           </div>
         )}
       </div>
+
+      {/* DELETE CONFIRMATION MODAL (kapalit ng browser confirm) */}
+      {memberToDelete && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4">
+          <div className="bg-white w-full max-w-md rounded-[32px] shadow-2xl border border-white/20 p-8">
+            <div className="flex items-start justify-between mb-5">
+              <div className="w-14 h-14 rounded-2xl bg-rose-50 text-rose-500 flex items-center justify-center">
+                <Trash2 size={26} />
+              </div>
+              <button
+                type="button"
+                onClick={() => setMemberToDelete(null)}
+                disabled={deletingId === memberToDelete.id}
+                className="text-slate-300 hover:text-slate-500 transition-colors"
+                aria-label="Close"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <h3 className="text-2xl font-black text-slate-900 tracking-tight">Delete this account?</h3>
+            <p className="text-sm font-bold text-slate-500 mt-2 leading-relaxed">
+              <span className="text-slate-800">{memberToDelete.full_name || memberToDelete.email}</span>
+              {' '}will be removed and will no longer be able to log in to LaundryLink. This cannot be undone.
+            </p>
+
+            <div className="mt-5 flex items-center gap-3 bg-slate-50 rounded-2xl px-4 py-3 border border-slate-100">
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-black text-slate-800 truncate">{memberToDelete.email}</p>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">
+                  {memberToDelete.role === 'rider' ? 'Delivery Rider' : memberToDelete.role}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-7">
+              <button
+                type="button"
+                onClick={() => setMemberToDelete(null)}
+                disabled={deletingId === memberToDelete.id}
+                className="flex-1 py-3.5 rounded-2xl border-2 border-slate-100 text-slate-500 font-black text-sm hover:bg-slate-50 transition-all active:scale-95 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={deletingId === memberToDelete.id}
+                className="flex-[1.4] py-3.5 rounded-2xl bg-rose-500 hover:bg-rose-600 text-white font-black text-sm shadow-lg shadow-rose-100 transition-all active:scale-95 disabled:opacity-60 flex items-center justify-center gap-2"
+              >
+                {deletingId === memberToDelete.id ? (
+                  <><Loader2 size={16} className="animate-spin" /> Deleting...</>
+                ) : (
+                  <><Trash2 size={16} /> Delete account</>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
