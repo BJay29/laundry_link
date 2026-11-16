@@ -22,6 +22,10 @@ export default function VerifyOtpModal({ isOpen, email, shopName, address, onClo
   const [resending, setResending] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  // Kapag verified na ang email pero pumalya ang paggawa ng shop (hal. may kaparehong shop name),
+  // hindi na ulit ive-verify ang OTP (nagamit na ito). Shop name na lang ang puwedeng baguhin at i-retry.
+  const [verified, setVerified] = useState(false);
+  const [shopNameInput, setShopNameInput] = useState(shopName || '');
   const [resendSecondsLeft, setResendSecondsLeft] = useState(RESEND_COOLDOWN_SECONDS);
   const timerRef = useRef(null);
 
@@ -45,6 +49,8 @@ export default function VerifyOtpModal({ isOpen, email, shopName, address, onClo
     if (isOpen) {
       setCode('');
       setErrorMessage('');
+      setVerified(false);
+      setShopNameInput(shopName || '');
       startResendCooldown();
     }
     return () => {
@@ -56,8 +62,12 @@ export default function VerifyOtpModal({ isOpen, email, shopName, address, onClo
 
   const handleVerify = async (e) => {
     e.preventDefault();
-    if (code.trim().length < 6) {
+    if (!verified && code.trim().length < 6) {
       setErrorMessage('Enter the code sent to your email.');
+      return;
+    }
+    if (verified && !shopNameInput.trim()) {
+      setErrorMessage('Enter your shop name.');
       return;
     }
 
@@ -65,7 +75,10 @@ export default function VerifyOtpModal({ isOpen, email, shopName, address, onClo
     setErrorMessage('');
 
     try {
-      await authService.verifyOtp({ email, code: code.trim() });
+      if (!verified) {
+        await authService.verifyOtp({ email, code: code.trim() });
+        setVerified(true);
+      }
 
       // Matapos ma-verify, may session na tayo sa Supabase side.
       // Kailangan pa nating tawagin ang register-shop endpoint dito
@@ -73,7 +86,7 @@ export default function VerifyOtpModal({ isOpen, email, shopName, address, onClo
       // para malikha ang Shop entity at ma-link sa User.
       setVerifying(false);
       setSyncing(true);
-      await authService.registerShop({ shopName, address });
+      await authService.registerShop({ shopName: shopNameInput.trim() || shopName, address });
 
       setSyncing(false);
       onVerified();
@@ -121,9 +134,15 @@ export default function VerifyOtpModal({ isOpen, email, shopName, address, onClo
           </div>
         </div>
 
-        <h2 className="text-xl font-bold text-slate-800 text-center mb-1">Verify your email</h2>
+        <h2 className="text-xl font-bold text-slate-800 text-center mb-1">
+          {verified ? 'Email verified' : 'Verify your email'}
+        </h2>
         <p className="text-sm text-slate-500 text-center mb-6">
-          We sent a code to<br /><span className="font-medium text-slate-700">{email}</span>
+          {verified ? (
+            'Your email is verified. Choose a shop name to finish setting up your shop.'
+          ) : (
+            <>We sent a code to<br /><span className="font-medium text-slate-700">{email}</span></>
+          )}
         </p>
 
         {errorMessage && (
@@ -133,26 +152,38 @@ export default function VerifyOtpModal({ isOpen, email, shopName, address, onClo
         )}
 
         <form onSubmit={handleVerify} className="space-y-4">
-          <input
-            type="text"
-            inputMode="numeric"
-            maxLength={8}
-            autoFocus
-            className="w-full text-center text-2xl font-bold tracking-[0.5em] bg-slate-50 border border-slate-300 rounded-lg py-3 px-4 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all text-slate-700 placeholder:text-slate-300"
-            placeholder="------"
-            value={code}
-            onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
-          />
+          {verified ? (
+            <input
+              type="text"
+              autoFocus
+              className="w-full bg-slate-50 border border-slate-300 rounded-lg py-3 px-4 text-[15px] focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all text-slate-700 placeholder:text-slate-300"
+              placeholder="Shop name"
+              value={shopNameInput}
+              onChange={(e) => setShopNameInput(e.target.value)}
+            />
+          ) : (
+            <input
+              type="text"
+              inputMode="numeric"
+              maxLength={8}
+              autoFocus
+              className="w-full text-center text-2xl font-bold tracking-[0.5em] bg-slate-50 border border-slate-300 rounded-lg py-3 px-4 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all text-slate-700 placeholder:text-slate-300"
+              placeholder="------"
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+            />
+          )}
 
           <button
             type="submit"
             disabled={busy}
             className={`w-full bg-sky-500 hover:bg-sky-600 text-white py-3 rounded-lg font-bold text-[15px] transition-all active:scale-[0.98] ${busy ? 'opacity-70 cursor-not-allowed' : ''}`}
           >
-            {syncing ? 'Setting up your shop...' : verifying ? 'Verifying...' : 'Verify account'}
+            {syncing ? 'Setting up your shop...' : verifying ? 'Verifying...' : verified ? 'Create shop' : 'Verify account'}
           </button>
         </form>
 
+        {!verified && (
         <div className="text-center mt-5">
           <span className="text-sm text-slate-500">Didn't receive a code? </span>
           <button
@@ -164,6 +195,7 @@ export default function VerifyOtpModal({ isOpen, email, shopName, address, onClo
             {resending ? 'Sending...' : resendSecondsLeft > 0 ? `Resend in ${resendSecondsLeft}s` : 'Resend'}
           </button>
         </div>
+        )}
       </div>
     </div>
   );

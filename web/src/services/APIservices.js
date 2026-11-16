@@ -754,10 +754,18 @@ export const apiService = {
     cancelPasswordRecovery,
 
     registerShop: async ({ shopName, address }) => {
-        await apiClient.post('/auth/register-shop', {
-            shop_name: shopName,
-            address,
-        });
+        try {
+            await apiClient.post('/auth/register-shop', {
+                shop_name: shopName,
+                address,
+            });
+        } catch (error) {
+            // Ipakita ang malinaw na mensahe galing sa backend (hal. "Shop name already taken")
+            const detail = error.response?.data?.detail;
+            throw new Error(
+                typeof detail === 'string' ? detail : 'Unable to create your shop. Please try again.'
+            );
+        }
         return await cacheProfile();
     },
 
