@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { QrCode, Upload, ImageOff, Loader2, Save, AlertTriangle, X } from 'lucide-react';
 import apiService from '../../services/APIservices';
+import { cropQrFromFile } from '../../utils/qrcrop';
 
 export const PAYMENT_CHANNELS = ['GCash', 'Maya', 'Bank Transfer', 'Others'];
 
 const ALLOWED_EXTENSIONS = ['jpg', 'jpeg', 'png'];
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png'];
 const MAX_FILE_BYTES = 2 * 1024 * 1024; // 2MB
-const SQUARE_TOLERANCE = 0.05; // 5% na pagkakaiba ng width/height
 
 const cleanNumber = (value) => (value || '').replace(/[\s-]+/g, '');
 
@@ -65,6 +65,8 @@ const PaymentSettings = ({ initial, shopId, onSaved, onNotify }) => {
   const [pendingPreview, setPendingPreview] = useState('');
   const [fileError, setFileError] = useState('');
   const [aspectWarning, setAspectWarning] = useState('');
+  const [cropNote, setCropNote] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
   const [previewFailed, setPreviewFailed] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
 
@@ -97,11 +99,12 @@ const PaymentSettings = ({ initial, shopId, onSaved, onNotify }) => {
     setPendingFile(null);
     setPendingPreview('');
     setAspectWarning('');
+    setCropNote('');
     setFileError('');
     setPreviewFailed(false);
   }, []);
 
-  const handleFile = useCallback((file) => {
+  const handleFile = useCallback(async (file) => {
     if (!file) return;
 
     const problem = validateQRFile(file);
@@ -110,23 +113,26 @@ const PaymentSettings = ({ initial, shopId, onSaved, onNotify }) => {
       return;
     }
 
-    const url = URL.createObjectURL(file);
-    const probe = new Image();
-    probe.onload = () => {
-      const ratioGap = Math.abs(probe.width - probe.height) / Math.max(probe.width, probe.height);
-      setAspectWarning(
-        ratioGap > SQUARE_TOLERANCE
-          ? `This image is ${probe.width}×${probe.height}px — not a square. It will be shown fully inside a square box, but a square screenshot with a white border around the QR scans best.`
-          : ''
-      );
-    };
-    probe.onerror = () => setAspectWarning('');
-    probe.src = url;
-
     setFileError('');
+    setAspectWarning('');
+    setCropNote('');
+    setIsProcessing(true);
+
+    // AUTO-CROP: hanapin ang QR code sa larawan at gupitin para QR lang ang matira.
+    const { file: processed, cropped } = await cropQrFromFile(file);
+    setIsProcessing(false);
+
+    if (cropped) {
+      setCropNote('QR code detected — the image was cropped automatically so only the QR code is used.');
+    } else {
+      setAspectWarning(
+        "We couldn't detect a QR code in this image, so it was used as is. Please upload a clear, well-lit image that shows the whole QR code."
+      );
+    }
+
     setPreviewFailed(false);
-    setPendingFile(file);
-    setPendingPreview(url);
+    setPendingFile(processed);
+    setPendingPreview(URL.createObjectURL(processed));
     setErrors((prev) => ({ ...prev, qr: undefined }));
   }, []);
 
@@ -259,11 +265,11 @@ const PaymentSettings = ({ initial, shopId, onSaved, onNotify }) => {
             <button
               type="button"
               onClick={() => inputRef.current?.click()}
-              disabled={isSaving}
+              disabled={isSaving || isProcessing}
               className="flex items-center gap-2 px-5 py-3 rounded-2xl font-black text-[11px] text-white bg-sky-600 hover:bg-sky-500 shadow-lg shadow-sky-100 transition-all active:scale-95 disabled:opacity-60"
             >
-              <Upload size={14} />
-              {displayUrl ? 'Replace QR Code' : 'Upload QR Code'}
+              {isProcessing ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+              {isProcessing ? 'Detecting QR…' : displayUrl ? 'Replace QR Code' : 'Upload QR Code'}
             </button>
             {pendingFile && (
               <button
@@ -283,6 +289,12 @@ const PaymentSettings = ({ initial, shopId, onSaved, onNotify }) => {
             <div className="flex items-start gap-2 bg-rose-50 border border-rose-100 rounded-xl px-3 py-2.5 w-full">
               <AlertTriangle size={14} className="text-rose-500 shrink-0 mt-0.5" />
               <p className="text-[11px] font-bold text-rose-600">{fileError}</p>
+            </div>
+          )}
+          {cropNote && !fileError && (
+            <div className="flex items-start gap-2 bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2.5 w-full">
+              <QrCode size={14} className="text-emerald-600 shrink-0 mt-0.5" />
+              <p className="text-[11px] font-bold text-emerald-700">{cropNote}</p>
             </div>
           )}
           {aspectWarning && !fileError && (

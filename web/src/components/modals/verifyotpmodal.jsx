@@ -2,7 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { X, Mail } from 'lucide-react';
 import authService from '../../services/APIservices';
 
-const RESEND_COOLDOWN_SECONDS = 60;
+const RESEND_COOLDOWN_SECONDS = 90; // 1 minuto at 30 segundo
+
+// 90 → "1:30", 5 → "0:05"
+const formatCooldown = (total) =>
+  `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
 
 /// Modal para sa OTP verification, ipinapakita pagkatapos ng
 /// successful signUp() sa Login page. Parehong logic ng ginawa nating
@@ -192,7 +196,7 @@ export default function VerifyOtpModal({ isOpen, email, shopName, address, onClo
             disabled={resending || busy || resendSecondsLeft > 0}
             className="text-sm text-sky-500 font-semibold hover:underline disabled:text-slate-400 disabled:no-underline disabled:cursor-not-allowed"
           >
-            {resending ? 'Sending...' : resendSecondsLeft > 0 ? `Resend in ${resendSecondsLeft}s` : 'Resend'}
+            {resending ? 'Sending...' : resendSecondsLeft > 0 ? `Resend in ${formatCooldown(resendSecondsLeft)}` : 'Resend'}
           </button>
         </div>
         )}

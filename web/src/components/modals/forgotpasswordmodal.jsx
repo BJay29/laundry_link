@@ -23,7 +23,11 @@ import {
  * out natin ang session para hindi maiwang naka-login ang user nang
  * hindi nagse-set ng password.
  */
-const RESEND_COOLDOWN_SECONDS = 60;
+const RESEND_COOLDOWN_SECONDS = 90; // 1 minuto at 30 segundo
+
+// 90 → "1:30", 5 → "0:05"
+const formatCooldown = (total) =>
+  `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
 
 const INPUT_CLASS =
   'w-full bg-slate-50/60 border-2 border-slate-200 rounded-2xl py-3.5 pl-11 pr-4 text-[15px] focus:outline-none focus:ring-4 focus:ring-sky-500/10 focus:border-sky-400 focus:bg-white transition-all text-slate-700 placeholder:text-slate-400 shadow-sm';
@@ -299,7 +303,7 @@ const ForgotPasswordModal = ({ isOpen, initialEmail = '', onClose, onDone }) => 
                   onClick={(e) => handleSendCode(e, true)}
                   className="text-sky-500 font-semibold hover:underline disabled:text-slate-300 disabled:no-underline disabled:cursor-not-allowed"
                 >
-                  {resendSecondsLeft > 0 ? `Resend in ${resendSecondsLeft}s` : 'Resend'}
+                  {resendSecondsLeft > 0 ? `Resend in ${formatCooldown(resendSecondsLeft)}` : 'Resend'}
                 </button>
               </div>
             </form>
