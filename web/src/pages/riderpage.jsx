@@ -31,6 +31,7 @@ import { formatCurrency } from '../utils/formatters';
 import { formatPhMobile } from '../utils/phone';
 import useMediaQuery from '../hooks/useMediaQuery';
 import laundryLinkLogo from '../assets/Untitled design.png';
+import LogoutModal from '../components/ui/logoutmodal';
 
 /**
  * RIDER PAGE (Rider accounts) — web layout
@@ -596,6 +597,7 @@ const RiderPage = () => {
   const [actionError, setActionError] = useState('');
   const [toast, setToast] = useState({ type: '', text: '' });
   const [now, setNow] = useState(new Date());
+  const [showLogout, setShowLogout] = useState(false);
 
   const riderName = apiService.getFullName?.() || localStorage.getItem('user_email') || 'Rider';
   const shopName = localStorage.getItem('shop_name') || 'LaundryLink';
@@ -844,7 +846,7 @@ const RiderPage = () => {
           </div>
           <button
             type="button"
-            onClick={() => apiService.logout()}
+            onClick={() => setShowLogout(true)}
             className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-black text-rose-400 hover:bg-rose-500/10 transition-all"
           >
             <LogOut size={18} /> Logout
@@ -893,7 +895,7 @@ const RiderPage = () => {
             </button>
             <button
               type="button"
-              onClick={() => apiService.logout()}
+              onClick={() => setShowLogout(true)}
               className="lg:hidden p-2.5 rounded-xl text-rose-400 hover:bg-rose-50 active:scale-95 transition-all"
               aria-label="Log out"
             >
@@ -971,6 +973,8 @@ const RiderPage = () => {
           </div>
         </div>
       )}
+
+      <LogoutModal isOpen={showLogout} onClose={() => setShowLogout(false)} />
 
       <ConfirmDialog
         key={pendingJob ? `${pendingJob.booking_id}-${pendingJob.action}` : 'none'}

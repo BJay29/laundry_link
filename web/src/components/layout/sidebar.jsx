@@ -5,8 +5,8 @@ import {
   Star
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import apiService from '../../services/APIservices';
 import laundryLinkLogo from '../../assets/Untitled design.png';
+import LogoutModal from '../ui/logoutmodal';
 
 /**
  * SIDEBAR COMPONENT (Collapsible & Dark Theme with Categories - Distinct Spacing)
@@ -18,6 +18,9 @@ import laundryLinkLogo from '../../assets/Untitled design.png';
  * /optimization-settings — ngayon ay /settings na (ang tunay na
  * Account Settings page). Naka-highlight din ito kapag nasa /settings.
  *
+ * UPDATED (Logout): may confirmation modal na ang Logout, at tunay na
+ * nagsa-sign out na (dati, /login lang ang pinupuntahan kaya buhay pa ang session).
+ *
  * UPDATED (Rating after order): dagdag na "Reviews" link (/reviews)
  * sa ilalim ng Operations, para makita ng may-ari ang mga rating at
  * komento ng customers.
@@ -25,6 +28,7 @@ import laundryLinkLogo from '../../assets/Untitled design.png';
 const Sidebar = ({ isCollapsed, setIsCollapsed }) => {
   const location = useLocation();
   const navigate = useNavigate();
+  const [showLogout, setShowLogout] = useState(false);
 
   const isAccountSettingsActive = location.pathname === '/settings';
 
@@ -162,7 +166,7 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }) => {
           </button>
           
           <button 
-            onClick={() => apiService.logout()}
+            onClick={() => setShowLogout(true)}
             title="Logout"
             className={`w-full flex items-center rounded-xl text-xs font-bold text-rose-400 hover:bg-rose-500/10 transition ${
               isCollapsed ? 'justify-center p-2' : 'gap-3 px-3 py-2'
@@ -185,6 +189,7 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }) => {
         </div>
 
       </div>
+      <LogoutModal isOpen={showLogout} onClose={() => setShowLogout(false)} />
     </aside>
   );
 };
