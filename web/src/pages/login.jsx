@@ -101,9 +101,20 @@ const Login = () => {
         shopName={pendingSignup?.shopName}
         address={pendingSignup?.address}
         onClose={closeOtpModal}
-        onVerified={() => {
+        onVerified={async () => {
+          // Pagkatapos ng OTP at paggawa ng shop, hindi diretso sa dashboard:
+          // i-sign out muna ang session, tapos ibalik sa Login form na nakasulat
+          // na ang verified na email — password na lang ang ilalagay.
+          const verifiedEmail = pendingSignup?.email || '';
           setPendingSignup(null);
-          navigate('/dashboard');
+          try {
+            await authService.signOutSilently();
+          } catch (_) {
+            // Ituloy pa rin kahit pumalya ang sign-out.
+          }
+          setPrefilledEmail(verifiedEmail);
+          setResetNotice('Email verified and shop created. Please log in to continue.');
+          setMode('login');
         }}
       />
 
@@ -217,6 +228,7 @@ function LoginForm({ onSwitch, navigate, onForgotPassword, notice, prefilledEmai
             required
             className="w-full bg-slate-50/60 border border-slate-200 rounded-xl py-3.5 pl-11 pr-11 text-[15px] focus:outline-none focus:ring-4 focus:ring-sky-500/10 focus:border-sky-400 focus:bg-white transition-all text-slate-700 placeholder:text-slate-400"
             placeholder="Password"
+            autoFocus={Boolean(prefilledEmail)}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />

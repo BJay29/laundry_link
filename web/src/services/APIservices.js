@@ -771,6 +771,13 @@ export const apiService = {
 
     registerStaff,
 
+    // Parang logout() pero HINDI nagre-redirect/nagre-reload ng page — ginagamit
+    // pagkatapos ng signup/OTP para manatili ang Login form na may nakasulat na email.
+    signOutSilently: async () => {
+        await supabase.auth.signOut();
+        localStorage.clear();
+    },
+
     logout: async () => {
         await supabase.auth.signOut();
         localStorage.clear();
