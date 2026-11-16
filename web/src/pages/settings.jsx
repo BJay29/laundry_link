@@ -75,17 +75,17 @@ const Settings = () => {
   if (fetching) return <LoadingScreen message="Loading Account..." />;
 
   return (
-    <div className="p-8 bg-slate-50 min-h-screen font-sans">
+    <div className="p-4 sm:p-6 lg:p-8 bg-slate-50 min-h-screen font-sans">
       
       {/* PAGE HEADER */}
-      <div className="mb-10">
+      <div className="mb-6 sm:mb-10">
         <div className="flex items-center gap-3 mb-2">
           <div className="p-2.5 bg-slate-900 rounded-xl shadow-lg">
             <Store size={18} className="text-white" />
           </div>
           <h2 className="text-slate-900 font-black text-lg tracking-tight uppercase">Account Management</h2>
         </div>
-        <h1 className="text-6xl font-black text-slate-900 tracking-tighter italic uppercase">Account Settings</h1>
+        <h1 className="text-4xl sm:text-6xl font-black text-slate-900 tracking-tighter italic uppercase">Account Settings</h1>
       </div>
 
       {/* SHARED FEEDBACK ALERT — shown for profile, security, and staff actions */}
@@ -143,7 +143,7 @@ const Settings = () => {
         </div>
 
         {/* MAIN CONTENT PANEL */}
-        <div className="lg:col-span-3 bg-white p-10 rounded-[56px] border border-slate-100 shadow-sm">
+        <div className="lg:col-span-3 bg-white p-5 sm:p-10 rounded-[32px] sm:rounded-[56px] border border-slate-100 shadow-sm">
           
           {/* Tab header changes based on active tab */}
           {activeTab === 'profile' && (
@@ -153,7 +153,7 @@ const Settings = () => {
                   <Store size={24} />
                 </div>
                 <div>
-                  <h3 className="text-3xl font-black text-slate-900 tracking-tight">Shop Profile</h3>
+                  <h3 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">Shop Profile</h3>
                   <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">
                     Public identity and contact information
                   </p>
@@ -171,7 +171,7 @@ const Settings = () => {
                   <Shield size={24} />
                 </div>
                 <div>
-                  <h3 className="text-3xl font-black text-slate-900 tracking-tight">Security Credentials</h3>
+                  <h3 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">Security Credentials</h3>
                   <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">
                     Manage your access and system passwords
                   </p>
@@ -189,7 +189,7 @@ const Settings = () => {
                   <Users size={24} />
                 </div>
                 <div>
-                  <h3 className="text-3xl font-black text-slate-900 tracking-tight">Staff Management</h3>
+                  <h3 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">Staff Management</h3>
                   <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">
                     Create login accounts for your staff and managers
                   </p>

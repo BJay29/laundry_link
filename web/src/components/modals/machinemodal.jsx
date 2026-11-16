@@ -107,7 +107,7 @@ const MachineModal = ({ isOpen, onClose, onRefresh, existingMachines = [] }) => 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-      <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+      <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl max-h-[92vh] overflow-y-auto animate-in fade-in zoom-in duration-200">
 
         {/* Modal Header */}
         <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
@@ -130,7 +130,7 @@ const MachineModal = ({ isOpen, onClose, onRefresh, existingMachines = [] }) => 
         </div>
 
         {/* Form Body */}
-        <form onSubmit={handleSubmit} className="p-8">
+        <form onSubmit={handleSubmit} className="p-5 sm:p-8">
           {error && (
             <div className="mb-6 p-4 bg-rose-50 border border-rose-100 rounded-xl flex items-center gap-3 text-rose-600 text-sm font-bold">
               <AlertCircle size={18} />

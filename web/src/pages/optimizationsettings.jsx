@@ -84,7 +84,7 @@ const TOAST_STYLES = {
 
 const ToastStack = ({ toasts, onDismiss }) => {
   return (
-    <div className="fixed top-6 right-6 z-[100] flex flex-col gap-3 w-[340px] max-w-[90vw] pointer-events-none">
+    <div className="fixed top-4 right-4 sm:top-6 sm:right-6 z-[100] flex flex-col gap-3 w-[340px] max-w-[90vw] pointer-events-none">
       {toasts.map((toast) => {
         const style = TOAST_STYLES[toast.type] || TOAST_STYLES.info;
         const Icon = style.icon;
@@ -895,7 +895,7 @@ const OptimizationSettings = () => {
   if (isLoading) return <LoadingScreen message="Loading Settings..." />;
 
   return (
-    <div className="p-8 bg-slate-50 min-h-screen custom-scrollbar">
+    <div className="p-4 sm:p-6 lg:p-8 bg-slate-50 min-h-screen custom-scrollbar">
       <ToastStack toasts={toasts} onDismiss={dismissToast} />
 
       <ConfirmDeleteModal
@@ -940,7 +940,7 @@ const OptimizationSettings = () => {
       <div className="space-y-8 max-w-7xl">
 
         {/* SECTION 1: SERVICE CATALOG */}
-        <div className="bg-white p-10 rounded-[48px] border-2 border-slate-100 shadow-xl shadow-slate-200/50">
+        <div className="bg-white p-5 sm:p-10 rounded-[32px] sm:rounded-[48px] border-2 border-slate-100 shadow-xl shadow-slate-200/50">
           <div className="flex items-center gap-3 mb-2">
             <div className="p-3 bg-sky-50 text-sky-600 rounded-2xl">
               <Banknote size={24} />
@@ -1195,7 +1195,7 @@ const OptimizationSettings = () => {
         </div>
 
         {/* SECTION 2: PAYMENT METHODS */}
-        <div className="bg-white p-10 rounded-[48px] border-2 border-slate-100 shadow-xl shadow-slate-200/50">
+        <div className="bg-white p-5 sm:p-10 rounded-[32px] sm:rounded-[48px] border-2 border-slate-100 shadow-xl shadow-slate-200/50">
           <div className="flex items-center gap-3 mb-2">
             <div className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl">
               <Wallet size={24} />
@@ -1262,7 +1262,7 @@ const OptimizationSettings = () => {
         </div>
 
         {/* SECTION 3: DELIVERY SETTINGS */}
-        <div className="bg-white p-10 rounded-[48px] border-2 border-slate-100 shadow-xl shadow-slate-200/50">
+        <div className="bg-white p-5 sm:p-10 rounded-[32px] sm:rounded-[48px] border-2 border-slate-100 shadow-xl shadow-slate-200/50">
           <div className="flex items-center gap-3 mb-2">
             <div className="p-3 bg-orange-50 text-orange-600 rounded-2xl">
               <Truck size={24} />
@@ -1321,7 +1321,7 @@ const OptimizationSettings = () => {
         <BlockedDatesPanel onNotify={showToast} />
 
         {/* SECTION 4: ADD-ONS */}
-        <div className="bg-white p-10 rounded-[48px] border-2 border-slate-100 shadow-xl shadow-slate-200/50">
+        <div className="bg-white p-5 sm:p-10 rounded-[32px] sm:rounded-[48px] border-2 border-slate-100 shadow-xl shadow-slate-200/50">
           <div className="flex items-center gap-3 mb-2">
             <div className="p-3 bg-violet-50 text-violet-600 rounded-2xl">
               <Plus size={24} />
@@ -1458,7 +1458,7 @@ const OptimizationSettings = () => {
         </div>
 
         {/* SECTION 5: PROMO CODES */}
-        <div className="bg-white p-10 rounded-[48px] border-2 border-slate-100 shadow-xl shadow-slate-200/50">
+        <div className="bg-white p-5 sm:p-10 rounded-[32px] sm:rounded-[48px] border-2 border-slate-100 shadow-xl shadow-slate-200/50">
           <div className="flex items-center gap-3 mb-2">
             <div className="p-3 bg-rose-50 text-rose-600 rounded-2xl">
               <Ticket size={24} />
@@ -1562,7 +1562,7 @@ const OptimizationSettings = () => {
         </div>
 
         {/* SECTION 6: BOOKING RULES */}
-        <div className="bg-white p-10 rounded-[48px] border-2 border-slate-100 shadow-xl shadow-slate-200/50">
+        <div className="bg-white p-5 sm:p-10 rounded-[32px] sm:rounded-[48px] border-2 border-slate-100 shadow-xl shadow-slate-200/50">
           <div className="flex items-center gap-3 mb-8">
             <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl">
               <Weight size={24} />
@@ -1582,7 +1582,7 @@ const OptimizationSettings = () => {
         </div>
 
         {/* SECTION 7: UTILITY CALIBRATION */}
-        <div className="bg-white p-10 rounded-[48px] border-2 border-slate-100 shadow-xl shadow-slate-200/50 relative overflow-hidden">
+        <div className="bg-white p-5 sm:p-10 rounded-[32px] sm:rounded-[48px] border-2 border-slate-100 shadow-xl shadow-slate-200/50 relative overflow-hidden">
           <div className="absolute top-0 right-0 p-8">
             <div className="bg-emerald-50 text-emerald-600 p-3 rounded-2xl" title="Calibration: CASURECO II & MNWD Rates">
               <Info size={20} />
@@ -1629,7 +1629,7 @@ const OptimizationSettings = () => {
         </div>
 
         {/* SECTION 8: SCHEDULING */}
-        <div className="bg-white p-10 rounded-[48px] border-2 border-slate-100 shadow-xl shadow-slate-200/50">
+        <div className="bg-white p-5 sm:p-10 rounded-[32px] sm:rounded-[48px] border-2 border-slate-100 shadow-xl shadow-slate-200/50">
           <div className="flex items-center gap-3 mb-8">
             <div className="p-3 bg-amber-50 text-amber-600 rounded-2xl">
               <Clock size={24} />

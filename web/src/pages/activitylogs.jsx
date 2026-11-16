@@ -153,7 +153,7 @@ const ActivityLogs = () => {
     <div className="min-h-screen bg-gray-50 pb-12">
       {/* ── Page Header ── */}
       <div className="bg-white border-b border-gray-100">
-        <div className="max-w-6xl mx-auto px-8 py-8">
+        <div className="max-w-6xl mx-auto px-4 sm:px-8 py-6 sm:py-8">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-widest text-emerald-500 mb-1">
@@ -178,7 +178,7 @@ const ActivityLogs = () => {
       </div>
 
       {/* ── Main Content ── */}
-      <div className="max-w-6xl mx-auto px-8 pt-8">
+      <div className="max-w-6xl mx-auto px-4 sm:px-8 pt-6 sm:pt-8">
 
         {/* Error Alert */}
         {error && (
@@ -326,7 +326,7 @@ const ActivityLogs = () => {
         {/* ── Activity Feed ── */}
         {!loading && filteredLogs.length > 0 && (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="px-6 py-3.5 border-b border-gray-100 bg-gray-50/60 flex items-center justify-between">
+            <div className="px-4 sm:px-6 py-3.5 border-b border-gray-100 bg-gray-50/60 flex flex-wrap items-center justify-between gap-2">
               <p className="text-sm text-gray-400 font-medium">
                 Showing <span className="font-bold text-gray-700">{filteredLogs.length}</span> entries
               </p>
@@ -341,7 +341,7 @@ const ActivityLogs = () => {
                 return (
                   <div
                     key={log.id}
-                    className="px-6 py-4 flex items-start gap-4 hover:bg-gray-50/70 transition-colors"
+                    className="px-4 sm:px-6 py-4 flex items-start gap-3 sm:gap-4 hover:bg-gray-50/70 transition-colors"
                   >
                     <div className="p-2 bg-gray-50 rounded-xl shrink-0 mt-0.5">
                       {getActionIcon(log.description)}

@@ -698,7 +698,7 @@ const WalkInForm = ({ onBookingSuccess, onAssignSuccess }) => {
                   <img
                     src={activeQrUrl}
                     alt="Payment QR code"
-                    className="w-44 h-44 object-contain"
+                    className="w-40 h-40 sm:w-44 sm:h-44 object-contain"
                     onError={() => setQrImageFailed(true)}
                   />
                 </div>
@@ -897,7 +897,7 @@ const WalkInForm = ({ onBookingSuccess, onAssignSuccess }) => {
 
     return (
       <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4">
-        <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl overflow-hidden flex flex-col border border-white/20">
+        <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl overflow-y-auto max-h-[92vh] flex flex-col border border-white/20">
 
           <div className="px-6 pt-6 pb-4 border-b border-slate-50">
             <div className="flex items-center gap-1.5 text-emerald-500 mb-1.5">
@@ -1021,28 +1021,28 @@ const WalkInForm = ({ onBookingSuccess, onAssignSuccess }) => {
   /* ------------------------------------------------------------------ */
   return (
     <>
-      <div className="bg-white w-full rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
+      <div className="bg-white w-full rounded-2xl sm:rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
 
         {/* HEADER: title + mode toggle + clear */}
-        <div className="px-6 py-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
+        <div className="px-4 sm:px-6 py-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-xl font-black text-slate-900 tracking-tight">Walk-In Entry</h2>
             <p className="text-slate-400 font-bold text-[10px] uppercase tracking-widest mt-0.5">LaundryLink Smart Terminal</p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <div className="bg-slate-100 p-1 rounded-xl flex items-center">
               <button
                 type="button"
                 onClick={() => setBookingMode('smart')}
-                className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-[11px] font-black transition-all ${bookingMode === 'smart' ? 'text-sky-600 bg-white shadow-sm' : 'text-slate-400 hover:text-slate-500'}`}
+                className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg text-[11px] font-black transition-all ${bookingMode === 'smart' ? 'text-sky-600 bg-white shadow-sm' : 'text-slate-400 hover:text-slate-500'}`}
               >
                 <Calculator size={13} /> SMART CALC
               </button>
               <button
                 type="button"
                 onClick={() => setBookingMode('manual')}
-                className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-[11px] font-black transition-all ${bookingMode === 'manual' ? 'text-orange-600 bg-white shadow-sm' : 'text-slate-400 hover:text-slate-500'}`}
+                className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg text-[11px] font-black transition-all ${bookingMode === 'manual' ? 'text-orange-600 bg-white shadow-sm' : 'text-slate-400 hover:text-slate-500'}`}
               >
                 <Edit3 size={13} /> MANUAL OVERRIDE
               </button>
@@ -1059,7 +1059,7 @@ const WalkInForm = ({ onBookingSuccess, onAssignSuccess }) => {
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4">
           {isLoadingSettings && (
             <div className="flex items-center justify-center py-2 gap-2 text-sky-500 font-bold text-sm animate-pulse">
               <Loader2 className="animate-spin" size={15} />
@@ -1218,7 +1218,7 @@ const WalkInForm = ({ onBookingSuccess, onAssignSuccess }) => {
                 </div>
               </div>
 
-              <div className={`rounded-2xl px-5 py-4 flex justify-between items-center shadow-lg transition-all duration-500 ${bookingMode === 'manual' ? 'bg-orange-600 shadow-orange-100' : 'bg-slate-900 shadow-slate-200'}`}>
+              <div className={`rounded-2xl px-5 py-4 flex flex-wrap gap-2 justify-between items-center shadow-lg transition-all duration-500 ${bookingMode === 'manual' ? 'bg-orange-600 shadow-orange-100' : 'bg-slate-900 shadow-slate-200'}`}>
                 <span className="font-bold text-white/50 text-[10px] uppercase tracking-[0.3em]">Total Payable</span>
                 {bookingMode === 'manual' ? (
                   <div className="flex items-center gap-1.5">

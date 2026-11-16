@@ -151,10 +151,10 @@ const AssignMachineModal = ({ isOpen, booking, availableMachines, onClose, onSuc
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4">
-      <div className="bg-white w-full max-w-md rounded-[40px] shadow-2xl overflow-hidden flex flex-col border border-white/20">
+      <div className="bg-white w-full max-w-md max-h-[92vh] overflow-y-auto rounded-[40px] shadow-2xl flex flex-col border border-white/20">
 
         {/* Header */}
-        <div className="px-8 pt-8 pb-5 border-b border-slate-50">
+        <div className="px-5 sm:px-8 pt-8 pb-5 border-b border-slate-50">
           <div className="flex justify-between items-start">
             <div>
               <h2 className="text-2xl font-black text-slate-900 tracking-tighter">
@@ -176,7 +176,7 @@ const AssignMachineModal = ({ isOpen, booking, availableMachines, onClose, onSuc
         </div>
 
         {/* Booking Info */}
-        <div className="px-8 py-5 bg-amber-50/60 border-b border-amber-100">
+        <div className="px-5 sm:px-8 py-5 bg-amber-50/60 border-b border-amber-100">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center text-amber-600 font-black text-sm shrink-0">
               {booking.customer_name?.charAt(0).toUpperCase() || 'C'}
@@ -194,7 +194,7 @@ const AssignMachineModal = ({ isOpen, booking, availableMachines, onClose, onSuc
         </div>
 
         {/* Machine Selection */}
-        <div className="px-8 py-6 space-y-6">
+        <div className="px-5 sm:px-8 py-6 space-y-6">
 
           {isLoadingPhases ? (
             <div className="flex items-center justify-center py-4 gap-2 text-sky-500 font-bold animate-pulse">
@@ -254,7 +254,7 @@ const AssignMachineModal = ({ isOpen, booking, availableMachines, onClose, onSuc
         </div>
 
         {/* Footer Actions */}
-        <div className="px-8 pb-8 pt-2 flex gap-3">
+        <div className="px-5 sm:px-8 pb-8 pt-2 flex gap-3">
           <button
             type="button"
             onClick={onClose}

@@ -101,7 +101,7 @@ export default function VerifyOtpModal({ isOpen, email, shopName, address, onClo
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm px-4">
-      <div className="bg-white w-full max-w-[420px] rounded-2xl p-8 shadow-xl border border-slate-100 relative">
+      <div className="bg-white w-full max-w-[420px] rounded-2xl p-6 sm:p-8 max-h-[92vh] overflow-y-auto shadow-xl border border-slate-100 relative">
         {/* Close button — sinasadyang hindi sinasara ang modal sa
             pag-click sa labas (walang onClick sa backdrop div sa
             itaas), para hindi aksidenteng ma-dismiss habang nagta-type

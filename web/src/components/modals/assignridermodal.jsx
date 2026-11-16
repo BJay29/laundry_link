@@ -160,7 +160,7 @@ const AssignRiderModal = ({ isOpen, booking, mode, onClose, onSuccess }) => {
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4">
-      <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl overflow-hidden border border-white/20">
+      <div className="bg-white w-full max-w-sm max-h-[92vh] overflow-y-auto rounded-3xl shadow-2xl border border-white/20">
 
         {/* HEADER */}
         <div className={`px-6 pt-6 pb-4 border-b border-slate-50 flex items-start justify-between ${headerBg}`}>

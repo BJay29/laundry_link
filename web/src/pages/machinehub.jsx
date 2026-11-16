@@ -200,26 +200,26 @@ const MachineHub = () => {
   const hasMachines = dbMachines.length > 0;
 
   return (
-    <div className="p-8 bg-slate-50 min-h-screen font-sans">
+    <div className="p-4 sm:p-6 lg:p-8 bg-slate-50 min-h-screen font-sans">
 
       {successMsg && (
-        <div className="fixed top-6 right-6 z-50 bg-slate-900 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4">
+        <div className="fixed top-4 left-4 right-4 sm:left-auto sm:top-6 sm:right-6 z-50 bg-slate-900 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4">
           <CheckCircle size={18} className="text-emerald-400" />
           <span className="text-sm font-bold">{successMsg}</span>
         </div>
       )}
 
-      <div className="flex justify-between items-start mb-8">
+      <div className="flex flex-col sm:flex-row sm:justify-between items-start gap-2 sm:gap-4 mb-6 sm:mb-8">
         <div>
           <h2 className="text-slate-900 font-bold text-lg mb-1 italic">
             {localStorage.getItem('shop_name') || 'Naga College Foundation Node'}
           </h2>
           <p className="text-slate-500 text-xs font-black mb-4 tracking-widest uppercase opacity-60">System Infrastructure</p>
-          <h1 className="text-4xl font-black text-slate-900 tracking-tight uppercase italic">Machine Hub</h1>
+          <h1 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight uppercase italic">Machine Hub</h1>
           <p className="text-slate-400 text-sm mt-1">Real-time telemetry and resource overhead management.</p>
         </div>
 
-        <div className="flex items-center gap-3 mt-4">
+        <div className="flex items-center gap-3 mt-2 sm:mt-4">
           <button
             onClick={syncMachineData}
             disabled={loading}
@@ -229,7 +229,7 @@ const MachineHub = () => {
           </button>
           <button
             onClick={() => setIsModalOpen(true)}
-            className="bg-sky-500 hover:bg-sky-600 text-white px-8 py-3 rounded-2xl font-black flex items-center gap-2 shadow-lg shadow-sky-100 transition-all hover:scale-[1.02] active:scale-95 uppercase text-xs tracking-wider"
+            className="bg-sky-500 hover:bg-sky-600 text-white px-5 sm:px-8 py-3 rounded-2xl font-black flex items-center gap-2 shadow-lg shadow-sky-100 transition-all hover:scale-[1.02] active:scale-95 uppercase text-xs tracking-wider"
           >
             <Plus size={18} strokeWidth={3} /> Register Unit
           </button>
@@ -255,7 +255,7 @@ const MachineHub = () => {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+            <table className="w-full min-w-[860px] text-left border-collapse">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50/50">
                   {['Unit ID', 'Type', 'Status', 'Live Timer', 'Usage Logs', 'Elec (PHP)', 'Water (PHP)', 'Det (PHP)', 'Actions'].map(h => (

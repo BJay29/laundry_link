@@ -36,7 +36,7 @@ const HistoryModal = ({ isOpen, onClose }) => {
 
   return (
     <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-[40px] w-full max-w-2xl p-8 shadow-2xl animate-in fade-in zoom-in duration-200">
+      <div className="bg-white rounded-[40px] w-full max-w-2xl p-5 sm:p-8 shadow-2xl animate-in fade-in zoom-in duration-200">
         <div className="flex justify-between items-center mb-8">
           <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Weekly Financial History</h2>
           <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full transition-all">
@@ -51,13 +51,13 @@ const HistoryModal = ({ isOpen, onClose }) => {
         ) : (
           <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
             {historyData.map((item, index) => (
-              <div key={index} className="flex items-center justify-between p-6 bg-slate-50 rounded-3xl border border-slate-100">
+              <div key={index} className="flex items-center justify-between gap-3 p-4 sm:p-6 bg-slate-50 rounded-3xl border border-slate-100">
                 <div>
                   <p className="text-xs font-black text-slate-400 uppercase tracking-widest">{item.date}</p>
                   <p className="text-lg font-black text-slate-900">₱{item.income?.toLocaleString() || 0}</p>
                 </div>
                 
-                <div className="flex items-center gap-6">
+                <div className="flex items-center gap-3 sm:gap-6">
                   <div className="text-right">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Expenses</p>
                     <p className="text-sm font-bold text-red-500">-₱{item.expenses?.toLocaleString() || 0}</p>

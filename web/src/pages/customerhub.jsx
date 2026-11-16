@@ -217,15 +217,15 @@ const CustomerHub = () => {
   if (loading) return <LoadingScreen message="Analyzing Customers..." />;
 
   return (
-    <div className="p-8 bg-slate-50 min-h-screen font-sans">
+    <div className="p-4 sm:p-6 lg:p-8 bg-slate-50 min-h-screen font-sans">
 
       {/* ── PAGE HEADER ── */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-6 mb-10">
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-4 sm:gap-6 mb-6 sm:mb-10">
         <div>
           <p className="text-slate-500 text-xs font-black uppercase tracking-widest mb-2 opacity-60">
             AI-Powered Behavioral Analysis
           </p>
-          <h1 className="text-5xl font-black text-slate-900 tracking-tighter italic uppercase">
+          <h1 className="text-3xl sm:text-5xl font-black text-slate-900 tracking-tighter italic uppercase">
             Customer Hub
           </h1>
           <p className="text-slate-400 text-sm mt-1 font-medium">
@@ -377,12 +377,12 @@ const CustomerHub = () => {
         </div>
 
         {/* Segment filter pills */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
           {['All', 'VIP', 'Regular', 'Occasional'].map(seg => (
             <button
               key={seg}
               onClick={() => setFilterSeg(seg)}
-              className={`px-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border
+              className={`shrink-0 px-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border
                 ${filterSeg === seg
                   ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
                   : 'bg-white text-slate-400 border-slate-200 hover:border-slate-300 hover:text-slate-600'
@@ -397,7 +397,7 @@ const CustomerHub = () => {
       {/* ── CUSTOMER TABLE ── */}
       <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="w-full min-w-[560px]">
             <thead>
               <tr className="border-b border-slate-50 bg-slate-50/50">
                 {[
@@ -410,7 +410,7 @@ const CustomerHub = () => {
                   <th
                     key={label}
                     onClick={() => key && handleSort(key)}
-                    className={`text-left px-8 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 select-none
+                    className={`text-left px-4 sm:px-8 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 select-none
                       ${key ? 'cursor-pointer hover:text-slate-600' : ''}`}
                   >
                     <div className="flex items-center gap-1.5">
@@ -447,7 +447,7 @@ const CustomerHub = () => {
                       className={`hover:bg-slate-50/60 transition-colors ${cfg.row}`}
                     >
                       {/* Customer Name */}
-                      <td className="px-8 py-6">
+                      <td className="px-4 sm:px-8 py-4 sm:py-6">
                         <div className="flex items-center gap-3">
                           <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-sm text-white shrink-0
                             ${customer.segment === 'VIP'
@@ -465,7 +465,7 @@ const CustomerHub = () => {
                       </td>
 
                       {/* Segment Badge */}
-                      <td className="px-8 py-6">
+                      <td className="px-4 sm:px-8 py-4 sm:py-6">
                         <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-tight border ${cfg.badge}`}>
                           {cfg.icon}
                           {customer.segment}
@@ -473,7 +473,7 @@ const CustomerHub = () => {
                       </td>
 
                       {/* Visit Frequency */}
-                      <td className="px-8 py-6">
+                      <td className="px-4 sm:px-8 py-4 sm:py-6">
                         <div className="flex items-center gap-1.5">
                           <TrendingUp size={13} className="text-slate-300" />
                           <span className="text-slate-700 font-black text-sm">
@@ -484,7 +484,7 @@ const CustomerHub = () => {
                       </td>
 
                       {/* Total Spent */}
-                      <td className="px-8 py-6">
+                      <td className="px-4 sm:px-8 py-4 sm:py-6">
                         <div className="flex items-center gap-1">
                           <PhilippinePeso size={13} className="text-emerald-500" />
                           <span className="text-emerald-600 font-black text-sm">
@@ -497,7 +497,7 @@ const CustomerHub = () => {
                       </td>
 
                       {/* Average Per Visit */}
-                      <td className="px-8 py-6">
+                      <td className="px-4 sm:px-8 py-4 sm:py-6">
                         <span className="text-slate-500 font-bold text-sm">
                           ₱{parseFloat(customer.avg_per_visit || 0).toLocaleString(undefined, {
                             minimumFractionDigits: 2,
@@ -515,7 +515,7 @@ const CustomerHub = () => {
 
         {/* Table footer */}
         {filtered.length > 0 && (
-          <div className="px-8 py-4 border-t border-slate-50 bg-slate-50/30 flex items-center justify-between">
+          <div className="px-4 sm:px-8 py-4 border-t border-slate-50 bg-slate-50/30 flex items-center justify-between">
             <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">
               Showing {filtered.length} of {customers.length} customers
             </p>

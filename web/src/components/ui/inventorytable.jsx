@@ -231,7 +231,7 @@ const InventoryTable = ({
 
       {/* Scrollable table */}
       <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse">
+        <table className="w-full min-w-[820px] text-left border-collapse">
 
           {/* Table Header */}
           <thead>
@@ -323,7 +323,7 @@ const InventoryTable = ({
 
                   {/* Action Buttons — all confirmations delegated to parent modals */}
                   <td className="py-4 px-5 text-center">
-                    <div className="flex items-center justify-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex items-center justify-center gap-1.5 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
 
                       {/* Record Usage — triggers parent usage modal */}
                       {onRecordUsage && (

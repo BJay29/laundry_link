@@ -529,7 +529,7 @@ const RecordSales = () => {
   const rtMismatch = rtExtracted !== null && Math.abs(rtExtracted - rtAmountDue) > 0.009;
 
   return (
-    <div className="p-8 bg-slate-50 min-h-screen space-y-10 font-sans">
+    <div className="p-4 sm:p-6 lg:p-8 bg-slate-50 min-h-screen space-y-6 sm:space-y-10 font-sans">
 
       {/* HEADER */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
@@ -538,7 +538,7 @@ const RecordSales = () => {
             <Receipt size={16} />
             <span className="text-[10px] font-black uppercase tracking-widest">Sales Overview</span>
           </div>
-          <h1 className="text-5xl font-black text-slate-900 tracking-tighter italic uppercase">Record Sales</h1>
+          <h1 className="text-3xl sm:text-5xl font-black text-slate-900 tracking-tighter italic uppercase">Record Sales</h1>
         </div>
         <button
           onClick={() => loadData(true)}
@@ -556,7 +556,7 @@ const RecordSales = () => {
       </div>
 
       {/* BOOKINGS TABLE + REPORT CONTROLS */}
-      <div className="bg-white p-10 rounded-[56px] border border-slate-100 shadow-sm">
+      <div className="bg-white p-4 sm:p-10 rounded-[32px] sm:rounded-[56px] border border-slate-100 shadow-sm">
 
         <div className="space-y-6 mb-6">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -605,7 +605,7 @@ const RecordSales = () => {
 
           {/* Report Period Tabs */}
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-50 rounded-3xl p-4">
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               {['daily', 'weekly', 'monthly', 'yearly'].map((p) => (
                 <button
                   key={p}
@@ -621,7 +621,7 @@ const RecordSales = () => {
               ))}
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 onClick={() => navigatePeriod(-1)}
                 className="p-2 bg-white border border-slate-200 rounded-xl text-slate-400 hover:text-sky-500 hover:border-sky-200 transition-all"
@@ -630,7 +630,7 @@ const RecordSales = () => {
               </button>
               <button
                 onClick={goToToday}
-                className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-[11px] font-black text-slate-700 min-w-[180px] text-center hover:bg-slate-50 transition-all"
+                className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-[11px] font-black text-slate-700 min-w-[130px] sm:min-w-[180px] text-center hover:bg-slate-50 transition-all"
               >
                 {formatRangeLabel()}
               </button>
@@ -738,7 +738,7 @@ const RecordSales = () => {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+            <table className="w-full min-w-[640px] text-left border-collapse">
               <thead>
                 <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
                   <th className="py-3 pr-4">Date</th>
@@ -833,7 +833,7 @@ const RecordSales = () => {
       {confirmTarget && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4">
           <div className="bg-white w-full max-w-md rounded-[32px] shadow-2xl overflow-hidden border border-white/20">
-            <div className="px-8 pt-8 pb-5 border-b border-slate-50 flex justify-between items-start">
+            <div className="px-5 sm:px-8 pt-8 pb-5 border-b border-slate-50 flex justify-between items-start">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-amber-50 flex items-center justify-center">
                   <ShieldCheck size={20} className="text-amber-500" />
@@ -854,7 +854,7 @@ const RecordSales = () => {
               </button>
             </div>
 
-            <div className="px-8 py-6 space-y-5">
+            <div className="px-5 sm:px-8 py-6 space-y-5">
               <div className="bg-slate-50/60 rounded-2xl border-2 border-slate-100 p-5 space-y-2">
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-400 font-bold">Customer</span>
@@ -895,7 +895,7 @@ const RecordSales = () => {
               )}
             </div>
 
-            <div className="px-8 pb-8 flex gap-3">
+            <div className="px-5 sm:px-8 pb-8 flex gap-3">
               <button
                 type="button"
                 onClick={closeConfirmModal}
@@ -923,7 +923,7 @@ const RecordSales = () => {
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4">
           <div className="bg-white w-full max-w-lg rounded-[40px] shadow-2xl overflow-hidden flex flex-col max-h-[92vh] border border-white/20">
 
-            <div className="px-8 pt-8 pb-5 border-b border-slate-50 shrink-0 flex justify-between items-start">
+            <div className="px-5 sm:px-8 pt-8 pb-5 border-b border-slate-50 shrink-0 flex justify-between items-start">
               <div>
                 <h2 className="text-2xl font-black text-slate-900 tracking-tighter">Payment Receipt</h2>
                 <p className="text-slate-400 font-bold text-[11px] uppercase tracking-[0.2em] mt-1">
@@ -938,7 +938,7 @@ const RecordSales = () => {
               </button>
             </div>
 
-            <div className="px-8 py-6 space-y-5 overflow-y-auto flex-1">
+            <div className="px-5 sm:px-8 py-6 space-y-5 overflow-y-auto flex-1">
 
               {/* Summary */}
               <div className="bg-slate-50/60 rounded-[28px] border-2 border-slate-100 p-6 space-y-3">
@@ -1080,7 +1080,7 @@ const RecordSales = () => {
               </div>
             </div>
 
-            <div className="px-8 py-6 border-t border-slate-50 shrink-0">
+            <div className="px-5 sm:px-8 py-6 border-t border-slate-50 shrink-0">
               <button
                 type="button"
                 onClick={closeReceipt}

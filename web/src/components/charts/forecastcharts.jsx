@@ -77,7 +77,7 @@ const getWeatherIcon = (rainMm) => {
 
 const WeatherOutlookStrip = ({ data }) => (
   <div className="w-full rounded-[28px] overflow-hidden border border-slate-100 bg-white shadow-sm mb-6">
-    <div className="flex items-center gap-3 px-6 pt-5 pb-4 border-b border-slate-50">
+    <div className="flex items-center gap-3 px-4 sm:px-6 pt-5 pb-4 border-b border-slate-50">
       <div className="p-2 bg-sky-50 rounded-xl">
         <CloudRain size={15} className="text-sky-500" />
       </div>
@@ -86,7 +86,7 @@ const WeatherOutlookStrip = ({ data }) => (
         <h3 className="text-sm font-black text-slate-800 tracking-tight leading-tight">Weather Forecast</h3>
       </div>
     </div>
-    <div className="grid grid-cols-7 gap-2 p-4">
+    <div className="grid grid-cols-7 gap-1 sm:gap-2 p-2 sm:p-4">
       {data.map((item, idx) => {
         const rainMm = item.rain_mm || 0;
         const { Icon, color } = getWeatherIcon(rainMm);
@@ -103,7 +103,7 @@ const WeatherOutlookStrip = ({ data }) => (
         );
       })}
     </div>
-    <p className="text-[10px] text-slate-400 font-medium px-6 pb-4">
+    <p className="text-[10px] text-slate-400 font-medium px-4 sm:px-6 pb-4">
       Rainier days tend to shift demand up in this forecast — more people send out laundry when it's harder to dry at home.
     </p>
   </div>
@@ -268,7 +268,7 @@ const ForecastCharts = ({ data, modelTier }) => {
         <>
           {/* ── CHART 1: TOTAL BOOKINGS (BAR CHART) ── */}
           <div className="w-full rounded-[28px] overflow-hidden border border-slate-100 bg-white shadow-sm">
-            <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-slate-50">
+            <div className="flex flex-wrap items-center justify-between gap-3 px-4 sm:px-6 pt-5 pb-4 border-b border-slate-50">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-sky-50 rounded-xl">
                   <BarChart2 size={15} className="text-sky-500" />
@@ -318,7 +318,7 @@ const ForecastCharts = ({ data, modelTier }) => {
               </div>
             </div>
 
-            <div className="flex items-center gap-1.5 px-6 pb-4 pt-1">
+            <div className="flex items-center gap-1.5 px-4 sm:px-6 pb-4 pt-1">
               <div className="w-6 h-px border-t-2 border-dashed border-sky-400 opacity-60" />
               <span className="text-[9px] font-black text-sky-400 uppercase tracking-widest opacity-70">
                 Daily Average: {avgBookings}
@@ -328,7 +328,7 @@ const ForecastCharts = ({ data, modelTier }) => {
 
           {/* ── CHART 2: PROJECTED INCOME (AREA + LINE CHART) ── */}
           <div className="w-full rounded-[28px] overflow-hidden border border-slate-100 bg-white shadow-sm">
-            <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-slate-50">
+            <div className="flex flex-wrap items-center justify-between gap-3 px-4 sm:px-6 pt-5 pb-4 border-b border-slate-50">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-emerald-50 rounded-xl">
                   <TrendingUp size={15} className="text-emerald-500" />
@@ -397,7 +397,7 @@ const ForecastCharts = ({ data, modelTier }) => {
               </div>
             </div>
 
-            <div className="flex items-center gap-1.5 px-6 pb-4 pt-1">
+            <div className="flex items-center gap-1.5 px-4 sm:px-6 pb-4 pt-1">
               <div className="w-6 h-px border-t-2 border-dashed border-emerald-400 opacity-60" />
               <span className="text-[9px] font-black text-emerald-500 uppercase tracking-widest opacity-70">
                 Daily Average: ₱{avgIncome.toLocaleString()}

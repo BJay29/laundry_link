@@ -104,7 +104,7 @@ const InventoryCharts = ({ items = [], loading = false }) => {
     <div className="w-full bg-white rounded-2xl border border-gray-100 shadow-sm mt-8">
 
       {/* Header */}
-      <div className="p-6 border-b border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div className="p-4 sm:p-6 border-b border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-widest text-emerald-500 mb-1">
             Stock Analysis
@@ -144,7 +144,7 @@ const InventoryCharts = ({ items = [], loading = false }) => {
       </div>
 
       {/* Chart */}
-      <div className="p-6">
+      <div className="p-3 sm:p-6">
         <div className="w-full h-80 md:h-[420px]">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
@@ -212,7 +212,7 @@ const InventoryCharts = ({ items = [], loading = false }) => {
         </div>
 
         {/* Legend footer */}
-        <div className="flex items-center gap-6 mt-4 pt-4 border-t border-gray-100">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 mt-4 pt-4 border-t border-gray-100">
           <div className="flex items-center gap-2">
             <span className="w-3 h-3 rounded-sm bg-slate-700"></span>
             <span className="text-xs text-gray-500 font-medium">Adequate Stock</span>

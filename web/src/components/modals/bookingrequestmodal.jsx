@@ -78,7 +78,7 @@ const BookingRequestModal = ({ isOpen, booking, onClose, onAccept, onDecline }) 
       <div className="bg-white w-full max-w-md max-h-[92vh] overflow-y-auto rounded-[40px] shadow-2xl border border-white/20">
 
         {/* HEADER */}
-        <div className="px-8 pt-8 pb-6 border-b border-slate-50">
+        <div className="px-5 sm:px-8 pt-8 pb-6 border-b border-slate-50">
           <div className="flex justify-between items-start mb-2">
             <div className="flex items-center gap-2">
               {showDeclineStep && (
@@ -112,7 +112,7 @@ const BookingRequestModal = ({ isOpen, booking, onClose, onAccept, onDecline }) 
         {showDeclineStep ? (
           <>
             {/* DECLINE REASON STEP */}
-            <div className="px-8 py-6 space-y-3">
+            <div className="px-5 sm:px-8 py-6 space-y-3">
               <p className="text-xs font-bold text-slate-400 mb-1">
                 This will be shown to {booking.customer_name} so they know why their request wasn't accepted.
               </p>
@@ -146,7 +146,7 @@ const BookingRequestModal = ({ isOpen, booking, onClose, onAccept, onDecline }) 
             </div>
 
             {/* CONFIRM DECLINE ACTION */}
-            <div className="px-8 pb-8">
+            <div className="px-5 sm:px-8 pb-8">
               <button
                 type="button"
                 onClick={handleConfirmDecline}
@@ -161,7 +161,7 @@ const BookingRequestModal = ({ isOpen, booking, onClose, onAccept, onDecline }) 
         ) : (
           <>
             {/* DETAILS */}
-            <div className="px-8 py-6 space-y-4">
+            <div className="px-5 sm:px-8 py-6 space-y-4">
               <div className="flex items-center gap-4 p-4 bg-slate-50/50 rounded-2xl border border-slate-100">
                 <div className="w-11 h-11 rounded-xl bg-slate-900 flex items-center justify-center text-white font-black text-sm shrink-0">
                   {booking.customer_name?.charAt(0).toUpperCase() || 'C'}
@@ -223,7 +223,7 @@ const BookingRequestModal = ({ isOpen, booking, onClose, onAccept, onDecline }) 
             </div>
 
             {/* ACTIONS */}
-            <div className="px-8 pb-8 flex gap-3">
+            <div className="px-5 sm:px-8 pb-8 flex gap-3">
               <button
                 type="button"
                 onClick={() => setShowDeclineStep(true)}

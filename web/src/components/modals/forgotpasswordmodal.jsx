@@ -191,10 +191,10 @@ const ForgotPasswordModal = ({ isOpen, initialEmail = '', onClose, onDone }) => 
 
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4">
-      <div className="bg-white w-full max-w-[420px] rounded-3xl shadow-2xl border border-white/20 overflow-hidden">
+      <div className="bg-white w-full max-w-[420px] rounded-3xl shadow-2xl border border-white/20 max-h-[92vh] overflow-y-auto">
 
         {/* HEADER */}
-        <div className="px-8 pt-8 pb-4 flex justify-between items-start">
+        <div className="px-5 sm:px-8 pt-8 pb-4 flex justify-between items-start">
           <div className="flex items-start gap-3">
             {step === 'code' && (
               <button
@@ -223,7 +223,7 @@ const ForgotPasswordModal = ({ isOpen, initialEmail = '', onClose, onDone }) => 
         </div>
 
         {/* BODY */}
-        <div className="px-8 pb-8">
+        <div className="px-5 sm:px-8 pb-8">
           {errorMessage && (
             <div className="mb-4 p-3 bg-red-50 border border-red-100 text-red-600 text-sm font-medium rounded-lg">
               {errorMessage}

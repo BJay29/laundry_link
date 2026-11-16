@@ -158,11 +158,11 @@ const Dashboard = () => {
   const hasRatings = ratingCount > 0 && ratingSummary?.average_rating != null;
 
   return (
-    <div className="p-8 bg-slate-50 min-h-screen space-y-10 font-sans">
+    <div className="p-4 sm:p-6 lg:p-8 bg-slate-50 min-h-screen space-y-6 sm:space-y-10 font-sans">
 
       <div className="flex flex-col lg:flex-row justify-between items-start gap-6">
         <div>
-          <div className="flex items-center gap-3 mb-1">
+          <div className="flex flex-wrap items-center gap-3 mb-1">
             <div className="p-2.5 bg-slate-900 rounded-xl shadow-lg">
               <Monitor size={18} className="text-white" />
             </div>
@@ -176,7 +176,7 @@ const Dashboard = () => {
               </span>
             </div>
           </div>
-          <h1 className="text-6xl font-black text-slate-900 mt-2 tracking-tighter italic uppercase">Dashboard</h1>
+          <h1 className="text-4xl sm:text-6xl font-black text-slate-900 mt-2 tracking-tighter italic uppercase">Dashboard</h1>
         </div>
 
         <div className="flex items-center gap-4 w-full lg:w-auto">
@@ -192,14 +192,14 @@ const Dashboard = () => {
           
           <button
             onClick={() => setIsHistoryOpen(true)}
-            className="bg-white border border-slate-200 text-slate-600 p-5 rounded-[28px] font-black transition-all hover:bg-slate-100 flex items-center justify-center gap-3"
+            className="bg-white border border-slate-200 text-slate-600 p-4 sm:p-5 rounded-[28px] font-black transition-all hover:bg-slate-100 flex items-center justify-center gap-3"
           >
             <History size={22} />
           </button>
 
           <button
             onClick={() => setIsModalOpen(true)}
-            className="flex-1 lg:flex-none bg-sky-500 hover:bg-sky-600 text-white px-10 py-5 rounded-[28px] font-black transition-all shadow-xl shadow-sky-100 flex items-center justify-center gap-3 hover:scale-[1.03] active:scale-95"
+            className="flex-1 lg:flex-none bg-sky-500 hover:bg-sky-600 text-white px-5 sm:px-10 py-4 sm:py-5 rounded-[28px] font-black transition-all shadow-xl shadow-sky-100 flex items-center justify-center gap-3 hover:scale-[1.03] active:scale-95"
           >
             <Plus size={22} strokeWidth={4} /> ADD BOOKING
           </button>
@@ -226,14 +226,14 @@ const Dashboard = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
-        <div className="lg:col-span-2 bg-white p-10 rounded-[56px] border border-slate-100 shadow-sm flex flex-col min-w-0">
-          <div className="flex justify-between items-start mb-8">
+        <div className="lg:col-span-2 bg-white p-5 sm:p-10 rounded-[32px] sm:rounded-[56px] border border-slate-100 shadow-sm flex flex-col min-w-0">
+          <div className="flex justify-between items-start gap-4 mb-6 sm:mb-8">
             <div>
               <div className="flex items-center gap-2 text-sky-500 mb-1">
                 <TrendingUp size={16} />
                 <span className="text-[10px] font-black uppercase tracking-widest">AI Prediction Engine</span>
               </div>
-              <h2 className="text-3xl font-black text-slate-900 tracking-tight">Income & Booking Forecast</h2>
+              <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">Income & Booking Forecast</h2>
             </div>
             <div className="text-right">
               <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Last Sync</span>
@@ -262,8 +262,8 @@ const Dashboard = () => {
         </div>
       </div>
 
-      <div className="bg-white p-10 rounded-[56px] border border-slate-100 shadow-sm">
-        <div className="flex justify-between items-center mb-10">
+      <div className="bg-white p-5 sm:p-10 rounded-[32px] sm:rounded-[56px] border border-slate-100 shadow-sm">
+        <div className="flex justify-between items-center gap-4 mb-6 sm:mb-10">
           <div>
             <div className="flex items-center gap-2 text-emerald-500 mb-1">
               <CheckCircle size={16} />
@@ -271,7 +271,7 @@ const Dashboard = () => {
                 Live status and profitability tracking
               </span>
             </div>
-            <h2 className="text-3xl font-black text-slate-900 tracking-tight">Real-Time Machine Monitoring</h2>
+            <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">Real-Time Machine Monitoring</h2>
           </div>
           <button
             onClick={() => loadDashboardData(true)}

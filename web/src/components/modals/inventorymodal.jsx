@@ -181,7 +181,7 @@ const InventoryModal = ({ isOpen, onClose, item, onSave, loading = false }) => {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
       {/* Modal Container */}
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md border border-gray-100">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[92vh] overflow-y-auto border border-gray-100">
 
         {/* Modal Header */}
         <div className="flex justify-between items-start p-6 border-b border-gray-100">

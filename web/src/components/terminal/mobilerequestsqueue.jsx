@@ -1,60 +1,30 @@
 import React, { useState } from 'react';
-import { Bell, Weight, Banknote, Inbox, Bike, PackageCheck, Lock } from 'lucide-react';
+import { Bell, Weight, Banknote, Inbox, Bike, Lock } from 'lucide-react';
 import { formatCurrency } from '../../utils/formatters';
 import ScheduleInfo from '../ui/scheduleinfo';
 import DeliveryAddress from '../ui/deliveryaddress';
+import useMediaQuery from '../../hooks/useMediaQuery';
 
 /**
  * MOBILE REQUESTS QUEUE COMPONENT
  *
- * Replaces the three separate bell dropdowns that used to sit in
- * ServiceTerminal.jsx's header. Rendered only when the parent's
- * currentView === 'mobile_requests'.
+ * Rendered only when the parent's currentView === 'mobile_requests'.
  *
- * Three internal sub-tabs, one per existing queue (each has a different
- * action, so they stay separate instead of being merged into one list):
- *   - Requests -> awaitingApproval      -> opens BookingRequestModal (Accept / Decline)
- *   - Weighing -> awaitingWeighing      -> opens WeighingPricingModal (Finalize Price)
- *   - Payment  -> pendingVerification   -> opens PaymentVerificationModal (Approve / Reject)
+ * Three internal sub-tabs, one per queue:
+ *   - Requests -> awaitingApproval  -> BookingRequestModal (Accept / Decline)
+ *   - Weighing -> awaitingWeighing  -> WeighingPricingModal (Finalize Price)
+ *   - Payment  -> pendingVerification -> PaymentVerificationModal (Approve / Reject)
  *
- * Like ActiveTerminalTable, this component owns no API calls or modals.
- * The lists and the "open modal" handlers come from the parent — this
- * component only displays the queues and reports which row was clicked.
+ * Owns no API calls or modals — lists and "open modal" handlers come from
+ * the parent.
  *
- * UPDATED (Schedule visibility): may bagong "Schedule" column na
- * gumagamit ng <ScheduleInfo />. Ipinapakita nito kung KAILAN ang
- * drop-off (para sa drop-off bookings) o ang pickup date/time (para sa
- * delivery bookings), para alam agad ni staff ang schedule
- * pagka-receive ng booking — sa lahat ng tatlong sub-tab.
+ * Delivery rows in Weighing: "Assign Rider" muna (Step 1 · Awaiting pickup);
+ * kapag may pickup rider na, "Weigh & Price" na ang aktibo (Step 2). Drop-off
+ * rows ay hindi naka-gate.
  *
- * UPDATED (Delivery address): para sa delivery bookings, makikita na
- * rin ang address (pinaikli) sa ilalim ng pangalan ng customer, kasama
- * ang "Open in Maps" na link (see <DeliveryAddress />). Lumalabas ito
- * sa lahat ng tatlong sub-tab, kaya hindi na kailangang buksan pa ang
- * review modal para malaman kung saan pupunta ang rider.
- *
- * UPDATED (Rider Assignment feature — Pickup & Delivery, flow clarity
- * fix): the Weighing sub-tab is where a delivery booking sits while the
- * pickup rider is still en route to the customer's address (the
- * laundry hasn't reached the shop yet, so it can't be weighed).
- *
- * NOW, for a delivery row with fulfillment_mode === 'delivery':
- *   - No rider assigned yet: "Assign Rider" is the ONLY active button.
- *     "Weigh & Price" renders disabled/greyed-out with a lock icon and
- *     a tooltip explaining why, plus a small "Awaiting pickup" status
- *     chip above the actions.
- *   - Rider assigned: "Weigh & Price" becomes the active/primary
- *     button. The rider assignment collapses into a smaller secondary
- *     badge (still tappable, to reassign if needed) next to it, and
- *     the status chip changes to "Ready to weigh".
- * Drop-off rows are completely unaffected — they only ever show an
- * active "Weigh & Price", same as before.
- *
- * This is a UI-only clarity fix — no backend gating was added.
- *
- * The parent's Tier 1 badge count is
- *   awaitingApproval.length + awaitingWeighing.length + pendingVerification.length
- * so it always matches the three sub-tab counts shown here.
+ * UPDATED (Responsive): sa desktop (lg: 1024px pataas) table pa rin; sa
+ * phone/tablet, CARD LIST — walang pahalang na scroll at buo ang detalye at
+ * aksyon. Iisang renderAction()/renderCustomer() ang gamit ng dalawa.
  */
 
 const SECTIONS = [
@@ -114,6 +84,8 @@ const MobileRequestsQueue = ({
   onOpenPayment,
   onOpenPickupRider,
 }) => {
+  const isDesktop = useMediaQuery('(min-width: 1024px)');
+
   const lists = {
     requests: awaitingApproval,
     weighing: awaitingWeighing,
@@ -148,10 +120,188 @@ const MobileRequestsQueue = ({
     return null;
   };
 
+  // ── Shared pieces (table AT card) ────────────────────────────────────────
+
+  const renderCustomer = (item) => (
+    <div className="flex items-center gap-3 min-w-0">
+      <div className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center text-white font-black text-[10px] shrink-0">
+        {item.customer_name?.charAt(0).toUpperCase() || 'C'}
+      </div>
+      <div className="min-w-0">
+        <span className="block text-slate-900 font-black text-sm truncate max-w-[200px] sm:max-w-[300px] lg:max-w-[180px]">
+          {item.customer_name}
+        </span>
+        <DeliveryAddress booking={item} variant="compact" />
+      </div>
+    </div>
+  );
+
+  const renderAmount = (item) => {
+    const note = getAmountNote(item);
+    return (
+      <>
+        <span className="text-emerald-600 font-black text-sm">{getAmount(item)}</span>
+        {note && (
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight mt-0.5">
+            {note}
+          </p>
+        )}
+      </>
+    );
+  };
+
+  const renderAction = (item) => {
+    const isDeliveryWeighingRow = activeSection === 'weighing' && item.fulfillment_mode === 'delivery';
+    const hasPickupRider = Boolean(item.pickup_rider_name);
+    // Weigh & Price is only actionable for a delivery row once a rider is assigned.
+    const weighingLocked = isDeliveryWeighingRow && !hasPickupRider;
+
+    return (
+      <div className="flex flex-col gap-1.5 items-start">
+        {isDeliveryWeighingRow && (
+          <span
+            className={
+              weighingLocked
+                ? 'text-[9px] font-black uppercase tracking-widest text-amber-600'
+                : 'text-[9px] font-black uppercase tracking-widest text-emerald-600'
+            }
+          >
+            {weighingLocked ? 'Step 1 · Awaiting pickup' : 'Step 2 · Ready to weigh'}
+          </span>
+        )}
+
+        <div className="flex flex-wrap items-center gap-2">
+          {isDeliveryWeighingRow && !hasPickupRider && (
+            <button
+              type="button"
+              onClick={() => onOpenPickupRider?.(item)}
+              className="flex items-center gap-1.5 px-3 py-2.5 bg-violet-500 text-white rounded-xl transition-all shadow-sm shadow-violet-200 hover:bg-violet-600 active:scale-90 text-[10px] font-black uppercase tracking-tight"
+              title="Assign a rider to fetch this laundry"
+            >
+              <Bike size={13} />
+              Assign Rider
+            </button>
+          )}
+
+          {isDeliveryWeighingRow && hasPickupRider && (
+            <button
+              type="button"
+              onClick={() => onOpenPickupRider?.(item)}
+              className="flex items-center gap-1.5 px-3 py-2 bg-violet-50 text-violet-600 rounded-xl text-[10px] font-black uppercase tracking-tight border border-violet-100 hover:bg-violet-100 transition-all active:scale-90"
+              title="Tap to change rider"
+            >
+              <Bike size={12} />
+              {item.pickup_rider_name}
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={() => !weighingLocked && handlers[activeSection]?.(item)}
+            disabled={weighingLocked}
+            title={weighingLocked ? 'Assign a rider to collect the laundry first' : undefined}
+            className={
+              weighingLocked
+                ? 'flex items-center gap-1.5 px-3 py-2.5 bg-slate-100 text-slate-400 rounded-xl text-[10px] font-black uppercase tracking-tight cursor-not-allowed'
+                : `flex items-center gap-1.5 px-3 py-2.5 text-white rounded-xl transition-all shadow-sm active:scale-90 text-[10px] font-black uppercase tracking-tight ${section.button}`
+            }
+          >
+            {weighingLocked ? <Lock size={13} /> : <SectionIcon size={13} />}
+            {section.buttonLabel}
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  // ── Views ────────────────────────────────────────────────────────────────
+
+  const renderEmpty = () => (
+    <div className="flex flex-col items-center gap-3 text-center py-16 sm:py-32 px-4">
+      <Inbox size={48} className="text-slate-100" />
+      <p className="text-slate-500 font-black text-base uppercase tracking-tight">
+        {section.emptyTitle}
+      </p>
+      <p className="text-slate-300 text-xs font-bold">{section.emptyHint}</p>
+    </div>
+  );
+
+  const renderTable = () => (
+    <div className="overflow-x-auto">
+      <table className="w-full">
+        <thead>
+          <tr className="border-b border-slate-50 bg-slate-50/50">
+            {TABLE_HEADERS.map((h) => (
+              <th
+                key={h}
+                className="text-left px-4 xl:px-8 py-5 xl:py-6 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400"
+              >
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-50">
+          {items.map((item) => (
+            <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
+              <td className="px-4 xl:px-8 py-6 xl:py-7">{renderCustomer(item)}</td>
+              <td className="px-4 xl:px-8 py-6 xl:py-7 text-slate-600 font-bold text-xs uppercase tracking-tight">
+                {item.service_type}
+              </td>
+              <td className="px-4 xl:px-8 py-6 xl:py-7">
+                <ScheduleInfo booking={item} variant="compact" />
+              </td>
+              <td className="px-4 xl:px-8 py-6 xl:py-7">{renderAmount(item)}</td>
+              <td className="px-4 xl:px-8 py-6 xl:py-7 text-slate-400 font-bold text-xs whitespace-nowrap">
+                {formatRelativeTime(item.booking_timestamp || item.created_at)}
+              </td>
+              <td className="px-4 xl:px-8 py-6 xl:py-7">{renderAction(item)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+
+  const renderCards = () => (
+    <div className="space-y-3">
+      {items.map((item) => (
+        <div key={item.id} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
+          <div className="flex items-start justify-between gap-3">
+            {renderCustomer(item)}
+            <span className="shrink-0 text-slate-400 font-bold text-[11px] whitespace-nowrap">
+              {formatRelativeTime(item.booking_timestamp || item.created_at)}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-x-4 gap-y-3 mt-4">
+            <div>
+              <p className="text-[9px] font-black uppercase tracking-widest text-slate-300 mb-0.5">Service</p>
+              <p className="text-slate-600 font-bold text-xs uppercase tracking-tight break-words">
+                {item.service_type}
+              </p>
+            </div>
+            <div>
+              <p className="text-[9px] font-black uppercase tracking-widest text-slate-300 mb-0.5">Amount</p>
+              {renderAmount(item)}
+            </div>
+          </div>
+
+          <div className="mt-3">
+            <p className="text-[9px] font-black uppercase tracking-widest text-slate-300 mb-0.5">Schedule</p>
+            <ScheduleInfo booking={item} variant="compact" />
+          </div>
+
+          <div className="mt-3 pt-3 border-t border-slate-50">{renderAction(item)}</div>
+        </div>
+      ))}
+    </div>
+  );
+
   return (
     <>
-      {/* SUB-TABS */}
-      <div className="flex items-center gap-2 mb-4 flex-wrap">
+      {/* SUB-TABS (nag-i-scroll pahalang sa phone) */}
+      <div className="flex items-center gap-2 mb-4 overflow-x-auto sm:flex-wrap pb-1">
         {SECTIONS.map((s) => {
           const Icon = s.icon;
           const count = lists[s.key].length;
@@ -161,7 +311,7 @@ const MobileRequestsQueue = ({
               key={s.key}
               type="button"
               onClick={() => setActiveSection(s.key)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-xs font-black uppercase tracking-tight transition-all ${
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-xs font-black uppercase tracking-tight transition-all whitespace-nowrap shrink-0 ${
                 isActive
                   ? `bg-white border-slate-200 shadow-sm ${s.activeText}`
                   : 'bg-transparent border-transparent text-slate-400 hover:text-slate-600 hover:bg-white/60'
@@ -181,156 +331,17 @@ const MobileRequestsQueue = ({
         })}
       </div>
 
-      {/* QUEUE TABLE */}
-      <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-slate-50 bg-slate-50/50">
-                {TABLE_HEADERS.map((h) => (
-                  <th
-                    key={h}
-                    className="text-left px-8 py-6 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400"
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50">
-              {items.length === 0 ? (
-                <tr>
-                  <td colSpan={TABLE_HEADERS.length} className="text-center py-32">
-                    <div className="flex flex-col items-center gap-3">
-                      <Inbox size={48} className="text-slate-100" />
-                      <p className="text-slate-500 font-black text-base uppercase tracking-tight">
-                        {section.emptyTitle}
-                      </p>
-                      <p className="text-slate-300 text-xs font-bold">{section.emptyHint}</p>
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                items.map((item) => {
-                  const note = getAmountNote(item);
-                  const isDeliveryWeighingRow = activeSection === 'weighing' && item.fulfillment_mode === 'delivery';
-                  const hasPickupRider = Boolean(item.pickup_rider_name);
-                  // Weigh & Price is only meaningfully actionable for a
-                  // delivery row once a rider has been assigned.
-                  // Drop-off rows are never gated.
-                  const weighingLocked = isDeliveryWeighingRow && !hasPickupRider;
-
-                  return (
-                    <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
-                      {/* Customer (+ delivery address, delivery lang) */}
-                      <td className="px-8 py-7">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center text-white font-black text-[10px] shrink-0">
-                            {item.customer_name?.charAt(0).toUpperCase() || 'C'}
-                          </div>
-                          <div className="min-w-0">
-                            <span className="block text-slate-900 font-black text-sm truncate max-w-[180px]">
-                              {item.customer_name}
-                            </span>
-                            <DeliveryAddress booking={item} variant="compact" />
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Service */}
-                      <td className="px-8 py-7 text-slate-600 font-bold text-xs uppercase tracking-tight">
-                        {item.service_type}
-                      </td>
-
-                      {/* Schedule */}
-                      <td className="px-8 py-7">
-                        <ScheduleInfo booking={item} variant="compact" />
-                      </td>
-
-                      {/* Amount */}
-                      <td className="px-8 py-7">
-                        <span className="text-emerald-600 font-black text-sm">{getAmount(item)}</span>
-                        {note && (
-                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight mt-0.5">
-                            {note}
-                          </p>
-                        )}
-                      </td>
-
-                      {/* Received */}
-                      <td className="px-8 py-7 text-slate-400 font-bold text-xs whitespace-nowrap">
-                        {formatRelativeTime(item.booking_timestamp || item.created_at)}
-                      </td>
-
-                      {/* Action */}
-                      <td className="px-8 py-7">
-                        <div className="flex flex-col gap-1.5 items-start">
-                          {isDeliveryWeighingRow && (
-                            <span
-                              className={
-                                weighingLocked
-                                  ? 'text-[9px] font-black uppercase tracking-widest text-amber-600'
-                                  : 'text-[9px] font-black uppercase tracking-widest text-emerald-600'
-                              }
-                            >
-                              {weighingLocked ? 'Step 1 · Awaiting pickup' : 'Step 2 · Ready to weigh'}
-                            </span>
-                          )}
-
-                          <div className="flex flex-wrap items-center gap-2">
-                            {isDeliveryWeighingRow && !hasPickupRider && (
-                              <button
-                                type="button"
-                                onClick={() => onOpenPickupRider?.(item)}
-                                className="flex items-center gap-1.5 px-3 py-2.5 bg-violet-500 text-white rounded-xl transition-all shadow-sm shadow-violet-200 hover:bg-violet-600 active:scale-90 text-[10px] font-black uppercase tracking-tight"
-                                title="Assign a rider to fetch this laundry"
-                              >
-                                <Bike size={13} />
-                                Assign Rider
-                              </button>
-                            )}
-
-                            {isDeliveryWeighingRow && hasPickupRider && (
-                              <button
-                                type="button"
-                                onClick={() => onOpenPickupRider?.(item)}
-                                className="flex items-center gap-1.5 px-3 py-2 bg-violet-50 text-violet-600 rounded-xl text-[10px] font-black uppercase tracking-tight border border-violet-100 hover:bg-violet-100 transition-all active:scale-90"
-                                title="Tap to change rider"
-                              >
-                                <Bike size={12} />
-                                {item.pickup_rider_name}
-                              </button>
-                            )}
-
-                            <button
-                              type="button"
-                              onClick={() => !weighingLocked && handlers[activeSection]?.(item)}
-                              disabled={weighingLocked}
-                              title={
-                                weighingLocked
-                                  ? 'Assign a rider to collect the laundry first'
-                                  : undefined
-                              }
-                              className={
-                                weighingLocked
-                                  ? 'flex items-center gap-1.5 px-3 py-2.5 bg-slate-100 text-slate-400 rounded-xl text-[10px] font-black uppercase tracking-tight cursor-not-allowed'
-                                  : `flex items-center gap-1.5 px-3 py-2.5 text-white rounded-xl transition-all shadow-sm active:scale-90 text-[10px] font-black uppercase tracking-tight ${section.button}`
-                              }
-                            >
-                              {weighingLocked ? <Lock size={13} /> : <SectionIcon size={13} />}
-                              {section.buttonLabel}
-                            </button>
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
+      {items.length === 0 ? (
+        <div className="bg-white rounded-2xl lg:rounded-[32px] border border-slate-100 shadow-sm overflow-hidden">
+          {renderEmpty()}
         </div>
-      </div>
+      ) : isDesktop ? (
+        <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden">
+          {renderTable()}
+        </div>
+      ) : (
+        renderCards()
+      )}
     </>
   );
 };

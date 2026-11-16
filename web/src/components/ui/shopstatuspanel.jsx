@@ -120,7 +120,7 @@ const ShopStatusPanel = ({ onNotify }) => {
       (useHours ? closing : null) !== (status.closing_time || null));
 
   return (
-    <div className="bg-white p-10 rounded-[48px] border-2 border-slate-100 shadow-xl shadow-slate-200/50">
+    <div className="bg-white p-5 sm:p-10 rounded-[32px] sm:rounded-[48px] border-2 border-slate-100 shadow-xl shadow-slate-200/50">
       <div className="flex items-center gap-3 mb-2">
         <div className="p-2.5 bg-sky-50 rounded-2xl text-sky-500">
           <Store size={22} />

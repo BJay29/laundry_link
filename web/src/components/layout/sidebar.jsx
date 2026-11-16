@@ -5,6 +5,7 @@ import {
   Star
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import apiService from '../../services/APIservices';
 import laundryLinkLogo from '../../assets/Untitled design.png';
 
 /**
@@ -161,7 +162,7 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }) => {
           </button>
           
           <button 
-            onClick={() => navigate('/login')}
+            onClick={() => apiService.logout()}
             title="Logout"
             className={`w-full flex items-center rounded-xl text-xs font-bold text-rose-400 hover:bg-rose-500/10 transition ${
               isCollapsed ? 'justify-center p-2' : 'gap-3 px-3 py-2'

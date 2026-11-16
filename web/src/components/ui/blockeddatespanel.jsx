@@ -125,7 +125,7 @@ const BlockedDatesPanel = ({ onNotify }) => {
   };
 
   return (
-    <div className="bg-white p-10 rounded-[48px] border-2 border-slate-100 shadow-xl shadow-slate-200/50">
+    <div className="bg-white p-5 sm:p-10 rounded-[32px] sm:rounded-[48px] border-2 border-slate-100 shadow-xl shadow-slate-200/50">
       <div className="flex items-center gap-3 mb-2">
         <div className="p-3 bg-rose-50 text-rose-600 rounded-2xl">
           <CalendarX2 size={24} />

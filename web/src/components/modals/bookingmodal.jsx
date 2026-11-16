@@ -618,7 +618,7 @@ const BookingModal = ({ isOpen, onClose, onSubmit, onAssignSuccess, actualBookin
       <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4">
         <div className="bg-white w-full max-w-md rounded-[40px] shadow-2xl overflow-hidden flex flex-col border border-white/20 max-h-[92vh]">
 
-          <div className="px-8 pt-10 pb-6 flex flex-col items-center border-b border-dashed border-slate-200">
+          <div className="px-5 sm:px-8 pt-10 pb-6 flex flex-col items-center border-b border-dashed border-slate-200">
             <div className="w-16 h-16 rounded-full bg-emerald-50 flex items-center justify-center mb-4">
               <CheckCircle2 size={32} className="text-emerald-500" />
             </div>
@@ -628,7 +628,7 @@ const BookingModal = ({ isOpen, onClose, onSubmit, onAssignSuccess, actualBookin
             </p>
           </div>
 
-          <div className="px-8 py-6 overflow-y-auto custom-scrollbar space-y-5">
+          <div className="px-5 sm:px-8 py-6 overflow-y-auto custom-scrollbar space-y-5">
 
             <div className="flex items-center gap-3 pb-4 border-b border-slate-100">
               <div className="w-10 h-10 rounded-xl bg-slate-900 flex items-center justify-center text-white font-black text-sm shrink-0">
@@ -707,7 +707,7 @@ const BookingModal = ({ isOpen, onClose, onSubmit, onAssignSuccess, actualBookin
             </div>
           </div>
 
-          <div className="px-8 pb-8 pt-2">
+          <div className="px-5 sm:px-8 pb-8 pt-2">
             <button
               type="button"
               onClick={resetAndClose}
@@ -727,9 +727,9 @@ const BookingModal = ({ isOpen, onClose, onSubmit, onAssignSuccess, actualBookin
   if (step === 'assign' && createdBooking) {
     return (
       <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4">
-        <div className="bg-white w-full max-w-md rounded-[40px] shadow-2xl overflow-hidden flex flex-col border border-white/20">
+        <div className="bg-white w-full max-w-md max-h-[92vh] overflow-y-auto rounded-[40px] shadow-2xl flex flex-col border border-white/20">
 
-          <div className="px-8 pt-8 pb-5 border-b border-slate-50">
+          <div className="px-5 sm:px-8 pt-8 pb-5 border-b border-slate-50">
             <div className="flex items-center gap-2 text-emerald-500 mb-2">
               <CheckCircle2 size={16} />
               <span className="text-[10px] font-black uppercase tracking-widest">Booking Created</span>
@@ -744,7 +744,7 @@ const BookingModal = ({ isOpen, onClose, onSubmit, onAssignSuccess, actualBookin
             </p>
           </div>
 
-          <div className="px-8 py-5 bg-amber-50/60 border-b border-amber-100">
+          <div className="px-5 sm:px-8 py-5 bg-amber-50/60 border-b border-amber-100">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center text-amber-600 font-black text-sm shrink-0">
                 {createdBooking.customer_name?.charAt(0).toUpperCase() || 'C'}
@@ -761,7 +761,7 @@ const BookingModal = ({ isOpen, onClose, onSubmit, onAssignSuccess, actualBookin
             </div>
           </div>
 
-          <div className="px-8 py-6 space-y-6">
+          <div className="px-5 sm:px-8 py-6 space-y-6">
             {isLoadingAssignData ? (
               <div className="flex items-center justify-center py-4 gap-2 text-sky-500 font-bold animate-pulse">
                 <Loader2 className="animate-spin" size={16} />
@@ -815,7 +815,7 @@ const BookingModal = ({ isOpen, onClose, onSubmit, onAssignSuccess, actualBookin
             )}
           </div>
 
-          <div className="px-8 pb-8 pt-2 flex gap-3">
+          <div className="px-5 sm:px-8 pb-8 pt-2 flex gap-3">
             <button
               type="button"
               onClick={handleSkipAssign}
@@ -851,9 +851,9 @@ const BookingModal = ({ isOpen, onClose, onSubmit, onAssignSuccess, actualBookin
   /* ------------------------------------------------------------------ */
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4">
-      <div className="bg-white w-full max-w-xl rounded-[48px] shadow-2xl overflow-hidden flex flex-col max-h-[92vh] border border-white/20">
+      <div className="bg-white w-full max-w-xl rounded-[32px] sm:rounded-[48px] shadow-2xl overflow-hidden flex flex-col max-h-[92vh] border border-white/20">
 
-        <div className="px-10 pt-10 pb-6 border-b border-slate-50 shrink-0">
+        <div className="px-5 sm:px-10 pt-10 pb-6 border-b border-slate-50 shrink-0">
           <div className="flex justify-between items-start mb-6">
             <div>
               <h2 className="text-3xl font-black text-slate-900 tracking-tighter">Create Booking</h2>
@@ -874,7 +874,7 @@ const BookingModal = ({ isOpen, onClose, onSubmit, onAssignSuccess, actualBookin
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="px-10 py-8 space-y-8 overflow-y-auto custom-scrollbar flex-1">
+        <form onSubmit={handleSubmit} className="px-5 sm:px-10 py-8 space-y-8 overflow-y-auto custom-scrollbar flex-1">
           {isLoadingSettings && (
             <div className="flex items-center justify-center py-4 gap-2 text-sky-500 font-bold animate-pulse">
               <Loader2 className="animate-spin" size={16} />
@@ -959,7 +959,7 @@ const BookingModal = ({ isOpen, onClose, onSubmit, onAssignSuccess, actualBookin
           </div>
 
           {/* INVENTORY ITEMS USED */}
-          <div className="space-y-4 p-8 bg-slate-50/50 rounded-[40px] border-2 border-slate-100">
+          <div className="space-y-4 p-4 sm:p-8 bg-slate-50/50 rounded-[32px] sm:rounded-[40px] border-2 border-slate-100">
             <div className="flex justify-between items-center px-2">
               <label className="text-[11px] font-black text-slate-500 uppercase flex items-center gap-2 tracking-[0.2em]">
                 <Droplets size={14} className="text-sky-500" /> Inventory Items Used
@@ -1027,7 +1027,7 @@ const BookingModal = ({ isOpen, onClose, onSubmit, onAssignSuccess, actualBookin
             </div>
           </div>
 
-          <div className={`rounded-[32px] p-8 flex justify-between items-center shadow-2xl transition-all duration-500 ${bookingMode === 'manual' ? 'bg-orange-600 shadow-orange-100' : 'bg-slate-900 shadow-slate-200'}`}>
+          <div className={`rounded-[32px] p-5 sm:p-8 flex flex-wrap gap-3 justify-between items-center shadow-2xl transition-all duration-500 ${bookingMode === 'manual' ? 'bg-orange-600 shadow-orange-100' : 'bg-slate-900 shadow-slate-200'}`}>
             <div className="flex flex-col">
               <span className="font-bold text-white/40 text-[10px] uppercase tracking-[0.4em]">Total Payable</span>
             </div>
@@ -1048,7 +1048,7 @@ const BookingModal = ({ isOpen, onClose, onSubmit, onAssignSuccess, actualBookin
           <button
             type="submit"
             disabled={isSubmitting || isSubmitBlocked}
-            className={`w-full text-white py-6 rounded-[32px] font-black text-2xl shadow-xl transition-all flex items-center justify-center gap-4 active:scale-95
+            className={`w-full text-white py-4 sm:py-6 rounded-[32px] font-black text-lg sm:text-2xl shadow-xl transition-all flex items-center justify-center gap-4 active:scale-95
               ${isSubmitting || isSubmitBlocked ? 'opacity-50 cursor-not-allowed' : ''}
               ${bookingMode === 'manual' ? 'bg-orange-500 hover:bg-orange-400 shadow-orange-200' : 'bg-sky-600 hover:bg-sky-500 shadow-sky-200'}
             `}

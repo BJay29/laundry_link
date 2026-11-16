@@ -159,7 +159,9 @@ const ServiceTerminal = () => {
     return () => clearInterval(timer);
   }, []);
 
-  // ── Close dropdown on window resize ───────────────────────────────────────
+  // ── Close dropdown on window resize / scroll ──────────────────────────────
+  // (fixed ang posisyon ng dropdown, kaya kapag nag-scroll ang page o
+  // nag-rotate ang phone, isasara na lang para hindi mapunta sa maling lugar)
   useEffect(() => {
     if (!openStatusDropdownId) return;
     const closeOnReposition = () => {
@@ -167,7 +169,11 @@ const ServiceTerminal = () => {
       setDropdownPosition(null);
     };
     window.addEventListener('resize', closeOnReposition);
-    return () => window.removeEventListener('resize', closeOnReposition);
+    window.addEventListener('scroll', closeOnReposition, true);
+    return () => {
+      window.removeEventListener('resize', closeOnReposition);
+      window.removeEventListener('scroll', closeOnReposition, true);
+    };
   }, [openStatusDropdownId]);
 
   // ── Load Available Machines ────────────────────────────────────────────────
@@ -374,9 +380,13 @@ const ServiceTerminal = () => {
     const btn = statusButtonRefs.current[bookingId];
     if (btn) {
       const rect = btn.getBoundingClientRect();
+      // 192px ang lapad ng dropdown (w-48) — huwag hayaang lumampas sa
+      // kanang gilid ng screen (phone).
+      const DROPDOWN_W = 192;
+      const left = Math.max(8, Math.min(rect.left, window.innerWidth - DROPDOWN_W - 8));
       setDropdownPosition({
         top: rect.bottom + 8,
-        left: rect.left,
+        left,
       });
     }
     setOpenStatusDropdownId(bookingId);
@@ -534,10 +544,10 @@ const ServiceTerminal = () => {
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="p-8 bg-slate-50 min-h-screen font-sans">
+    <div className="p-0 sm:p-2 lg:p-8 bg-slate-50 min-h-screen font-sans">
 
       {successMessage && (
-        <div className="fixed top-8 right-8 z-[100] bg-slate-900 text-white px-6 py-4 rounded-2xl shadow-2xl font-bold text-sm flex items-center gap-3 animate-in fade-in slide-in-from-right-4 max-w-sm">
+        <div className="fixed top-4 left-4 right-4 sm:left-auto sm:top-8 sm:right-8 z-[100] bg-slate-900 text-white px-4 sm:px-6 py-3 sm:py-4 rounded-2xl shadow-2xl font-bold text-sm flex items-center gap-3 animate-in fade-in slide-in-from-right-4 sm:max-w-sm">
           <Bell size={18} className="text-emerald-400 shrink-0" />
           <span className="flex-1">{successMessage}</span>
           <button
@@ -550,15 +560,15 @@ const ServiceTerminal = () => {
       )}
 
       {/* HEADER */}
-      <div className="flex flex-col lg:flex-row justify-between items-start mb-8 gap-6">
-        <div>
+      <div className="flex flex-col lg:flex-row justify-between items-start mb-6 lg:mb-8 gap-4 lg:gap-6">
+        <div className="min-w-0 max-w-full">
           <h2 className="text-slate-900 font-bold text-lg mb-1 tracking-tight">
             {localStorage.getItem('shop_name') || 'Laundromat Terminal'}
           </h2>
-          <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mb-4 opacity-60">
+          <p className="text-slate-500 text-[10px] sm:text-xs font-bold uppercase tracking-widest mb-3 sm:mb-4 opacity-60">
             Real-Time Performance Dashboard
           </p>
-          <h1 className="text-5xl font-black text-slate-900 tracking-tighter italic uppercase">
+          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-slate-900 tracking-tighter italic uppercase break-words">
             Service Terminal
           </h1>
           <p className="text-slate-400 text-sm mt-1 font-medium">
@@ -567,7 +577,7 @@ const ServiceTerminal = () => {
         </div>
 
         <div className="flex items-center gap-3 w-full lg:w-auto flex-wrap">
-          <div className="flex items-center gap-3 bg-white px-5 py-4 rounded-2xl border border-slate-200 shadow-sm">
+          <div className="flex items-center gap-3 bg-white px-4 py-3 lg:px-5 lg:py-4 rounded-2xl border border-slate-200 shadow-sm">
             <Clock size={18} className="text-sky-500" />
             <span className="text-sm font-black text-slate-700 tabular-nums">
               {currentTime.toLocaleTimeString('en-US', {
@@ -601,7 +611,7 @@ const ServiceTerminal = () => {
                     ? shopStatus.closed_reason || 'Shop is closed'
                     : 'Bookings paused. Click to accept bookings again.'
               }
-              className={`flex items-center gap-2 px-4 py-4 rounded-2xl border font-black text-xs uppercase tracking-tight shadow-sm transition-all active:scale-95 disabled:opacity-60 ${
+              className={`flex items-center gap-2 px-4 py-3 lg:py-4 rounded-2xl border font-black text-xs uppercase tracking-tight shadow-sm transition-all active:scale-95 disabled:opacity-60 ${
                 shopStatus.accepting_bookings
                   ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
                   : 'bg-slate-100 border-slate-200 text-slate-500 hover:bg-slate-200'
@@ -613,7 +623,7 @@ const ServiceTerminal = () => {
           )}
 
           {pendingUnassignedCount > 0 && (
-            <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-700 px-4 py-4 rounded-2xl font-black text-xs uppercase tracking-tight shadow-sm">
+            <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-700 px-4 py-3 lg:py-4 rounded-2xl font-black text-xs uppercase tracking-tight shadow-sm">
               <AlertTriangle size={15} className="text-amber-500" />
               {pendingUnassignedCount} Pending
             </div>
@@ -621,7 +631,7 @@ const ServiceTerminal = () => {
 
           <button
             onClick={() => handleViewChange('walk_in')}
-            className="flex-1 lg:flex-none bg-sky-500 hover:bg-sky-600 text-white px-8 py-4 rounded-2xl font-black transition-all shadow-lg shadow-sky-200 active:scale-95 flex items-center justify-center gap-2"
+            className="flex-1 lg:flex-none min-w-[150px] bg-sky-500 hover:bg-sky-600 text-white px-6 lg:px-8 py-3 lg:py-4 rounded-2xl font-black transition-all shadow-lg shadow-sky-200 active:scale-95 flex items-center justify-center gap-2"
           >
             <Plus size={18} strokeWidth={3} />
             ADD BOOKING
@@ -630,7 +640,7 @@ const ServiceTerminal = () => {
       </div>
 
       {/* TIER 1: WORKFLOW TABS */}
-      <div className="flex items-center gap-2 mb-6 flex-wrap">
+      <div className="flex items-center gap-2 mb-5 lg:mb-6 overflow-x-auto sm:flex-wrap pb-1">
         {VIEWS.map((view) => {
           const isActive = currentView === view.key;
           const Icon = view.icon;
@@ -639,10 +649,10 @@ const ServiceTerminal = () => {
               key={view.key}
               type="button"
               onClick={() => handleViewChange(view.key)}
-              className={`flex items-center gap-2 text-sm ${
+              className={`flex items-center gap-2 text-sm whitespace-nowrap shrink-0 ${
                 isActive
-                  ? 'bg-blue-600 text-white font-semibold shadow-sm rounded-lg py-2 px-5'
-                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 rounded-lg py-2 px-5 transition-all'
+                  ? 'bg-blue-600 text-white font-semibold shadow-sm rounded-lg py-2 px-4 sm:px-5'
+                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 rounded-lg py-2 px-4 sm:px-5 transition-all'
               }`}
             >
               <Icon size={16} />

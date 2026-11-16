@@ -59,10 +59,10 @@ const MoveToDryerModal = ({ isOpen, booking, loadNumber, availableMachines, onCl
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4">
-      <div className="bg-white w-full max-w-sm rounded-[40px] shadow-2xl overflow-hidden flex flex-col border border-white/20">
+      <div className="bg-white w-full max-w-sm max-h-[92vh] overflow-y-auto rounded-[40px] shadow-2xl flex flex-col border border-white/20">
 
         {/* Header */}
-        <div className="px-8 pt-8 pb-5 border-b border-slate-50">
+        <div className="px-5 sm:px-8 pt-8 pb-5 border-b border-slate-50">
           <div className="flex justify-between items-start">
             <div>
               <h2 className="text-2xl font-black text-slate-900 tracking-tighter">Move to Dryer</h2>
@@ -80,7 +80,7 @@ const MoveToDryerModal = ({ isOpen, booking, loadNumber, availableMachines, onCl
         </div>
 
         {/* Dryer Selection */}
-        <div className="px-8 py-6 space-y-4">
+        <div className="px-5 sm:px-8 py-6 space-y-4">
           <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
             <HardDrive size={13} className="text-orange-500" />
             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Dryers</span>
@@ -129,7 +129,7 @@ const MoveToDryerModal = ({ isOpen, booking, loadNumber, availableMachines, onCl
         </div>
 
         {/* Footer Actions */}
-        <div className="px-8 pb-8 pt-2 flex gap-3">
+        <div className="px-5 sm:px-8 pb-8 pt-2 flex gap-3">
           <button
             type="button"
             onClick={onClose}

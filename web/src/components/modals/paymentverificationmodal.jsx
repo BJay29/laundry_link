@@ -256,7 +256,7 @@ const PaymentVerificationModal = ({ isOpen, booking, onClose, onSuccess }) => {
         <div className="bg-white w-full max-w-lg rounded-[40px] shadow-2xl overflow-hidden flex flex-col max-h-[92vh] border border-white/20">
 
           {/* HEADER */}
-          <div className="px-8 pt-8 pb-5 border-b border-slate-50 shrink-0 flex justify-between items-start">
+          <div className="px-5 sm:px-8 pt-8 pb-5 border-b border-slate-50 shrink-0 flex justify-between items-start">
             <div>
               <h2 className="text-2xl font-black text-slate-900 tracking-tighter">Verify Payment</h2>
               <p className="text-slate-400 font-bold text-[11px] uppercase tracking-[0.2em] mt-1">
@@ -273,7 +273,7 @@ const PaymentVerificationModal = ({ isOpen, booking, onClose, onSuccess }) => {
           </div>
 
           {/* CONTENT */}
-          <div className="px-8 py-6 space-y-6 overflow-y-auto custom-scrollbar flex-1">
+          <div className="px-5 sm:px-8 py-6 space-y-6 overflow-y-auto custom-scrollbar flex-1">
 
             {/* Booking summary */}
             <div className="bg-slate-50/60 rounded-[28px] border-2 border-slate-100 p-6 space-y-3">
@@ -463,7 +463,7 @@ const PaymentVerificationModal = ({ isOpen, booking, onClose, onSuccess }) => {
           </div>
 
           {/* FOOTER ACTIONS */}
-          <div className="px-8 py-6 border-t border-slate-50 shrink-0 space-y-4">
+          <div className="px-5 sm:px-8 py-6 border-t border-slate-50 shrink-0 space-y-4">
 
             {/* Dual-check (>= ₱5,000) */}
             {!showRejectForm && requiresDualCheck && (

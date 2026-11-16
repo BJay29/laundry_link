@@ -15,7 +15,6 @@ import {
   PackageCheck,
   Truck,
   Bike,
-  Phone,
   Navigation,
   Repeat,
 } from 'lucide-react';
@@ -23,78 +22,29 @@ import { formatTime, formatCurrency } from '../../utils/formatters';
 import { getCollectInfo } from '../../utils/collect';
 import { getQuantity } from '../../utils/quantity';
 import DeliveryAddress from '../ui/deliveryaddress';
+import useMediaQuery from '../../hooks/useMediaQuery';
 
 /**
  * ACTIVE TERMINAL TABLE COMPONENT
  *
- * Extracted from ServiceTerminal.jsx's main table markup as part of the
- * 2-tier navigation restructure (Tier 1: page-level workflow tabs in
- * ServiceTerminal.jsx; Tier 2: this component's own sub-status filter
- * pills, scoped only to the "Active Terminal" view).
- *
  * Renders ONLY when the parent's currentView === 'active_terminal'.
- * All data fetching, polling, and mutation logic (loadBookings,
- * handleStatusUpdate, handleOpenAssignModal, etc.) live in the PARENT
- * and are passed down as props — this component owns no API calls, only
- * its local Tier 2 filter state.
+ * All data fetching and mutation logic live in the PARENT (ServiceTerminal)
+ * and are passed down as props — this component owns only its Tier 2
+ * filter state.
  *
- * TIER 2 FILTER MAPPING (onto the EXISTING Booking.status values — no
- * new backend field):
- *   - All Orders                     -> no filter
- *   - Pending Setup                  -> status === 'Pending'
- *   - In Progress                    -> status === 'In Progress'
- *   - Ready for Pickup / Delivery    -> status === 'Ready'
- * "Awaiting Weighing" / "Awaiting Payment" / "Awaiting Approval" never
- * appear in `bookings` — the backend's get_active_bookings() excludes
- * them (see the Mobile Requests tab instead).
+ * TIER 2 FILTERS: All / Pending / In Progress / Ready / Out for Delivery
+ * (mapped onto the existing Booking.status values).
  *
- * UPDATED (Quantity column fix): ang dating "Weight" column ay laging
- * nagpapakita ng `booking.weight`, kaya "0 KG" ang lumalabas para sa
- * mga service na per-LOAD ang presyo (ang backend ay nagse-save ng
- * weight = 0 at loads = N para sa mga iyon). Ngayon, "Quantity" na ang
- * column: kilo kung may kilo, at bilang ng loads kung wala
- * (see utils/quantity.js).
+ * UPDATED (Responsive): sa desktop (lg: 1024px pataas) table pa rin; sa
+ * phone/tablet, CARD LIST na — bawat order ay isang card na kumpleto ang
+ * detalye at mga aksyon, kaya walang pahalang na scroll at hindi nasisira
+ * ang layout. Iisa lang ang nire-render sa bawat oras (JS media query, hindi
+ * CSS hidden) para hindi magulo ang status-dropdown refs.
  *
- * UPDATED (Delivery address): para sa delivery bookings, makikita na
- * ang address (pinaikli) sa ilalim ng pangalan ng customer, kasama ang
- * "Open in Maps" na link (see <DeliveryAddress />), kaya alam agad ni
- * staff kung saan pupunta ang rider kahit nasa Ready na ang order.
- *
- * UPDATED (Rider Assignment feature — Pickup & Delivery): a 'Ready'
- * booking with fulfillment_mode === 'delivery' USED TO show a static,
- * non-interactive "For Delivery" label (no rider/dispatch feature
- * existed yet). It now shows either:
- *   - an "Assign Rider" button (opens AssignRiderModal in "delivery"
- *     mode) when booking.delivery_rider_name is still empty, or
- *   - a small rider badge (name + phone icon) once assigned, which is
- *     itself clickable to reassign, PLUS a "Mark Delivered" button that
- *     runs the existing handleStatusUpdate(booking.id, 'Claimed') flow.
- * The backend's assign_delivery_rider() only allows this while the
- * booking is 'In Progress' or 'Ready' — since this table only ever
- * shows 'Ready' rows reaching this branch, no extra client-side status
- * gate is needed here beyond the existing isDelivery + Ready check.
- *
- * Drop-off/counter bookings keep the original "Release to Customer"
- * action (handleStatusUpdate -> 'Claimed') unchanged — riders don't
- * apply to them.
- *
- * UPDATED (Switch to Delivery): ang customer ay puwede nang gawing
- * delivery ang drop-off booking habang Pending / In Progress / Ready
- * (see backend request_delivery). Kaya ang delivery row na hindi pa
- * 'Ready' ay may "For Delivery" chip na ngayon (alam agad ni staff na
- * ihahatid, hindi iaabot sa counter), at habang 'In Progress' ay puwede
- * nang mag-assign ng rider (pinapayagan na ito ng backend). Ang
- * 'Ready' branch ay hindi nagbago.
- *
- * UPDATED (Out for Delivery): bagong status na "Out for Delivery" (delivery
- * lang). Sa 'Ready' na delivery row na may rider, ang pangunahing button
- * ay "Out for Delivery" (hindi na diretsong Mark Delivered); sa 'Out for
- * Delivery' row, rider badge (puwedeng i-reassign) + "Mark Delivered".
- * Puwede pa ring piliin ang Claimed sa status dropdown.
- *
- * UPDATED (Switch to Delivery — polish): "Switched" badge (galing
- * drop-off, may switched_to_delivery_at), "Collect ₱X" para sa rider
- * (see utils/collect.js), at ang preferred na petsa ng hatid.
+ * Lahat ng aksyon (Assign, To Dryer, Verify Payment, Assign Rider, Out for
+ * Delivery, Mark Delivered, Release to Customer) ay nasa iisang
+ * renderOperations() na ginagamit ng table at ng card — walang nabago sa
+ * lohika.
  *
  * UI NOTE: icons are lucide-react only — no emojis.
  */
@@ -135,11 +85,10 @@ const ActiveTerminalTable = ({
   handleOpenAssignModal,
   handleOpenMoveToDryerModal,
   handleOpenPaymentVerification,
-  // NEW (Rider Assignment feature — Pickup & Delivery)
   handleOpenDeliveryRiderModal,
 }) => {
-  // --- TIER 2: SUB-STATUS FILTER ---
   const [statusFilter, setStatusFilter] = useState('all');
+  const isDesktop = useMediaQuery('(min-width: 1024px)');
 
   const filteredRows = bookings.filter((item) =>
     statusFilter === 'all' ? true : item.status === statusFilter
@@ -223,10 +172,385 @@ const ActiveTerminalTable = ({
     return (booking.machine_assignments || []).filter((a) => a.phase === 'washing');
   };
 
+  // ── Shared pieces (table AT card) ────────────────────────────────────────
+
+  const renderCustomer = (booking) => {
+    const isDelivery = booking.fulfillment_mode === 'delivery';
+    const isSwitched = Boolean(booking.switched_to_delivery_at);
+    const collect = getCollectInfo(booking);
+    const deliverOn = isDelivery ? fmtDeliveryDate(booking.delivery_datetime) : null;
+
+    return (
+      <div className="flex items-center gap-3 min-w-0">
+        <div className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center text-white font-black text-[10px] shrink-0">
+          {booking.customer_name?.charAt(0).toUpperCase() || 'C'}
+        </div>
+        <div className="min-w-0">
+          <span className="block text-slate-900 font-black text-sm truncate max-w-[150px] sm:max-w-[260px] lg:max-w-[150px]">
+            {booking.customer_name}
+          </span>
+          {/* Delivery address + Open in Maps (delivery lang) */}
+          <DeliveryAddress booking={booking} variant="compact" />
+
+          {isDelivery && (
+            <div className="flex flex-wrap items-center gap-1.5 mt-1">
+              {isSwitched && (
+                <span
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-violet-50 text-violet-600 border border-violet-100 text-[9px] font-black uppercase tracking-wide"
+                  title="Customer switched this from drop-off to delivery"
+                >
+                  <Repeat size={9} />
+                  Switched
+                </span>
+              )}
+              {deliverOn && (
+                <span className="text-[10px] font-bold text-slate-400 whitespace-nowrap">
+                  Deliver {deliverOn}
+                </span>
+              )}
+              {collect.amount > 0 && (
+                <span
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-100 text-[9px] font-black uppercase tracking-wide whitespace-nowrap"
+                  title={collect.label}
+                >
+                  <Banknote size={9} />
+                  Collect {formatCurrency(collect.amount)}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderStatusButton = (booking) => {
+    const isDropdownOpen = openStatusDropdownId === booking.id;
+    return (
+      <button
+        type="button"
+        ref={(el) => { statusButtonRefs.current[booking.id] = el; }}
+        onClick={() => toggleStatusDropdown(booking.id)}
+        className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[9px] uppercase font-black tracking-widest border transition-all hover:brightness-95 whitespace-nowrap ${getStatusStyle(booking.status)}`}
+      >
+        {booking.status}
+        <ChevronDown size={11} className={`transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
+      </button>
+    );
+  };
+
+  const renderOperations = (booking) => {
+    const movableToDryerLoads = getMovableToDryerLoads(booking);
+    const totalLoads = booking.machine_assignments?.length > 1;
+    const isDelivery = booking.fulfillment_mode === 'delivery';
+    const hasDeliveryRider = Boolean(booking.delivery_rider_name);
+
+    return (
+      <div className="flex flex-wrap items-center gap-2">
+        {/* CASE 'Pending' — Assign Machine */}
+        {needsMachineAssign(booking) && availableMachines.length > 0 && (
+          <button
+            onClick={() => handleOpenAssignModal(booking)}
+            className="flex items-center gap-1.5 px-3 py-2.5 bg-amber-500 text-white rounded-xl transition-all shadow-sm shadow-amber-200 hover:bg-amber-600 active:scale-90 text-[10px] font-black uppercase tracking-tight"
+            title={`Assign ${booking.loads > 1 ? `${booking.loads} Machines` : 'Machine'}`}
+          >
+            <Cpu size={13} />
+            Assign{booking.loads > 1 ? ` (${booking.loads})` : ''}
+          </button>
+        )}
+
+        {needsMachineAssign(booking) && availableMachines.length === 0 && (
+          <div
+            className="flex items-center gap-1.5 px-3 py-2.5 bg-slate-100 text-slate-400 rounded-xl text-[10px] font-black uppercase tracking-tight cursor-default"
+            title="No machines available right now — booking stays as a reservation until one is free."
+          >
+            <HardDrive size={13} />
+            Please Wait
+          </div>
+        )}
+
+        {/* CASE 'In Progress' — per-load Move to Dryer */}
+        {movableToDryerLoads.map((assignment) => (
+          <button
+            key={assignment.id}
+            onClick={() => handleOpenMoveToDryerModal(booking, assignment.load_number)}
+            className="flex items-center gap-1.5 px-3 py-2.5 bg-orange-500 text-white rounded-xl transition-all shadow-sm shadow-orange-200 hover:bg-orange-600 active:scale-90 text-[10px] font-black uppercase tracking-tight"
+            title={`Move Load ${assignment.load_number} to Dryer`}
+          >
+            <HardDrive size={13} />
+            {totalLoads ? `L${assignment.load_number} to Dryer` : 'To Dryer'}
+          </button>
+        ))}
+
+        {/* Online Payment — quick-access verify button */}
+        {booking.payment_status === 'pending_verification' && (
+          <button
+            onClick={() => handleOpenPaymentVerification(booking)}
+            className="flex items-center gap-1.5 px-3 py-2.5 bg-emerald-500 text-white rounded-xl transition-all shadow-sm shadow-emerald-200 hover:bg-emerald-600 active:scale-90 text-[10px] font-black uppercase tracking-tight"
+            title="Verify Online Payment"
+          >
+            <Banknote size={13} />
+            Verify Payment
+          </button>
+        )}
+
+        {/* Delivery row na hindi pa Ready: "For Delivery" chip + (In Progress) rider */}
+        {isDelivery && (booking.status === 'Pending' || booking.status === 'In Progress') && (
+          <>
+            <span
+              className="inline-flex items-center gap-1.5 px-3 py-2.5 bg-sky-50 text-sky-600 rounded-xl text-[10px] font-black uppercase tracking-tight border border-sky-100"
+              title="This order will be delivered to the customer"
+            >
+              <Truck size={13} />
+              For Delivery
+            </span>
+
+            {booking.status === 'In Progress' && (
+              hasDeliveryRider ? (
+                <button
+                  onClick={() => handleOpenDeliveryRiderModal(booking)}
+                  className="flex items-center gap-1.5 px-3 py-2.5 bg-sky-50 text-sky-600 rounded-xl text-[10px] font-black uppercase tracking-tight border border-sky-100 hover:bg-sky-100 transition-all active:scale-90"
+                  title="Tap to change rider"
+                >
+                  <Bike size={13} />
+                  {booking.delivery_rider_name}
+                </button>
+              ) : (
+                <button
+                  onClick={() => handleOpenDeliveryRiderModal(booking)}
+                  className="flex items-center gap-1.5 px-3 py-2.5 bg-sky-500 text-white rounded-xl transition-all shadow-sm shadow-sky-200 hover:bg-sky-600 active:scale-90 text-[10px] font-black uppercase tracking-tight"
+                  title="Assign a rider for this delivery"
+                >
+                  <Truck size={13} />
+                  Assign Rider
+                </button>
+              )
+            )}
+          </>
+        )}
+
+        {/* 'Out for Delivery' — nasa daan na ang rider */}
+        {booking.status === 'Out for Delivery' && (
+          <>
+            <button
+              onClick={() => handleOpenDeliveryRiderModal(booking)}
+              className="flex items-center gap-1.5 px-3 py-2.5 bg-sky-50 text-sky-600 rounded-xl text-[10px] font-black uppercase tracking-tight border border-sky-100 hover:bg-sky-100 transition-all active:scale-90"
+              title="Tap to change rider"
+            >
+              <Bike size={13} />
+              {booking.delivery_rider_name || 'Rider'}
+            </button>
+            <button
+              onClick={() => handleStatusUpdate(booking.id, 'Claimed')}
+              className="flex items-center gap-1.5 px-3 py-2.5 bg-emerald-500 text-white rounded-xl transition-all shadow-sm shadow-emerald-200 hover:bg-emerald-600 active:scale-90 text-[10px] font-black uppercase tracking-tight"
+              title="Mark as delivered"
+            >
+              <CheckCircle size={13} />
+              Mark Delivered
+            </button>
+          </>
+        )}
+
+        {/* 'Ready' — Release to Customer (drop-off) vs rider + Out for Delivery */}
+        {booking.status === 'Ready' && (
+          isDelivery ? (
+            <>
+              {hasDeliveryRider ? (
+                <button
+                  onClick={() => handleOpenDeliveryRiderModal(booking)}
+                  className="flex items-center gap-1.5 px-3 py-2.5 bg-sky-50 text-sky-600 rounded-xl text-[10px] font-black uppercase tracking-tight border border-sky-100 hover:bg-sky-100 transition-all active:scale-90"
+                  title="Tap to change rider"
+                >
+                  <Bike size={13} />
+                  {booking.delivery_rider_name}
+                </button>
+              ) : (
+                <button
+                  onClick={() => handleOpenDeliveryRiderModal(booking)}
+                  className="flex items-center gap-1.5 px-3 py-2.5 bg-sky-500 text-white rounded-xl transition-all shadow-sm shadow-sky-200 hover:bg-sky-600 active:scale-90 text-[10px] font-black uppercase tracking-tight"
+                  title="Assign a rider for this delivery"
+                >
+                  <Truck size={13} />
+                  Assign Rider
+                </button>
+              )}
+
+              {hasDeliveryRider && (
+                <button
+                  onClick={() => handleStatusUpdate(booking.id, 'Out for Delivery')}
+                  className="flex items-center gap-1.5 px-3 py-2.5 bg-sky-500 text-white rounded-xl transition-all shadow-sm shadow-sky-200 hover:bg-sky-600 active:scale-90 text-[10px] font-black uppercase tracking-tight"
+                  title="Rider is leaving with the laundry"
+                >
+                  <Navigation size={13} />
+                  Out for Delivery
+                </button>
+              )}
+            </>
+          ) : (
+            <button
+              onClick={() => handleStatusUpdate(booking.id, 'Claimed')}
+              className="flex items-center gap-1.5 px-3 py-2.5 bg-sky-500 text-white rounded-xl transition-all shadow-lg shadow-sky-100 hover:bg-sky-600 active:scale-90 text-[10px] font-black uppercase tracking-tight"
+              title="Release to Customer"
+            >
+              <Archive size={13} />
+              Release to Customer
+            </button>
+          )
+        )}
+      </div>
+    );
+  };
+
+  // ── Views ────────────────────────────────────────────────────────────────
+
+  const renderEmpty = () => (
+    <div className="flex flex-col items-center gap-3 text-center py-16 sm:py-32 px-4">
+      <Package size={48} className="text-slate-100" />
+      <p className="text-slate-500 font-black text-base uppercase tracking-tight">
+        {statusFilter === 'all' ? 'Terminal Clear' : 'No Matching Orders'}
+      </p>
+      <p className="text-slate-300 text-xs font-bold">
+        {statusFilter === 'all'
+          ? 'No active transactions in the current queue.'
+          : 'Try a different filter, or check "All Orders".'}
+      </p>
+    </div>
+  );
+
+  const renderTable = () => (
+    <div className="overflow-x-auto">
+      <table className="w-full">
+        <thead>
+          <tr className="border-b border-slate-50 bg-slate-50/50">
+            {['Time', 'Customer Name', 'Service Type', 'Quantity', 'Machines', 'Price', 'Status', 'Operations'].map(h => (
+              <th
+                key={h}
+                className="text-left px-4 xl:px-8 py-5 xl:py-6 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400"
+              >
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-50">
+          {filteredRows.map((booking) => {
+            const quantity = getQuantity(booking);
+            return (
+              <tr
+                key={booking.id}
+                className={`hover:bg-slate-50/50 transition-colors group ${
+                  needsMachineAssign(booking) ? 'bg-amber-50/20' : ''
+                }`}
+              >
+                <td className="px-4 xl:px-8 py-6 xl:py-7">
+                  <div className="flex items-center gap-2 text-slate-500 font-bold text-xs whitespace-nowrap">
+                    <Clock size={14} className="text-slate-300" />
+                    {formatTime(booking.booking_timestamp || booking.created_at)}
+                  </div>
+                </td>
+
+                <td className="px-4 xl:px-8 py-6 xl:py-7">{renderCustomer(booking)}</td>
+
+                <td className="px-4 xl:px-8 py-6 xl:py-7 text-slate-600 font-bold text-xs uppercase tracking-tight">
+                  {booking.service_type}
+                </td>
+
+                <td className="px-4 xl:px-8 py-6 xl:py-7 text-slate-500 font-black text-sm tracking-tighter whitespace-nowrap">
+                  {quantity.value}{' '}
+                  <span className="text-[10px] text-slate-300 uppercase">{quantity.unit}</span>
+                </td>
+
+                <td className="px-4 xl:px-8 py-6 xl:py-7">
+                  <div className="flex items-center gap-2">
+                    <HardDrive
+                      size={14}
+                      className={needsMachineAssign(booking) ? 'text-amber-400' : 'text-sky-400'}
+                    />
+                    {getMachineDisplay(booking)}
+                  </div>
+                </td>
+
+                <td className="px-4 xl:px-8 py-6 xl:py-7">
+                  <span className="text-emerald-600 font-black text-sm">
+                    {formatCurrency(booking.total_price || 0)}
+                  </span>
+                </td>
+
+                <td className="px-4 xl:px-8 py-6 xl:py-7 relative">{renderStatusButton(booking)}</td>
+
+                <td className="px-4 xl:px-8 py-6 xl:py-7">{renderOperations(booking)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+
+  const renderCards = () => (
+    <div className="space-y-3">
+      {filteredRows.map((booking) => {
+        const quantity = getQuantity(booking);
+        return (
+          <div
+            key={booking.id}
+            className={`bg-white rounded-2xl border shadow-sm p-4 ${
+              needsMachineAssign(booking) ? 'border-amber-100 bg-amber-50/20' : 'border-slate-100'
+            }`}
+          >
+            <div className="flex items-start justify-between gap-3">
+              {renderCustomer(booking)}
+              <div className="shrink-0">{renderStatusButton(booking)}</div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-x-4 gap-y-3 mt-4">
+              <div>
+                <p className="text-[9px] font-black uppercase tracking-widest text-slate-300 mb-0.5">Service</p>
+                <p className="text-slate-600 font-bold text-xs uppercase tracking-tight break-words">
+                  {booking.service_type}
+                </p>
+              </div>
+              <div>
+                <p className="text-[9px] font-black uppercase tracking-widest text-slate-300 mb-0.5">Quantity</p>
+                <p className="text-slate-500 font-black text-sm tracking-tighter">
+                  {quantity.value}{' '}
+                  <span className="text-[10px] text-slate-300 uppercase">{quantity.unit}</span>
+                </p>
+              </div>
+              <div>
+                <p className="text-[9px] font-black uppercase tracking-widest text-slate-300 mb-0.5">Machines</p>
+                <div className="flex items-center gap-1.5">
+                  <HardDrive
+                    size={13}
+                    className={needsMachineAssign(booking) ? 'text-amber-400' : 'text-sky-400'}
+                  />
+                  {getMachineDisplay(booking)}
+                </div>
+              </div>
+              <div>
+                <p className="text-[9px] font-black uppercase tracking-widest text-slate-300 mb-0.5">Price</p>
+                <p className="text-emerald-600 font-black text-sm">
+                  {formatCurrency(booking.total_price || 0)}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 text-slate-400 font-bold text-[11px] mt-3">
+              <Clock size={12} className="text-slate-300" />
+              {formatTime(booking.booking_timestamp || booking.created_at)}
+            </div>
+
+            <div className="mt-3 pt-3 border-t border-slate-50">{renderOperations(booking)}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+
   return (
     <>
-      {/* TIER 2: SUB-STATUS FILTER PILLS */}
-      <div className="flex items-center gap-2 mb-4 flex-wrap">
+      {/* TIER 2: SUB-STATUS FILTER PILLS (nag-i-scroll pahalang sa phone) */}
+      <div className="flex items-center gap-1 sm:gap-2 mb-4 overflow-x-auto sm:flex-wrap pb-1">
         {STATUS_FILTERS.map((filter) => {
           const isActive = statusFilter === filter.value;
           const Icon = filter.icon;
@@ -235,10 +559,10 @@ const ActiveTerminalTable = ({
               key={filter.value}
               type="button"
               onClick={() => setStatusFilter(filter.value)}
-              className={`flex items-center gap-2 text-sm ${
+              className={`flex items-center gap-2 text-sm whitespace-nowrap shrink-0 ${
                 isActive
-                  ? 'border-b-2 border-blue-600 text-blue-600 font-bold px-4 py-2 transition'
-                  : 'border-b-2 border-transparent text-gray-500 hover:text-gray-700 px-4 py-2 transition'
+                  ? 'border-b-2 border-blue-600 text-blue-600 font-bold px-3 sm:px-4 py-2 transition'
+                  : 'border-b-2 border-transparent text-gray-500 hover:text-gray-700 px-3 sm:px-4 py-2 transition'
               }`}
             >
               <Icon size={15} />
@@ -248,335 +572,27 @@ const ActiveTerminalTable = ({
         })}
       </div>
 
-      <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden">
-        {loading ? (
-          <div className="flex flex-col items-center justify-center py-44">
+      {loading ? (
+        <div className="bg-white rounded-2xl lg:rounded-[32px] border border-slate-100 shadow-sm overflow-hidden">
+          <div className="flex flex-col items-center justify-center py-28 lg:py-44">
             <div className="animate-spin rounded-full h-12 w-12 border-[3px] border-sky-500 border-r-transparent mb-4" />
             <p className="text-slate-400 font-black text-[10px] uppercase tracking-widest">Loading...</p>
           </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-slate-50 bg-slate-50/50">
-                  {['Time', 'Customer Name', 'Service Type', 'Quantity', 'Machines', 'Price', 'Status', 'Operations'].map(h => (
-                    <th
-                      key={h}
-                      className="text-left px-8 py-6 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400"
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {filteredRows.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="text-center py-32">
-                      <div className="flex flex-col items-center gap-3">
-                        <Package size={48} className="text-slate-100" />
-                        <p className="text-slate-500 font-black text-base uppercase tracking-tight">
-                          {statusFilter === 'all' ? 'Terminal Clear' : 'No Matching Orders'}
-                        </p>
-                        <p className="text-slate-300 text-xs font-bold">
-                          {statusFilter === 'all'
-                            ? 'No active transactions in the current queue.'
-                            : 'Try a different filter, or check "All Orders".'}
-                        </p>
-                      </div>
-                    </td>
-                  </tr>
-                ) : (
-                  filteredRows.map((booking) => {
-                    const isDropdownOpen = openStatusDropdownId === booking.id;
-                    const movableToDryerLoads = getMovableToDryerLoads(booking);
-                    const totalLoads = booking.machine_assignments?.length > 1;
-                    const isDelivery = booking.fulfillment_mode === 'delivery';
-                    const hasDeliveryRider = Boolean(booking.delivery_rider_name);
-                    const quantity = getQuantity(booking);
-                    const isSwitched = Boolean(booking.switched_to_delivery_at);
-                    const collect = getCollectInfo(booking);
-                    const deliverOn = isDelivery ? fmtDeliveryDate(booking.delivery_datetime) : null;
+        </div>
+      ) : filteredRows.length === 0 ? (
+        <div className="bg-white rounded-2xl lg:rounded-[32px] border border-slate-100 shadow-sm overflow-hidden">
+          {renderEmpty()}
+        </div>
+      ) : isDesktop ? (
+        <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden">
+          {renderTable()}
+        </div>
+      ) : (
+        renderCards()
+      )}
 
-                    return (
-                      <tr
-                        key={booking.id}
-                        className={`hover:bg-slate-50/50 transition-colors group ${
-                          needsMachineAssign(booking) ? 'bg-amber-50/20' : ''
-                        }`}
-                      >
-                        {/* Time */}
-                        <td className="px-8 py-7">
-                          <div className="flex items-center gap-2 text-slate-500 font-bold text-xs whitespace-nowrap">
-                            <Clock size={14} className="text-slate-300" />
-                            {formatTime(booking.booking_timestamp || booking.created_at)}
-                          </div>
-                        </td>
-
-                        {/* Customer */}
-                        <td className="px-8 py-7">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center text-white font-black text-[10px] shrink-0">
-                              {booking.customer_name?.charAt(0).toUpperCase() || 'C'}
-                            </div>
-                            <div className="min-w-0">
-                              <span className="block text-slate-900 font-black text-sm truncate max-w-[150px]">
-                                {booking.customer_name}
-                              </span>
-                              {/* UPDATED (Delivery address): address + Open in Maps (delivery lang) */}
-                              <DeliveryAddress booking={booking} variant="compact" />
-
-                              {isDelivery && (
-                                <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                                  {isSwitched && (
-                                    <span
-                                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-violet-50 text-violet-600 border border-violet-100 text-[9px] font-black uppercase tracking-wide"
-                                      title="Customer switched this from drop-off to delivery"
-                                    >
-                                      <Repeat size={9} />
-                                      Switched
-                                    </span>
-                                  )}
-                                  {deliverOn && (
-                                    <span className="text-[10px] font-bold text-slate-400 whitespace-nowrap">
-                                      Deliver {deliverOn}
-                                    </span>
-                                  )}
-                                  {collect.amount > 0 && (
-                                    <span
-                                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-100 text-[9px] font-black uppercase tracking-wide whitespace-nowrap"
-                                      title={collect.label}
-                                    >
-                                      <Banknote size={9} />
-                                      Collect {formatCurrency(collect.amount)}
-                                    </span>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </td>
-
-                        {/* Service Type */}
-                        <td className="px-8 py-7 text-slate-600 font-bold text-xs uppercase tracking-tight">
-                          {booking.service_type}
-                        </td>
-
-                        {/* Quantity (kg kung may timbang, loads kung wala) */}
-                        <td className="px-8 py-7 text-slate-500 font-black text-sm tracking-tighter whitespace-nowrap">
-                          {quantity.value}{' '}
-                          <span className="text-[10px] text-slate-300 uppercase">{quantity.unit}</span>
-                        </td>
-
-                        {/* Machine */}
-                        <td className="px-8 py-7">
-                          <div className="flex items-center gap-2">
-                            <HardDrive
-                              size={14}
-                              className={needsMachineAssign(booking) ? 'text-amber-400' : 'text-sky-400'}
-                            />
-                            {getMachineDisplay(booking)}
-                          </div>
-                        </td>
-
-                        {/* Price */}
-                        <td className="px-8 py-7">
-                          <span className="text-emerald-600 font-black text-sm">
-                            {formatCurrency(booking.total_price || 0)}
-                          </span>
-                        </td>
-
-                        {/* Status */}
-                        <td className="px-8 py-7 relative">
-                          <button
-                            type="button"
-                            ref={(el) => { statusButtonRefs.current[booking.id] = el; }}
-                            onClick={() => toggleStatusDropdown(booking.id)}
-                            className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[9px] uppercase font-black tracking-widest border transition-all hover:brightness-95 ${getStatusStyle(booking.status)}`}
-                          >
-                            {booking.status}
-                            <ChevronDown size={11} className={`transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
-                          </button>
-                        </td>
-
-                        {/* Operations */}
-                        <td className="px-8 py-7">
-                          <div className="flex flex-wrap items-center gap-2">
-                            {/* CASE 'Pending' — Assign Machine */}
-                            {needsMachineAssign(booking) && availableMachines.length > 0 && (
-                              <button
-                                onClick={() => handleOpenAssignModal(booking)}
-                                className="flex items-center gap-1.5 px-3 py-2.5 bg-amber-500 text-white rounded-xl transition-all shadow-sm shadow-amber-200 hover:bg-amber-600 active:scale-90 text-[10px] font-black uppercase tracking-tight"
-                                title={`Assign ${booking.loads > 1 ? `${booking.loads} Machines` : 'Machine'}`}
-                              >
-                                <Cpu size={13} />
-                                Assign{booking.loads > 1 ? ` (${booking.loads})` : ''}
-                              </button>
-                            )}
-
-                            {needsMachineAssign(booking) && availableMachines.length === 0 && (
-                              <div
-                                className="flex items-center gap-1.5 px-3 py-2.5 bg-slate-100 text-slate-400 rounded-xl text-[10px] font-black uppercase tracking-tight cursor-default"
-                                title="No machines available right now — booking stays as a reservation until one is free."
-                              >
-                                <HardDrive size={13} />
-                                Please Wait
-                              </div>
-                            )}
-
-                            {/* CASE 'In Progress' — per-load Move to Dryer
-                                (the row-level "Mark as Done" for a fully
-                                finished cycle is still the Status dropdown
-                                -> Ready, same as before) */}
-                            {movableToDryerLoads.map((assignment) => (
-                              <button
-                                key={assignment.id}
-                                onClick={() => handleOpenMoveToDryerModal(booking, assignment.load_number)}
-                                className="flex items-center gap-1.5 px-3 py-2.5 bg-orange-500 text-white rounded-xl transition-all shadow-sm shadow-orange-200 hover:bg-orange-600 active:scale-90 text-[10px] font-black uppercase tracking-tight"
-                                title={`Move Load ${assignment.load_number} to Dryer`}
-                              >
-                                <HardDrive size={13} />
-                                {totalLoads ? `L${assignment.load_number} to Dryer` : 'To Dryer'}
-                              </button>
-                            ))}
-
-                            {/* Online Payment feature — quick-access verify
-                                button, shown when pending_verification. */}
-                            {booking.payment_status === 'pending_verification' && (
-                              <button
-                                onClick={() => handleOpenPaymentVerification(booking)}
-                                className="flex items-center gap-1.5 px-3 py-2.5 bg-emerald-500 text-white rounded-xl transition-all shadow-sm shadow-emerald-200 hover:bg-emerald-600 active:scale-90 text-[10px] font-black uppercase tracking-tight"
-                                title="Verify Online Payment"
-                              >
-                                <Banknote size={13} />
-                                Verify Payment
-                              </button>
-                            )}
-
-                            {/* NEW (Switch to Delivery) — delivery row na
-                                hindi pa Ready: "For Delivery" chip, at
-                                (In Progress lang) rider assignment. */}
-                            {isDelivery && (booking.status === 'Pending' || booking.status === 'In Progress') && (
-                              <>
-                                <span
-                                  className="inline-flex items-center gap-1.5 px-3 py-2.5 bg-sky-50 text-sky-600 rounded-xl text-[10px] font-black uppercase tracking-tight border border-sky-100"
-                                  title="This order will be delivered to the customer"
-                                >
-                                  <Truck size={13} />
-                                  For Delivery
-                                </span>
-
-                                {booking.status === 'In Progress' && (
-                                  hasDeliveryRider ? (
-                                    <button
-                                      onClick={() => handleOpenDeliveryRiderModal(booking)}
-                                      className="flex items-center gap-1.5 px-3 py-2.5 bg-sky-50 text-sky-600 rounded-xl text-[10px] font-black uppercase tracking-tight border border-sky-100 hover:bg-sky-100 transition-all active:scale-90"
-                                      title="Tap to change rider"
-                                    >
-                                      <Bike size={13} />
-                                      {booking.delivery_rider_name}
-                                    </button>
-                                  ) : (
-                                    <button
-                                      onClick={() => handleOpenDeliveryRiderModal(booking)}
-                                      className="flex items-center gap-1.5 px-3 py-2.5 bg-sky-500 text-white rounded-xl transition-all shadow-sm shadow-sky-200 hover:bg-sky-600 active:scale-90 text-[10px] font-black uppercase tracking-tight"
-                                      title="Assign a rider for this delivery"
-                                    >
-                                      <Truck size={13} />
-                                      Assign Rider
-                                    </button>
-                                  )
-                                )}
-                              </>
-                            )}
-
-                            {/* NEW (Out for Delivery) — nasa daan na ang rider */}
-                            {booking.status === 'Out for Delivery' && (
-                              <>
-                                <button
-                                  onClick={() => handleOpenDeliveryRiderModal(booking)}
-                                  className="flex items-center gap-1.5 px-3 py-2.5 bg-sky-50 text-sky-600 rounded-xl text-[10px] font-black uppercase tracking-tight border border-sky-100 hover:bg-sky-100 transition-all active:scale-90"
-                                  title="Tap to change rider"
-                                >
-                                  <Bike size={13} />
-                                  {booking.delivery_rider_name || 'Rider'}
-                                </button>
-                                <button
-                                  onClick={() => handleStatusUpdate(booking.id, 'Claimed')}
-                                  className="flex items-center gap-1.5 px-3 py-2.5 bg-emerald-500 text-white rounded-xl transition-all shadow-sm shadow-emerald-200 hover:bg-emerald-600 active:scale-90 text-[10px] font-black uppercase tracking-tight"
-                                  title="Mark as delivered"
-                                >
-                                  <CheckCircle size={13} />
-                                  Mark Delivered
-                                </button>
-                              </>
-                            )}
-
-                            {/* CASE 'Ready' — Release to Customer (drop-off /
-                                counter) vs rider assignment + Mark Delivered
-                                (delivery). UPDATED (Rider Assignment
-                                feature): the old static "For Delivery"
-                                label is now interactive. */}
-                            {booking.status === 'Ready' && (
-                              isDelivery ? (
-                                <>
-                                  {hasDeliveryRider ? (
-                                    <button
-                                      onClick={() => handleOpenDeliveryRiderModal(booking)}
-                                      className="flex items-center gap-1.5 px-3 py-2.5 bg-sky-50 text-sky-600 rounded-xl text-[10px] font-black uppercase tracking-tight border border-sky-100 hover:bg-sky-100 transition-all active:scale-90"
-                                      title="Tap to change rider"
-                                    >
-                                      <Bike size={13} />
-                                      {booking.delivery_rider_name}
-                                    </button>
-                                  ) : (
-                                    <button
-                                      onClick={() => handleOpenDeliveryRiderModal(booking)}
-                                      className="flex items-center gap-1.5 px-3 py-2.5 bg-sky-500 text-white rounded-xl transition-all shadow-sm shadow-sky-200 hover:bg-sky-600 active:scale-90 text-[10px] font-black uppercase tracking-tight"
-                                      title="Assign a rider for this delivery"
-                                    >
-                                      <Truck size={13} />
-                                      Assign Rider
-                                    </button>
-                                  )}
-
-                                  {hasDeliveryRider && (
-                                    <button
-                                      onClick={() => handleStatusUpdate(booking.id, 'Out for Delivery')}
-                                      className="flex items-center gap-1.5 px-3 py-2.5 bg-sky-500 text-white rounded-xl transition-all shadow-sm shadow-sky-200 hover:bg-sky-600 active:scale-90 text-[10px] font-black uppercase tracking-tight"
-                                      title="Rider is leaving with the laundry"
-                                    >
-                                      <Navigation size={13} />
-                                      Out for Delivery
-                                    </button>
-                                  )}
-                                </>
-                              ) : (
-                                <button
-                                  onClick={() => handleStatusUpdate(booking.id, 'Claimed')}
-                                  className="flex items-center gap-1.5 px-3 py-2.5 bg-sky-500 text-white rounded-xl transition-all shadow-lg shadow-sky-100 hover:bg-sky-600 active:scale-90 text-[10px] font-black uppercase tracking-tight"
-                                  title="Release to Customer"
-                                >
-                                  <Archive size={13} />
-                                  Release to Customer
-                                </button>
-                              )
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* PORTAL: Status dropdown menu — rendered into document.body with
-          fixed positioning so it is never clipped by the table's
-          overflow-x-auto wrapper. */}
+      {/* PORTAL: Status dropdown menu — fixed positioning sa document.body
+          para hindi maputol ng overflow ng table/card. */}
       {openStatusDropdownId && dropdownPosition && openBooking && ReactDOM.createPortal(
         <>
           <div

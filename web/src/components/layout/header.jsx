@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Bell, Settings, LogOut, Clock, Calendar, Search,
   LayoutDashboard, Monitor, Cpu, BarChart3, Package,
-  Users, History, Receipt, AlertTriangle, ClipboardList, X, UserCog
+  Users, History, Receipt, AlertTriangle, ClipboardList, X, UserCog, Menu
 } from 'lucide-react';
 import apiService from '../../services/APIservices';
 import laundryLinkLogo from '../../assets/Untitled design.png';
@@ -19,6 +19,14 @@ import laundryLinkLogo from '../../assets/Untitled design.png';
  * Account Settings page). Idinagdag din ito sa search "Pages" results,
  * at ang dating "Settings" search item (Optimization Settings) ay
  * pinalitan ng pangalang "Optimization" para hindi malito.
+ *
+ * UPDATED (Responsive):
+ *  - May hamburger button (phone/tablet lang) na tumatawag sa
+ *    `onMenuClick` — binubuksan nito ang sidebar drawer ng Layout.
+ *  - Sa phone, ang search box ay nakatago at may search icon na
+ *    nagbubukas nito bilang full-width na bar sa ilalim ng header.
+ *  - Ang notification dropdown ay halos full-width sa phone (hindi na
+ *    naputol sa kaliwa).
  */
 
 const NAV_ITEMS = [
@@ -66,7 +74,7 @@ const markSeen = (key, id) => {
   }
 };
 
-const Header = () => {
+const Header = ({ onMenuClick }) => {
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -80,6 +88,7 @@ const Header = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchIndex, setSearchIndex] = useState({ bookings: [], machines: [], inventory: [] });
   const [showSearchResults, setShowSearchResults] = useState(false);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const searchBoxRef = useRef(null);
 
   // Kunin ang title ng kasalukuyang page, default sa 'LaundryLink' kung walang katugma
@@ -254,17 +263,32 @@ const Header = () => {
     navigate(path);
     setSearchQuery('');
     setShowSearchResults(false);
+    setMobileSearchOpen(false);
   };
 
+  // Isara ang mobile search bar kapag lumipat ng page.
+  useEffect(() => {
+    setMobileSearchOpen(false);
+  }, [location.pathname]);
+
   return (
-    <header className="bg-white border-b border-slate-200 h-16 px-6 flex items-center justify-between sticky top-0 z-50 shadow-sm gap-4">
+    <header className="bg-white border-b border-slate-200 h-16 px-3 sm:px-6 flex items-center justify-between sticky top-0 z-50 shadow-sm gap-2 sm:gap-4">
 
       {/* 1. LEFT: Logo + Dynamic Page Name Indicator */}
-      <div className="flex items-center gap-4 shrink-0">
-        <img src={laundryLinkLogo} alt="LaundryLink" className="h-9 w-auto" />
-        <div className="h-5 w-[1px] bg-slate-200 hidden sm:block"></div>
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-black text-slate-800 tracking-tight uppercase">
+      <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+        {/* Hamburger — phone/tablet lang */}
+        <button
+          type="button"
+          onClick={onMenuClick}
+          className="lg:hidden shrink-0 p-2 -ml-1 text-slate-600 hover:text-sky-600 hover:bg-slate-100 rounded-xl transition"
+          aria-label="Open menu"
+        >
+          <Menu size={22} />
+        </button>
+        <img src={laundryLinkLogo} alt="LaundryLink" className="h-8 sm:h-9 w-auto shrink-0" />
+        <div className="h-5 w-[1px] bg-slate-200 hidden sm:block shrink-0"></div>
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-[11px] sm:text-sm font-black text-slate-800 tracking-tight uppercase truncate max-w-[120px] sm:max-w-none">
             {currentPageTitle}
           </span>
         </div>
@@ -273,7 +297,24 @@ const Header = () => {
       {/* 2. CENTER: Search + Live Clock */}
       <div className="flex items-center gap-3 flex-1 max-w-xl justify-end">
 
-        <div ref={searchBoxRef} className="relative w-full max-w-xs md:max-w-md">
+        {/* Search icon — phone lang (nagbubukas ng search bar) */}
+        <button
+          type="button"
+          onClick={() => setMobileSearchOpen((v) => !v)}
+          className="md:hidden shrink-0 p-2 text-slate-600 hover:text-sky-500 hover:bg-slate-100 rounded-full transition"
+          aria-label="Search"
+        >
+          {mobileSearchOpen ? <X size={20} /> : <Search size={20} />}
+        </button>
+
+        <div
+          ref={searchBoxRef}
+          className={`${
+            mobileSearchOpen
+              ? 'absolute left-0 right-0 top-full bg-white p-3 border-b border-slate-200 shadow-md'
+              : 'hidden'
+          } md:block md:relative md:top-auto md:left-auto md:right-auto md:p-0 md:bg-transparent md:border-0 md:shadow-none w-full md:max-w-md`}
+        >
           <form onSubmit={handleSearchSubmit}>
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
               <Search size={16} />
@@ -367,7 +408,7 @@ const Header = () => {
       </div>
 
       {/* 3. RIGHT: Notifications & Profile */}
-      <div className="flex items-center gap-4 relative shrink-0">
+      <div className="flex items-center gap-1 sm:gap-4 relative shrink-0">
 
         <div className="relative">
           <button
@@ -384,7 +425,7 @@ const Header = () => {
           </button>
 
           {showNotifications && (
-            <div className="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-xl border border-slate-100 py-3 z-50">
+            <div className="fixed left-3 right-3 top-[4.5rem] sm:absolute sm:left-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-80 bg-white rounded-2xl shadow-xl border border-slate-100 py-3 z-50">
               <div className="px-4 pb-2 border-b border-slate-100 flex items-center justify-between">
                 <h3 className="font-bold text-slate-800 text-sm">System Notifications</h3>
                 {unreadCount > 0 && (
@@ -427,7 +468,7 @@ const Header = () => {
           )}
         </div>
 
-        <div className="h-6 w-[1px] bg-slate-200"></div>
+        <div className="h-6 w-[1px] bg-slate-200 hidden sm:block"></div>
 
         <div className="relative">
           <button
@@ -451,7 +492,7 @@ const Header = () => {
                 </button>
                 <div className="border-t border-slate-100 my-1"></div>
                 <button
-                  onClick={() => { navigate('/login'); setShowProfileMenu(false); }}
+                  onClick={() => { setShowProfileMenu(false); apiService.logout(); }}
                   className="w-full px-4 py-2 text-left text-xs font-medium text-rose-600 hover:bg-rose-50 flex items-center gap-2.5 transition"
                 >
                   <LogOut size={15} className="text-rose-500" /> Logout

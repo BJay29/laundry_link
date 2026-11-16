@@ -280,7 +280,7 @@ const InventoryPage = () => {
 
       {/* ── Top-right success toast ── */}
       {successMessage && (
-        <div className="fixed top-5 right-5 z-50 flex items-center gap-3 bg-white border border-emerald-100 shadow-xl rounded-2xl px-4 py-3 max-w-sm">
+        <div className="fixed top-4 left-4 right-4 sm:left-auto sm:top-5 sm:right-5 z-50 flex items-center gap-3 bg-white border border-emerald-100 shadow-xl rounded-2xl px-4 py-3 max-w-sm">
           <CheckCircle2 size={18} className="text-emerald-500 flex-shrink-0" />
           <p className="text-gray-800 font-medium text-sm flex-1">{successMessage}</p>
           <button onClick={() => setSuccessMessage(null)} className="text-gray-300 hover:text-gray-500">
@@ -377,7 +377,7 @@ const InventoryPage = () => {
 
       {/* ── Page Header ── */}
       <div className="bg-white border-b border-gray-100">
-        <div className="max-w-7xl mx-auto px-6 py-6">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-5 sm:py-6">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-widest text-emerald-500 mb-1">
@@ -400,7 +400,7 @@ const InventoryPage = () => {
       </div>
 
       {/* ── Main Content ── */}
-      <div className="max-w-7xl mx-auto px-6 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
 
         {/* Error Alert */}
         {error && (
@@ -421,7 +421,7 @@ const InventoryPage = () => {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
 
             {/* Total Items */}
-            <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex justify-between items-start">
+            <div className="bg-white p-4 sm:p-5 rounded-2xl border border-gray-100 shadow-sm flex justify-between items-start">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-2">Total Items</p>
                 <p className="text-3xl font-bold text-gray-900">{stats.total}</p>
@@ -432,7 +432,7 @@ const InventoryPage = () => {
             </div>
 
             {/* Adequate */}
-            <div className="bg-white p-5 rounded-2xl border border-emerald-100 shadow-sm flex justify-between items-start">
+            <div className="bg-white p-4 sm:p-5 rounded-2xl border border-emerald-100 shadow-sm flex justify-between items-start">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-2">Adequate</p>
                 <p className="text-3xl font-bold text-emerald-600">{stats.adequate}</p>
@@ -443,7 +443,7 @@ const InventoryPage = () => {
             </div>
 
             {/* Low Stock */}
-            <div className="bg-white p-5 rounded-2xl border border-amber-100 shadow-sm flex justify-between items-start">
+            <div className="bg-white p-4 sm:p-5 rounded-2xl border border-amber-100 shadow-sm flex justify-between items-start">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-2">Low Stock</p>
                 <p className="text-3xl font-bold text-amber-500">{stats.low}</p>
@@ -454,7 +454,7 @@ const InventoryPage = () => {
             </div>
 
             {/* Critical */}
-            <div className="bg-white p-5 rounded-2xl border border-red-100 shadow-sm flex justify-between items-start">
+            <div className="bg-white p-4 sm:p-5 rounded-2xl border border-red-100 shadow-sm flex justify-between items-start">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-2">Critical</p>
                 <p className="text-3xl font-bold text-red-500">{stats.critical}</p>

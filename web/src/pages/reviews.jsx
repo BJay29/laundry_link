@@ -75,7 +75,7 @@ const Reviews = () => {
   const visibleReviews = starFilter ? reviews.filter((r) => r.rating === starFilter) : reviews;
 
   return (
-    <div className="p-8 bg-slate-50 min-h-screen space-y-10 font-sans">
+    <div className="p-4 sm:p-6 lg:p-8 bg-slate-50 min-h-screen space-y-6 sm:space-y-10 font-sans">
 
       {/* HEADER */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
@@ -84,7 +84,7 @@ const Reviews = () => {
             <Star size={16} className="fill-amber-400" />
             <span className="text-[10px] font-black uppercase tracking-widest">Customer Feedback</span>
           </div>
-          <h1 className="text-5xl font-black text-slate-900 tracking-tighter italic uppercase">Reviews</h1>
+          <h1 className="text-3xl sm:text-5xl font-black text-slate-900 tracking-tighter italic uppercase">Reviews</h1>
           <p className="text-slate-500 font-bold text-sm mt-2">
             What customers say after their order is completed.
           </p>
@@ -107,9 +107,9 @@ const Reviews = () => {
       {/* SUMMARY + DISTRIBUTION */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-        <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm flex flex-col items-center justify-center text-center">
+        <div className="bg-white p-6 sm:p-8 rounded-[32px] sm:rounded-[40px] border border-slate-100 shadow-sm flex flex-col items-center justify-center text-center">
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3">Average Rating</p>
-          <p className="text-7xl font-black text-slate-900 tracking-tighter">
+          <p className="text-6xl sm:text-7xl font-black text-slate-900 tracking-tighter">
             {total > 0 && average !== null ? average.toFixed(1) : '—'}
           </p>
           <div className="mt-3">
@@ -120,7 +120,7 @@ const Reviews = () => {
           </p>
         </div>
 
-        <div className="lg:col-span-2 bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm">
+        <div className="lg:col-span-2 bg-white p-6 sm:p-8 rounded-[32px] sm:rounded-[40px] border border-slate-100 shadow-sm">
           <div className="flex items-center justify-between mb-5">
             <h2 className="text-lg font-black text-slate-900 tracking-tight">Rating Breakdown</h2>
             {starFilter && (
@@ -169,7 +169,7 @@ const Reviews = () => {
       </div>
 
       {/* REVIEW LIST */}
-      <div className="bg-white p-10 rounded-[56px] border border-slate-100 shadow-sm">
+      <div className="bg-white p-4 sm:p-10 rounded-[32px] sm:rounded-[56px] border border-slate-100 shadow-sm">
         <div className="flex items-center gap-2 mb-6">
           <div className="p-2 bg-sky-50 text-sky-600 rounded-xl">
             <MessageSquare size={16} />
@@ -193,7 +193,7 @@ const Reviews = () => {
             {visibleReviews.map((review) => (
               <div
                 key={review.id}
-                className="p-6 bg-slate-50/60 rounded-3xl border border-slate-100"
+                className="p-4 sm:p-6 bg-slate-50/60 rounded-3xl border border-slate-100"
               >
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <div className="flex items-center gap-3">

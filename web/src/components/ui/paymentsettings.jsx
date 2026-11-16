@@ -199,7 +199,7 @@ const PaymentSettings = ({ initial, shopId, onSaved, onNotify }) => {
     }`;
 
   return (
-    <div className="mt-6 p-8 bg-sky-50/40 rounded-[36px] border-2 border-sky-100">
+    <div className="mt-6 p-4 sm:p-8 bg-sky-50/40 rounded-[28px] sm:rounded-[36px] border-2 border-sky-100">
       <div className="flex items-center gap-2 mb-1">
         <QrCode size={16} className="text-sky-500" />
         <p className="text-[11px] font-black text-sky-700 uppercase tracking-[0.2em]">Payment QR & Account Details</p>
